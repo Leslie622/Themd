@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Columns2,
   Download,
@@ -35,7 +35,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { usePanelRef } from 'react-resizable-panels'
 import {
   Select,
   SelectContent,
@@ -45,11 +45,14 @@ import {
 } from '@/components/ui/select'
 import { Toaster } from '@/components/ui/sonner'
 import { Sidebar } from '@/components/Sidebar'
+import { SettingsSheet } from '@/components/SettingsSheet'
+import { EDITOR_FONT_RANGE, useEditorPrefs } from '@/store-editor'
 import { EditorPane } from '@/components/EditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
 import { ThemeStudio } from '@/components/theme/ThemeStudio'
 import { useNotebook } from '@/store'
 import { listAllThemes, useThemeStore } from '@/store-themes'
+import { cn } from '@/lib/utils'
 import { downloadNote } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 
@@ -71,6 +74,22 @@ export default function App() {
   const [view, setView] = useState<ViewMode>('split')
   const [studioOpen, setStudioOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const editorFontSize = useEditorPrefs((s) => s.fontSize)
+  const setEditorFontSize = useEditorPrefs((s) => s.setFontSize)
+  const sidebarPanelRef = usePanelRef()
+  const sidebarResizeRaf = useRef(0)
+
+  useEffect(() => {
+    const onCollapse = () => sidebarPanelRef.current?.collapse()
+    window.addEventListener("themd:collapse-sidebar", onCollapse)
+    const onSettings = () => setSettingsOpen(true)
+    window.addEventListener("themd:open-settings", onSettings)
+    return () => {
+      window.removeEventListener("themd:collapse-sidebar", onCollapse)
+      window.removeEventListener("themd:open-settings", onSettings)
+    }
+  }, [sidebarPanelRef])
   const [previewText, setPreviewText] = useState('')
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -78,6 +97,7 @@ export default function App() {
 
   // 切换笔记时预览立即刷新
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreviewText(active?.content ?? '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
@@ -99,8 +119,29 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} />
-      <main className="flex min-w-0 flex-1 flex-col">
+      <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+        <ResizablePanel
+          panelRef={sidebarPanelRef}
+          defaultSize="24%"
+          minSize="15%"
+          maxSize="45%"
+          collapsible
+          collapsedSize="0"
+          onResize={(size) => {
+            // 拖动时高频回调:同步比对开销大,经 rAF 合帧,一帧至多一次 setState
+            if (!sidebarResizeRaf.current) {
+              sidebarResizeRaf.current = requestAnimationFrame(() => {
+                sidebarResizeRaf.current = 0
+                setSidebarCollapsed(size.asPercentage === 0)
+              })
+            }
+          }}
+        >
+          <Sidebar />
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel minSize="40%">
+          <main className="flex h-full min-w-0 flex-col">
         {active ? (
           <>
             <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
@@ -110,7 +151,7 @@ export default function App() {
                     variant="ghost"
                     size="icon"
                     className="size-8 shrink-0"
-                    onClick={() => setSidebarCollapsed(false)}
+                    onClick={() => sidebarPanelRef.current?.expand()}
                     aria-label="展开侧栏"
                     title="展开侧栏"
                   >
@@ -147,40 +188,50 @@ export default function App() {
                   </SelectContent>
                 </Select>
 
-                {/* 视图切换:一个分组区块 */}
-                <div className="flex overflow-hidden rounded-lg border">
-                  <ToggleGroup
-                    type="single"
-                    variant="outline"
-                    size="sm"
-                    className="gap-0"
-                    value={view}
-                    onValueChange={(v) => {
-                      if (v) setView(v as ViewMode)
-                    }}
+                {/* 编辑器字号 */}
+                <div className="flex h-7 items-center overflow-hidden rounded-lg border text-xs">
+                  <button
+                    type="button"
+                    className="h-full px-2 transition-colors hover:bg-accent disabled:opacity-40"
+                    aria-label="减小编辑器字号"
+                    disabled={editorFontSize <= EDITOR_FONT_RANGE.MIN}
+                    onClick={() => setEditorFontSize(editorFontSize - 0.5)}
                   >
-                    <ToggleGroupItem
-                      value="edit"
-                      aria-label="编辑视图"
-                      className="rounded-none px-3"
+                    A-</button>
+                  <span className="min-w-9 border-x px-1 text-center leading-7 text-muted-foreground" aria-live="polite">
+                    {editorFontSize}
+                  </span>
+                  <button
+                    type="button"
+                    className="h-full px-2 transition-colors hover:bg-accent disabled:opacity-40"
+                    aria-label="增大编辑器字号"
+                    disabled={editorFontSize >= EDITOR_FONT_RANGE.MAX}
+                    onClick={() => setEditorFontSize(editorFontSize + 0.5)}
+                  >
+                    A+</button>
+                </div>
+
+                {/* 视图切换:分段控件 */}
+                <div className="flex h-7 items-center overflow-hidden rounded-lg border">
+                  {([
+                    ["edit", "编辑", PenLine],
+                    ["split", "分屏", Columns2],
+                    ["preview", "预览", Eye],
+                  ] as const).map(([key, label, Icon], i) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-label={label + "视图"}
+                      onClick={() => setView(key as ViewMode)}
+                      className={cn(
+                        "flex h-full items-center gap-1.5 px-3 text-xs transition-colors hover:bg-accent",
+                        i > 0 && "border-l",
+                        view === key ? "bg-accent font-medium text-foreground" : "text-muted-foreground",
+                      )}
                     >
-                      <PenLine /> 编辑
-                    </ToggleGroupItem>
-                    <ToggleGroupItem
-                      value="split"
-                      aria-label="分屏视图"
-                      className="rounded-none border-x px-3"
-                    >
-                      <Columns2 /> 分屏
-                    </ToggleGroupItem>
-                    <ToggleGroupItem
-                      value="preview"
-                      aria-label="预览视图"
-                      className="rounded-none px-3"
-                    >
-                      <Eye /> 预览
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                      <Icon className="size-3.5" /> {label}
+                    </button>
+                  ))}
                 </div>
 
                 {/* 主题工厂 + 笔记操作 */}
@@ -327,7 +378,10 @@ export default function App() {
             </Button>
           </div>
         )}
-      </main>
+          </main>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+      <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
       <Toaster />
     </div>
   )

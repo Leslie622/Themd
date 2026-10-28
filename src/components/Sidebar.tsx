@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { FileText, FolderUp, PanelLeftClose, Plus, Search } from 'lucide-react'
+import { FileText, FolderUp, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { useNotebook } from '@/store'
 import type { Note } from '@/store'
 
-export function Sidebar({ collapsed, onToggle }: { collapsed?: boolean; onToggle?: () => void }) {
+export function Sidebar() {
   const notes = useNotebook((s) => s.notes)
   const activeId = useNotebook((s) => s.activeId)
   const setActive = useNotebook((s) => s.setActive)
@@ -40,20 +40,32 @@ export function Sidebar({ collapsed, onToggle }: { collapsed?: boolean; onToggle
   }
 
   return (
-    <aside className={cn("flex h-full shrink-0 flex-col overflow-hidden border-r bg-sidebar transition-[width] duration-200", collapsed ? "w-0 border-r-0" : "w-72")}>
-      <div className="flex flex-col gap-3 border-b">
-        <div className="flex h-14 shrink-0 items-center justify-between pl-4 pr-2 text-foreground">
+    <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
+      <div className="flex flex-col gap-3 border-b px-4 py-2">
+        <div className="flex h-10 items-center justify-between text-foreground">
           <img src="/themd-logo.png" alt="Themd" className="h-7 w-auto shrink-0" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={onToggle}
-            aria-label="收起侧栏"
-            title="收起侧栏"
-          >
-            <PanelLeftClose />
-          </Button>
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => window.dispatchEvent(new CustomEvent("themd:open-settings"))}
+              aria-label="设置"
+              title="设置"
+            >
+              <Settings />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => window.dispatchEvent(new CustomEvent("themd:collapse-sidebar"))}
+              aria-label="收起侧栏"
+              title="收起侧栏"
+            >
+              <PanelLeftClose />
+            </Button>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button className="flex-1" onClick={() => createNote()}>

@@ -8,6 +8,8 @@
 
 @theme inline {
     --font-heading: var(--font-sans);
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'PingFang SC', 'Microsoft YaHei', monospace;
+    --font-editor-size: 13.5px;
     --font-sans: 'Geist Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -181,14 +183,13 @@ pre::-webkit-scrollbar,
 /* ---------- CodeMirror 编辑器主题化 ----------
  * 与 shadcn 令牌联动:明暗模式自动跟随;行号、活动行、选区、光标统一观感 */
 .cm-editor {
-  font-size: 13.5px;
+  font-size: var(--font-editor-size);
+  font-family: var(--font-mono);
 }
 .cm-editor.cm-focused {
   outline: none;
 }
 .cm-scroller {
-  padding-top: 12px;
-  padding-bottom: 16px;
   line-height: 1.7;
 }
 /* 行号槽 */
