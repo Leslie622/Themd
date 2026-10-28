@@ -124,9 +124,10 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     [element],
   )
   useEffect(() => {
-    // 双 rAF:等 ThemeScopedPreview 的 style 变量真正应用到 DOM
+    // 防抖 150ms 后再测量(双 rAF 确保样式已应用)。
+    // 拖动取色器时令牌每帧变化,每帧批量 getComputedStyle 会强制同步布局,卡顿明显
     let raf2 = 0
-    const raf1 = requestAnimationFrame(() => {
+    const timer = setTimeout(() => {
       raf2 = requestAnimationFrame(() => {
         const root = miniPreviewRef.current?.querySelector('.themd-prose')
         if (!root) return
@@ -136,9 +137,9 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
         )
         setFallbackColors(measured as Record<string, string | undefined>)
       })
-    })
+    }, 150)
     return () => {
-      cancelAnimationFrame(raf1)
+      clearTimeout(timer)
       cancelAnimationFrame(raf2)
     }
   }, [colorKeys, editing, editDark, isDark])
@@ -160,6 +161,14 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     // 内置主题被复制后，跟随到副本继续编辑
     if (realId !== editing.id) setEditId(realId)
   }
+
+  // 稳定回调:memo 化的 FieldRow/ColorFieldRow 依赖引用相等跳过重渲染,
+  // 每次渲染新建函数会让 memo 失效(拖动取色器时 80+ 控件全量重渲染 = 卡顿主因)
+  const setTokenRef = useRef(setToken)
+  setTokenRef.current = setToken
+  const setTokenStable = useRef((key: TokenKey, value: string | undefined) =>
+    setTokenRef.current(key, value),
+  ).current
 
   const resetElement = () => {
     if (editDark) {
@@ -485,14 +494,14 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     field={f}
                     value={activeTokens[f.key]}
                     fallbackColor={fallbackColors[f.key]}
-                    onChange={(v) => setToken(f.key, v)}
+                    onChange={(v) => setTokenStable(f.key, v)}
                   />
                 ) : (
                   <FieldRow
                     key={f.key}
                     field={f}
                     value={activeTokens[f.key]}
-                    onChange={(v) => setToken(f.key, v)}
+                    onChange={(v) => setTokenStable(f.key, v)}
                   />
                 ),
               )}

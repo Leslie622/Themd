@@ -1,5 +1,11 @@
 import { RotateCcw } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
+import {
+  detectInstalledFonts,
+  getCachedFullFontList,
+  isLocalFontAccessSupported,
+  requestAllFonts,
+} from '@/lib/theme/font-list'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +24,7 @@ import { cn } from '@/lib/utils'
  * 工场右栏的属性行：label + 类型控件 + ⟲ 恢复默认。
  * 「未设置」= 令牌不存在 = 回落基础样式表默认值。
  */
-export function FieldRow({
+export const FieldRow = memo(function FieldRow({
   field,
   value,
   onChange,
@@ -48,7 +54,7 @@ export function FieldRow({
       </Button>
     </div>
   )
-}
+})
 
 function FieldControl({
   field,
@@ -142,11 +148,12 @@ function weightHint(w: string) {
   return hints[w] ?? ''
 }
 
+
 /**
  * 颜色属性行(仅 color 类型用):传入 fallbackColor(未设置时的实际观感色,由父级从
  * 迷你预览测量)时,未设置的色块显示回落色并带斜角标识;否则显示通用棋盘格。
  */
-export function ColorFieldRow({
+export const ColorFieldRow = memo(function ColorFieldRow({
   field,
   value,
   fallbackColor,
@@ -178,7 +185,7 @@ export function ColorFieldRow({
       </Button>
     </div>
   )
-}
+})
 
 /** 取色器 + hex 文本。未设置时显示回落色预览(当前实际观感),拖动经 rAF 合帧提交 */
 function ColorInput({
@@ -308,37 +315,92 @@ const FONT_PRESETS = [
   { label: '等宽', value: "ui-monospace, Consolas, monospace" },
 ]
 
-/** 字体：预设下拉 + 自定义输入 */
+/**
+ * 字体选择:预设下拉 + 本机字体(挂载时自动用 canvas 测量法探测,约 70ms,结果缓存)
+ * + 任意值自定义输入。浏览器安全模型不允许静默枚举全部已装字体,
+ * 测量法覆盖常见中西文与编程字体;字体列表逐项用自身字体渲染预览。
+ */
 function FontFamilyInput({ value, onChange }: { value: string | undefined; onChange: (v: string) => void }) {
   const isPreset = FONT_PRESETS.some((f) => f.value === value)
+  // 字体来源优先级:上次授权的完整列表(Local Font Access)> canvas 测量法(常见字体探测)
+  const [localFonts, setLocalFonts] = useState<string[] | null>(null)
+  const [accessSupported, setAccessSupported] = useState(false)
+  const [requesting, setRequesting] = useState(false)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      setLocalFonts(getCachedFullFontList() ?? detectInstalledFonts())
+      setAccessSupported(isLocalFontAccessSupported())
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  const requestFullList = async () => {
+    setRequesting(true)
+    const list = await requestAllFonts()
+    setRequesting(false)
+    if (list) setLocalFonts(list)
+  }
+
   return (
     <div className="flex items-center gap-1">
       <Select
-        value={isPreset ? (value ?? '') : 'custom'}
+        value={
+          isPreset || !value
+            ? (value ?? 'custom')
+            : localFonts?.some((f) => value.includes(`'${f}'`))
+              ? value
+              : 'custom'
+        }
         onValueChange={(v) => {
           if (v !== 'custom') onChange(v)
         }}
       >
-        <SelectTrigger size="sm" className="w-28 shrink-0">
+        <SelectTrigger size="sm" className="w-32 shrink-0">
           <SelectValue placeholder="自定义" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="max-h-72">
+          <div className="px-2 py-1 text-xs font-medium text-muted-foreground">预设组合</div>
           {FONT_PRESETS.map((f) => (
             <SelectItem key={f.value} value={f.value}>
               {f.label}
             </SelectItem>
           ))}
+          {localFonts && localFonts.length > 0 && (
+            <>
+              <div className="flex items-center justify-between gap-1 border-t px-2 py-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  本机字体（{localFonts.length}）
+                </span>
+                {accessSupported && (
+                  <button
+                    type="button"
+                    disabled={requesting}
+                    onClick={() => void requestFullList()}
+                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                    title="通过浏览器授权读取全部已安装字体(含你自行安装的)"
+                  >
+                    {requesting ? '读取中…' : '获取完整列表'}
+                  </button>
+                )}
+              </div>
+              {localFonts.map((f) => (
+                <SelectItem key={f} value={`'${f}'`}>
+                  <span className="truncate" style={{ fontFamily: `'${f}', monospace` }}>
+                    {f}
+                  </span>
+                </SelectItem>
+              ))}
+            </>
+          )}
           <SelectItem value="custom">自定义…</SelectItem>
         </SelectContent>
       </Select>
-      {!isPreset && (
-        <Input
-          value={value ?? ''}
-          placeholder="font-family 值"
-          onChange={(e) => onChange(e.target.value)}
-          className="h-8 min-w-0 flex-1 font-mono text-xs"
-        />
-      )}
+      <Input
+        value={value ?? ''}
+        placeholder="font-family 值"
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 min-w-0 flex-1 font-mono text-xs"
+      />
     </div>
   )
 }

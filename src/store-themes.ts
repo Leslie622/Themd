@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 import { BUILTIN_THEMES } from '@/lib/theme/builtin'
 import { throttledStateStorage } from '@/lib/throttled-storage'
@@ -150,8 +150,9 @@ export const useThemeStore = create<ThemeState>()(
     {
       name: 'themd-themes',
       version: 1,
-      // 取色器拖动等高频 set:落盘节流,避免同步 IO 卡顿
-      storage: throttledStateStorage as never,
+      // 取色器拖动等高频 set:落盘节流,避免同步 IO 卡顿。
+      // createJSONStorage 负责 JSON 序列化;节流层只碰字符串
+      storage: createJSONStorage(() => throttledStateStorage),
       // 只持久化用户数据；builtin 主题重新从代码合并（保证随版本更新）
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<ThemeState>

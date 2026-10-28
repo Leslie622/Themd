@@ -1,8 +1,12 @@
 /**
- * localStorage 的节流包装（zustand persist 的 StateStorage）。
+ * localStorage 的节流包装（供 zustand persist 的 createJSONStorage 使用）。
  * localStorage.setItem 是同步 IO，取色器拖动、编辑器打字这类高频 set
  * 会逐次全量落盘造成卡顿；这里合并为最多每 WRITE_DELAY 一次写入，
  * 页面隐藏/关闭前强制 flush，不丢数据。
+ *
+ * 注意:zustand v5 persist 的 storage 收发的 value 是对象 {state,version}（JSON 序列化
+ * 由 createJSONStorage 负责），本文件只做字符串层的节流，必须与 createJSONStorage 搭配：
+ *   storage: createJSONStorage(() => throttledStateStorage)
  */
 const WRITE_DELAY = 250
 
@@ -38,6 +42,7 @@ if (typeof window !== 'undefined') {
   })
 }
 
+/** StateStorage 形态（字符串进出），供 createJSONStorage 消费 */
 export const throttledStateStorage = {
   getItem: (name: string): string | null => {
     const p = pending.get(name)
