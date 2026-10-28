@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import 'highlight.js/styles/github.css'
 import {
   ArrowLeft,
@@ -42,6 +42,8 @@ import { compileTokens, } from '@/lib/theme/compile'
 import { exportThemeCss, importThemeCss } from '@/lib/theme/css-io'
 import { ELEMENTS, ELEMENT_GROUPS, elementTokenKeys } from '@/lib/theme/elements'
 import { ELEMENT_SAMPLES } from '@/lib/theme/element-samples'
+import { TOKEN_VAR } from '@/lib/theme/tokens'
+import type { FieldDef } from '@/lib/theme/elements'
 import { resolveFallbackColors } from '@/lib/theme/color-fallbacks'
 import { inspectElementId } from '@/lib/theme/inspect'
 import { md } from '@/lib/markdown'
@@ -134,8 +136,14 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
         const measured = resolveFallbackColors(
           root as HTMLElement,
           colorKeys as never,
-        )
-        setFallbackColors(measured as Record<string, string | undefined>)
+        ) as Record<string, string | undefined>
+        // 值未变化时跳过 setState,避免无谓的全树重渲染
+        setFallbackColors((prev) => {
+          const same =
+            Object.keys(prev).length === Object.keys(measured).length &&
+            colorKeys.every((k) => prev[k] === measured[k])
+          return same ? prev : measured
+        })
       })
     }, 150)
     return () => {
@@ -143,6 +151,21 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
       cancelAnimationFrame(raf2)
     }
   }, [colorKeys, editing, editDark, isDark])
+
+  // 拖动取色器的「绝对流畅」路径:令牌键 → CSS 变量名,直写两处预览容器的 style,
+  // 不经过 React 渲染;松手 200ms 后 commit 走正常 store 提交(持久化+状态归位)。
+  // 两个回调用 useCallback 永久稳定(内部经 implRef 间接调用最新实现),不破坏子组件 memo。
+  const centerPreviewRef = useRef<HTMLDivElement | null>(null)
+  const livePreviewImplRef = useRef<(field: FieldDef, v: string) => void>(() => {})
+  const commitImplRef = useRef<(field: FieldDef, v: string) => void>(() => {})
+  const livePreviewColor = useCallback(
+    (field: FieldDef, v: string) => livePreviewImplRef.current(field, v),
+    [],
+  )
+  const commitColor = useCallback(
+    (field: FieldDef, v: string) => commitImplRef.current(field, v),
+    [],
+  )
 
   const setToken = (key: TokenKey, value: string | undefined) => {
     if (editDark) {
@@ -165,10 +188,23 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   // 稳定回调:memo 化的 FieldRow/ColorFieldRow 依赖引用相等跳过重渲染,
   // 每次渲染新建函数会让 memo 失效(拖动取色器时 80+ 控件全量重渲染 = 卡顿主因)
   const setTokenRef = useRef(setToken)
-  setTokenRef.current = setToken
   const setTokenStable = useRef((key: TokenKey, value: string | undefined) =>
     setTokenRef.current(key, value),
   ).current
+  useEffect(() => {
+    setTokenRef.current = setToken
+    livePreviewImplRef.current = (field, v) => {
+      const varName = TOKEN_VAR[field.key as TokenKey]
+      if (!varName) return
+      for (const el of [
+        centerPreviewRef.current?.querySelector('.themd-prose'),
+        miniPreviewRef.current?.querySelector('.themd-prose'),
+      ]) {
+        ;(el as HTMLElement | null)?.style.setProperty(varName, v)
+      }
+    }
+    commitImplRef.current = (field, v) => setTokenRef.current(field.key as TokenKey, v)
+  })
 
   const resetElement = () => {
     if (editDark) {
@@ -423,6 +459,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
               theme={editing}
               content={previewDoc}
               forceDark={editDark}
+              containerRef={centerPreviewRef}
               inspect={inspectMode}
               onInspect={(id) => {
                 setSelectedElement(id)
@@ -495,6 +532,8 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     value={activeTokens[f.key]}
                     fallbackColor={fallbackColors[f.key]}
                     onChange={(v) => setTokenStable(f.key, v)}
+                    onLivePreview={livePreviewColor}
+                    onCommit={commitColor}
                   />
                 ) : (
                   <FieldRow
@@ -560,15 +599,18 @@ function StudioPreview({
   forceDark = false,
   inspect = false,
   onInspect,
+  containerRef,
 }: {
   theme: ThemeFile
   content: string
   forceDark?: boolean
   inspect?: boolean
   onInspect?: (elementId: string) => void
+  /** 外部直写 CSS 变量的挂载点(取色器拖动实时预览用) */
+  containerRef?: React.RefObject<HTMLDivElement | null>
 }) {
   return (
-    <div className="min-h-0 flex-1">
+    <div className="min-h-0 flex-1" ref={containerRef}>
       <ThemeScopedPreview
         theme={theme}
         content={content}
