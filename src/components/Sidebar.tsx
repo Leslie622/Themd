@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { FileText, FolderUp, Plus, Search } from 'lucide-react'
+import { FileText, FolderUp, PanelLeftClose, Plus, Search } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { useNotebook } from '@/store'
 import type { Note } from '@/store'
 
-export function Sidebar() {
+export function Sidebar({ collapsed, onToggle }: { collapsed?: boolean; onToggle?: () => void }) {
   const notes = useNotebook((s) => s.notes)
   const activeId = useNotebook((s) => s.activeId)
   const setActive = useNotebook((s) => s.setActive)
@@ -40,10 +40,20 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-sidebar">
-      <div className="flex flex-col gap-3 border-b p-3">
-        <div className="flex h-14 items-center justify-center text-foreground">
-          <img src="/themd-logo.png" alt="Themd" className="h-8 w-auto shrink-0" />
+    <aside className={cn("flex h-full shrink-0 flex-col overflow-hidden border-r bg-sidebar transition-[width] duration-200", collapsed ? "w-0 border-r-0" : "w-72")}>
+      <div className="flex flex-col gap-3 border-b">
+        <div className="flex h-14 shrink-0 items-center justify-between pl-4 pr-2 text-foreground">
+          <img src="/themd-logo.png" alt="Themd" className="h-7 w-auto shrink-0" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={onToggle}
+            aria-label="收起侧栏"
+            title="收起侧栏"
+          >
+            <PanelLeftClose />
+          </Button>
         </div>
         <div className="flex gap-2">
           <Button className="flex-1" onClick={() => createNote()}>

@@ -5,6 +5,7 @@ import {
   Eye,
   MoreHorizontal,
   Palette,
+  PanelLeft,
   PenLine,
   Pencil,
   Plus,
@@ -69,6 +70,7 @@ export default function App() {
 
   const [view, setView] = useState<ViewMode>('split')
   const [studioOpen, setStudioOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [previewText, setPreviewText] = useState('')
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -97,12 +99,24 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} />
       <main className="flex min-w-0 flex-1 flex-col">
         {active ? (
           <>
             <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
-              <div className="flex min-w-0 items-baseline gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                {sidebarCollapsed && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 shrink-0"
+                    onClick={() => setSidebarCollapsed(false)}
+                    aria-label="展开侧栏"
+                    title="展开侧栏"
+                  >
+                    <PanelLeft />
+                  </Button>
+                )}
                 <h1 className="truncate text-sm font-semibold">{active.title}</h1>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {active.content.length} 字 · {fromNow(active.updatedAt)}
@@ -137,6 +151,8 @@ export default function App() {
                 <div className="flex overflow-hidden rounded-lg border">
                   <ToggleGroup
                     type="single"
+                    variant="outline"
+                    size="sm"
                     className="gap-0"
                     value={view}
                     onValueChange={(v) => {
