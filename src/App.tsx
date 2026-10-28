@@ -7,29 +7,17 @@ import {
   Palette,
   PanelLeft,
   PenLine,
-  Pencil,
   Plus,
-  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
 import {
   ResizableHandle,
   ResizablePanel,
@@ -61,8 +49,6 @@ export default function App() {
   const notes = useNotebook((s) => s.notes)
   const activeId = useNotebook((s) => s.activeId)
   const updateNote = useNotebook((s) => s.updateNote)
-  const renameNote = useNotebook((s) => s.renameNote)
-  const removeNote = useNotebook((s) => s.removeNote)
   const createNote = useNotebook((s) => s.createNote)
   const setNoteTheme = useNotebook((s) => s.setNoteTheme)
   const themeList = useThemeStore((s) => s.themes)
@@ -88,9 +74,6 @@ export default function App() {
     }
   }, [sidebarPanelRef])
   const [previewText, setPreviewText] = useState('')
-  const [renameOpen, setRenameOpen] = useState(false)
-  const [renameValue, setRenameValue] = useState('')
-  const [deleteOpen, setDeleteOpen] = useState(false)
 
   // 切换笔记时预览立即刷新
   useEffect(() => {
@@ -223,15 +206,7 @@ export default function App() {
                       <MoreHorizontal />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setRenameValue(active.title)
-                        setRenameOpen(true)
-                      }}
-                    >
-                      <Pencil /> 重命名
-                    </DropdownMenuItem>
+                  <DropdownMenuContent align="end" className="min-w-36">
                     <DropdownMenuItem
                       onClick={() => {
                         downloadNote(active)
@@ -239,13 +214,6 @@ export default function App() {
                       }}
                     >
                       <Download /> 导出为 .md
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => setDeleteOpen(true)}
-                    >
-                      <Trash2 /> 删除笔记
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -280,68 +248,6 @@ export default function App() {
               </div>
             )}
 
-            <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-              <DialogContent className="sm:max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>重命名笔记</DialogTitle>
-                  <DialogDescription>
-                    手动命名后，标题不再自动跟随正文首行。
-                  </DialogDescription>
-                </DialogHeader>
-                <Input
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && renameValue.trim()) {
-                      renameNote(active.id, renameValue.trim())
-                      setRenameOpen(false)
-                    }
-                  }}
-                />
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setRenameOpen(false)}>
-                    取消
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      if (renameValue.trim()) {
-                        renameNote(active.id, renameValue.trim())
-                        setRenameOpen(false)
-                      }
-                    }}
-                  >
-                    保存
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-              <DialogContent className="sm:max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>删除笔记</DialogTitle>
-                  <DialogDescription>
-                    确定删除「{active.title}」吗？此操作不可恢复。
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-                    取消
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      removeNote(active.id)
-                      setDeleteOpen(false)
-                      toast.success('已删除')
-                    }}
-                  >
-                    删除
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-4">

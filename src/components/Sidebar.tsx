@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import {
   ChevronRight,
   FileText,
+  Folder,
   FolderInput,
   FolderPlus,
   FolderUp,
@@ -234,6 +235,9 @@ export function Sidebar() {
                 <div className="group/row flex items-center rounded-lg transition-colors hover:bg-sidebar-accent">
                   <CollapsibleTrigger className="group/chev flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium">
                     <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
+                      <Folder className="size-3" />
+                    </span>
                     <span className="truncate">{f.name}</span>
                     <span className="text-xs text-muted-foreground">{items.length}</span>
                   </CollapsibleTrigger>
@@ -352,9 +356,11 @@ function NoteItem({
       <button
         type="button"
         onClick={onClick}
-        className="flex min-w-0 flex-1 items-start gap-2 px-2 py-2 text-left text-sm"
+        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm"
       >
-        <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400">
+          <FileText className="size-3.5" />
+        </span>
         <span className="min-w-0 flex-1">
           <span className={cn('block truncate', active && 'font-medium')}>
             {note.title}

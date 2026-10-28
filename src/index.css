@@ -135,6 +135,13 @@
   #root {
     height: 100%;
   }
+  /* Tailwind v4 preflight 故意把按钮 cursor 改成 default,官方文档推荐这样恢复手型 */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  [role="menuitem"]:not([data-disabled]),
+  [role="option"]:not([data-disabled]) {
+    cursor: pointer;
+  }
 }
 
 /* CodeMirror 编辑器撑满所在面板 */
