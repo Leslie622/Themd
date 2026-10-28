@@ -15,6 +15,7 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
+    "@uiw/codemirror-theme-github": "^4.25.12",
     "@uiw/react-codemirror": "^4.25.12",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",

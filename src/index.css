@@ -144,9 +144,14 @@
   }
 }
 
-/* CodeMirror 编辑器撑满所在面板 */
+/* CodeMirror 编辑器撑满所在面板:高度链每一环都要确定——
+   漏掉 .cm-theme 包装层的话,% 对 auto 解析成 auto,编辑器被内容撑高且无法滚动 */
+.cm-theme,
 .cm-editor {
   height: 100%;
+}
+.cm-scroller {
+  overflow-y: auto;
 }
 
 /* ---------- 全局滚动条 ----------
@@ -188,7 +193,9 @@ pre::-webkit-scrollbar,
   height: 8px;
 }
 /* ---------- CodeMirror 编辑器主题化 ----------
- * 与 shadcn 令牌联动:明暗模式自动跟随;行号、活动行、选区、光标统一观感 */
+ * 语法配色:GitHub Light/Dark(EditorPane 内随明暗切换)。
+ * 行号槽/活动行/光标的令牌化观感写在 EditorPane 的 EditorView.theme 里——
+ * CodeMirror 的样式模块按插入顺序覆盖普通 css,这些规则写在这里会被压掉。 */
 .cm-editor {
   font-size: var(--font-editor-size);
   font-family: var(--font-mono);
@@ -199,20 +206,6 @@ pre::-webkit-scrollbar,
 .cm-scroller {
   line-height: 1.7;
 }
-/* 行号槽 */
-.cm-gutters {
-  background: transparent;
-  border-right: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
-  color: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
-}
-.cm-activeLineGutter {
-  background: color-mix(in oklch, var(--accent) 45%, transparent);
-  color: var(--foreground);
-}
-/* 当前行 */
-.cm-activeLine {
-  background: color-mix(in oklch, var(--accent) 30%, transparent);
-}
 /* 选区 */
 .cm-selectionBackground,
 .cm-content ::selection {
@@ -221,9 +214,8 @@ pre::-webkit-scrollbar,
 .cm-focused .cm-selectionBackground {
   background: color-mix(in oklch, var(--primary) 18%, transparent) !important;
 }
-/* 光标 */
+/* 光标粗细(颜色随主题扩展走) */
 .cm-caret {
-  color: var(--primary);
   border-left-width: 2px;
 }
 /* 括号匹配等高亮走 token 色 */
