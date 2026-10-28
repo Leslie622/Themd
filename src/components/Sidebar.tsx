@@ -163,7 +163,7 @@ export function Sidebar() {
     <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
       <div className="flex flex-col gap-3 border-b px-4 py-2">
         <div className="flex h-10 items-center justify-between text-foreground">
-          <img src="/themd-logo.png" alt="Themd" className="h-6 w-auto shrink-0" />
+          <img src="/themd-logo.png" alt="Themd" className="h-5.5 w-auto shrink-0" />
           <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"

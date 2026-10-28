@@ -93,6 +93,8 @@ export function EditorPane({
         value={value}
         onChange={onChange}
         height="100%"
+        // 关掉 @uiw 默认 light 主题选项(白色背景/行号槽配色),配色完全由上面的扩展接管
+        theme="none"
         extensions={[
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           themeExt,

@@ -144,9 +144,11 @@
   }
 }
 
-/* CodeMirror 编辑器撑满所在面板:高度链每一环都要确定——
-   漏掉 .cm-theme 包装层的话,% 对 auto 解析成 auto,编辑器被内容撑高且无法滚动 */
-.cm-theme,
+/* CodeMirror 编辑器撑满所在面板:高度链每一环都要确定。
+   包装层类名是 cm-theme-light / cm-theme-dark / cm-theme-none(随 theme prop 拼接),
+   用属性选择器兜住;漏掉这一环,% 会解析成 auto,编辑器被内容撑高后被
+   外层 overflow-hidden 裁掉,滚动条不出现 */
+[class*="cm-theme"],
 .cm-editor {
   height: 100%;
 }
