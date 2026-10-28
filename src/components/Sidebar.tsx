@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import {
-  ChevronDown,
   ChevronRight,
   FileText,
   FolderInput,
+  FolderPlus,
   FolderUp,
   MoreHorizontal,
   PanelLeftClose,
@@ -16,6 +16,11 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,10 +52,9 @@ export function Sidebar() {
   const setNoteFolder = useNotebook((s) => s.setNoteFolder)
 
   const [keyword, setKeyword] = useState('')
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
   const [renaming, setRenaming] = useState<
     { kind: 'note' | 'folder'; id: string; value: string } | null
->(null)
+  >(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
@@ -104,13 +108,11 @@ export function Sidebar() {
     e.target.value = ''
   }
 
-  const toggleFolder = (id: string) =>
-    setCollapsedFolders((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  /** 新建分组:建完立即进入内联重命名 */
+  const handleCreateFolder = () => {
+    const id = createFolder('新建分组')
+    setRenaming({ kind: 'folder', id, value: '新建分组' })
+  }
 
   const commitRename = () => {
     if (!renaming) return
@@ -122,19 +124,25 @@ export function Sidebar() {
     setRenaming(null)
   }
 
+  const renameInput = (
+    <Input
+      value={renaming?.value ?? ''}
+      autoFocus
+      className="h-7 text-xs"
+      onChange={(e) => {
+        if (renaming) setRenaming({ ...renaming, value: e.target.value })
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commitRename()
+        if (e.key === 'Escape') setRenaming(null)
+      }}
+    />
+  )
+
   const renderNoteItem = (n: Note) =>
     renaming?.kind === 'note' && renaming.id === n.id ? (
       <div key={n.id} className="flex items-center gap-1 px-2 py-1">
-        <Input
-          value={renaming.value}
-          autoFocus
-          className="h-7 text-xs"
-          onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commitRename()
-            if (e.key === 'Escape') setRenaming(null)
-          }}
-        />
+        {renameInput}
       </div>
     ) : (
       <NoteItem
@@ -142,7 +150,7 @@ export function Sidebar() {
         note={n}
         active={n.id === activeId}
         onClick={() => setActive(n.id)}
-        onRename={() => setRenaming({ kind: "note", id: n.id, value: n.title })}
+        onRename={() => setRenaming({ kind: 'note', id: n.id, value: n.title })}
         onDelete={() => removeNote(n.id)}
         folders={folders}
         currentFolderId={n.folderId ?? null}
@@ -182,6 +190,15 @@ export function Sidebar() {
           <Button className="flex-1" onClick={() => createNote()}>
             <Plus /> 新建
           </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleCreateFolder}
+            aria-label="新建分组"
+            title="新建分组"
+          >
+            <FolderPlus />
+          </Button>
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <FolderUp /> 导入
           </Button>
@@ -192,14 +209,6 @@ export function Sidebar() {
             multiple
             hidden
             onChange={handleImport}
-          />
-          <input
-            ref={folderInputRef}
-            type="file"
-            // @ts-expect-error 非标准属性,Chromium 支持
-            webkitdirectory=""
-            hidden
-            onChange={handleFolderImport}
           />
         </div>
         <div className="relative">
@@ -216,52 +225,32 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
         {folders.map((f) => {
           const items = byFolder.get(f.id) ?? []
-          const collapsed = collapsedFolders.has(f.id)
           const isRenaming = renaming?.kind === 'folder' && renaming.id === f.id
           return (
-            <div key={f.id}>
+            <Collapsible key={f.id} defaultOpen>
               {isRenaming ? (
-                <div className="flex items-center gap-1 px-2 py-1">
-                  <Input
-                    value={renaming.value}
-                    autoFocus
-                    className="h-7 text-xs"
-                    onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitRename()
-                      if (e.key === 'Escape') setRenaming(null)
-                    }}
-                  />
-                </div>
+                <div className="flex items-center gap-1 px-2 py-1">{renameInput}</div>
               ) : (
-                <div className="group flex items-center rounded-lg transition-colors hover:bg-sidebar-accent">
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium"
-                    onClick={() => toggleFolder(f.id)}
-                  >
-                    {collapsed ? (
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-                    )}
+                <div className="group/row flex items-center rounded-lg transition-colors hover:bg-sidebar-accent">
+                  <CollapsibleTrigger className="group/chev flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium">
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
                     <span className="truncate">{f.name}</span>
                     <span className="text-xs text-muted-foreground">{items.length}</span>
-                  </button>
+                  </CollapsibleTrigger>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+                        className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
                         aria-label={`分组 ${f.name} 操作`}
                       >
                         <MoreHorizontal className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="min-w-40">
                       <DropdownMenuItem
-                        onClick={() => setRenaming({ kind: "folder", id: f.id, value: f.name })}
+                        onClick={() => setRenaming({ kind: 'folder', id: f.id, value: f.name })}
                       >
                         <Pencil /> 重命名分组
                       </DropdownMenuItem>
@@ -282,8 +271,16 @@ export function Sidebar() {
                   </DropdownMenu>
                 </div>
               )}
-              {!collapsed && items.map(renderNoteItem)}
-            </div>
+              <CollapsibleContent>
+                {/* 组内笔记缩进并加参考线,和根目录笔记拉开层级 */}
+                <div className="ml-4 border-l border-sidebar-border/70 pl-1.5">
+                  {items.map(renderNoteItem)}
+                  {items.length === 0 && (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">空分组</p>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           )
         })}
 
@@ -372,13 +369,14 @@ function NoteItem({
           <Button
             variant="ghost"
             size="icon"
-            className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+            className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
             aria-label={`笔记 ${note.title} 操作`}
           >
             <MoreHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        {/* 菜单默认宽度跟随 ⋯ 触发器,被 min-w-32 兜底;「移动到分组」差一点就换行,加宽到 min-w-44 */}
+        <DropdownMenuContent align="end" className="min-w-44">
           <DropdownMenuItem onClick={onRename}>
             <Pencil /> 重命名
           </DropdownMenuItem>
@@ -386,7 +384,7 @@ function NoteItem({
             <DropdownMenuSubTrigger>
               <FolderInput /> 移动到分组
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
+            <DropdownMenuSubContent className="min-w-32">
               <DropdownMenuItem onClick={() => onMove(null)}>
                 {currentFolderId === null ? '✓ ' : ''}未分组
               </DropdownMenuItem>

@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Toaster } from '@/components/ui/sonner'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Sidebar } from '@/components/Sidebar'
 import { SettingsSheet } from '@/components/SettingsSheet'
 import { EditorPane } from '@/components/EditorPane'
@@ -51,7 +52,6 @@ import { PreviewPane } from '@/components/PreviewPane'
 import { ThemeStudio } from '@/components/theme/ThemeStudio'
 import { useNotebook } from '@/store'
 import { listAllThemes, useThemeStore } from '@/store-themes'
-import { cn } from '@/lib/utils'
 import { downloadNote } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 
@@ -185,28 +185,27 @@ export default function App() {
                   </SelectContent>
                 </Select>
 
-                {/* 视图切换:分段控件 */}
-                <div className="flex h-7 items-center overflow-hidden rounded-lg border">
-                  {([
-                    ["edit", "编辑", PenLine],
-                    ["split", "分屏", Columns2],
-                    ["preview", "预览", Eye],
-                  ] as const).map(([key, label, Icon], i) => (
-                    <button
-                      key={key}
-                      type="button"
-                      aria-label={label + "视图"}
-                      onClick={() => setView(key as ViewMode)}
-                      className={cn(
-                        "flex h-full items-center gap-1.5 px-3 text-xs transition-colors hover:bg-accent",
-                        i > 0 && "border-l",
-                        view === key ? "bg-accent font-medium text-foreground" : "text-muted-foreground",
-                      )}
-                    >
-                      <Icon className="size-3.5" /> {label}
-                    </button>
-                  ))}
-                </div>
+                {/* 视图切换:shadcn ToggleGroup(spacing=0 即连体分段样式) */}
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  spacing={0}
+                  value={view}
+                  onValueChange={(v) => {
+                    if (v) setView(v as ViewMode)
+                  }}
+                >
+                  <ToggleGroupItem value="edit" aria-label="编辑视图">
+                    <PenLine /> 编辑
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="split" aria-label="分屏视图">
+                    <Columns2 /> 分屏
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="preview" aria-label="预览视图">
+                    <Eye /> 预览
+                  </ToggleGroupItem>
+                </ToggleGroup>
 
                 {/* 主题工厂 + 笔记操作 */}
                 <Button
