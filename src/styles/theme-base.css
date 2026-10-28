@@ -124,10 +124,29 @@
 
 /* ---------- 列表 ---------- */
 
+/* Tailwind preflight 全局 list-style:none,这里显式恢复圆点/编号 */
 .themd-prose ul,
 .themd-prose ol {
   padding-left: var(--t-list-indent, 1.5em);
   margin-bottom: 1.25em;
+}
+.themd-prose ul {
+  list-style: disc;
+}
+.themd-prose ul ul {
+  list-style: circle;
+}
+.themd-prose ul ul ul {
+  list-style: square;
+}
+.themd-prose ol {
+  list-style: decimal;
+}
+.themd-prose ol ol {
+  list-style: lower-alpha;
+}
+.themd-prose ol ol ol {
+  list-style: lower-roman;
 }
 .themd-prose li + li {
   margin-top: var(--t-li-spacing, 0.375em);

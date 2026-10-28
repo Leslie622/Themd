@@ -183,15 +183,25 @@ export const ELEMENTS: ElementDef[] = [
     ],
   },
   {
-    id: 'list',
-    label: '列表',
+    id: 'ul',
+    label: '无序列表',
     group: 'lists',
-    sampleHint: '列表',
+    sampleHint: '无序列表',
     fields: [
       { key: 'list.indent', label: '缩进', type: 'size', unit: 'em', placeholder: '1.5em' },
       { key: 'li.spacing', label: '项间距', type: 'size', unit: 'em', placeholder: '0.375em' },
-      { key: 'ul.markerColor', label: '无序圆点色', type: 'color' },
-      { key: 'ol.markerColor', label: '有序编号色', type: 'color' },
+      { key: 'ul.markerColor', label: '圆点颜色', type: 'color' },
+    ],
+  },
+  {
+    id: 'ol',
+    label: '有序列表',
+    group: 'lists',
+    sampleHint: '有序列表',
+    fields: [
+      { key: 'list.indent', label: '缩进', type: 'size', unit: 'em', placeholder: '1.5em' },
+      { key: 'li.spacing', label: '项间距', type: 'size', unit: 'em', placeholder: '0.375em' },
+      { key: 'ol.markerColor', label: '编号颜色', type: 'color' },
     ],
   },
   {

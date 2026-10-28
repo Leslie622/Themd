@@ -10,7 +10,8 @@ const CONTAINER_TARGETS: { id: ElementDef['id']; match: (el: Element) => boolean
   { id: 'codeBlock', match: (el) => el.tagName === 'PRE' || (el.tagName === 'CODE' && el.closest('pre') !== null) },
   { id: 'quote', match: (el) => el.tagName === 'BLOCKQUOTE' },
   { id: 'table', match: (el) => ['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'].includes(el.tagName) },
-  { id: 'list', match: (el) => el.tagName === 'UL' || el.tagName === 'OL' || el.tagName === 'LI' },
+  { id: 'ul', match: (el) => el.tagName === 'UL' || (el.tagName === 'LI' && el.closest('ul') !== null) },
+  { id: 'ol', match: (el) => el.tagName === 'OL' || (el.tagName === 'LI' && el.closest('ol') !== null) },
   { id: 'hr', match: (el) => el.tagName === 'HR' },
   { id: 'img', match: (el) => el.tagName === 'IMG' },
 ]
