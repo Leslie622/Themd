@@ -11,13 +11,14 @@ import {
 } from '@uiw/codemirror-theme-github'
 import { useEffect, useMemo, useRef } from 'react'
 
-import { resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
+import { buildFontStack, useEditorPrefs } from '@/store-editor'
 
 /**
  * CodeMirror 编辑器封装。
  * 语法配色用 GitHub Light/Dark 跟随明暗开关,与内置 GitHub 渲染主题呼应;
  * 背景/行号槽/活动行设为透明或语义令牌色,编辑区观感与整体 UI 联动。
+ * 字体默认跟产品 UI;设置抽屉自定义后按设置走。
  */
 export function EditorPane({
   value,
@@ -29,23 +30,24 @@ export function EditorPane({
   /** 绑定内部滚动容器(.cm-scroller),用于编辑/预览同步滚动 */
   bindScroller?: (el: HTMLElement | null) => void
 }) {
-  const activeId = useThemeStore((s) => s.activeId)
-  const themes = useThemeStore((s) => s.themes)
   const isDark = useAppearance((s) => s.isDark)
-  const theme = useMemo(
-    () => resolveActiveTheme({ themes, activeId }),
-    [themes, activeId],
+  // 编辑器字体默认跟产品 UI(index.css 的 .cm-editor 消费 --font-ui-sans);
+  // 设置里自定义后 store 注入 --font-editor。无论哪种,都要用样式模块覆盖
+  // .cm-scroller——CodeMirror 基础主题在那里硬编码了 monospace
+  const editorFont = useEditorPrefs((s) =>
+    s.editorFontWestern || s.editorFontCjk
+      ? buildFontStack(s.editorFontWestern, s.editorFontCjk, 'monospace')
+      : 'var(--font-ui-sans)', // 未自定义 = 跟随产品界面
   )
-  const fontToken = (isDark ? theme.dark?.['root.font'] : undefined) ?? theme.tokens['root.font']
 
-  const fontExt = useMemo(() => {
-    if (!fontToken) return []
-    // CodeMirror 默认字体声明在 .cm-scroller 上,须同选择器覆盖(写 '&' 会被它压掉)
-    return [EditorView.theme({
-      '&': { fontFamily: fontToken },
-      '.cm-scroller': { fontFamily: fontToken },
-    })]
-  }, [fontToken])
+  const fontExt = useMemo(
+    () =>
+      EditorView.theme({
+        '&': { fontFamily: editorFont },
+        '.cm-scroller': { fontFamily: editorFont },
+      }),
+    [editorFont],
+  )
 
   // GitHub 语法配色;背景/活动行透明化,行号槽给淡色实体背景(用户感知为
   // 「行号区应有底色」)。settings 值直接写 CSS 表达式,var() 合法。
