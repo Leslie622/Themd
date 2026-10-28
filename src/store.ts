@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { createIdbStorage } from '@/lib/storage'
 
 export interface Note {
   id: string
@@ -25,11 +26,15 @@ interface NotebookState {
   notes: Note[]
   folders: Folder[]
   activeId: string | null
+  /** persist 异步水合(IDB)完成前为 false,App 据此延迟渲染避免闪欢迎笔记 */
+  hydrated: boolean
   createNote: (title?: string, content?: string) => string
   updateNote: (id: string, content: string) => void
   renameNote: (id: string, title: string) => void
   removeNote: (id: string) => void
   setActive: (id: string | null) => void
+  /** 水合完成回调(onRehydrateStorage 用) */
+  setHydrated: () => void
   /** 设置/清除本篇笔记的主题覆盖；清除后回落全局主题 */
   setNoteTheme: (id: string, themeId: string | null) => void
   /** 新建分组 */
@@ -42,14 +47,14 @@ interface NotebookState {
   setNoteFolder: (id: string, folderId: string | null) => void
 }
 
-/** 从正文推导标题：优先 # 标题，否则第一个非空行 */
+/** 从正文推导标题：优先 # 标题，否则第一个非空行（跳过图片行） */
 export function deriveTitle(content: string): string {
   const heading = content.match(/^#\s+(.+)$/m)
   if (heading) return heading[1].trim().slice(0, 50)
   const line = content
     .split('\n')
     .map((l) => l.trim())
-    .find((l) => l && !l.startsWith('#'))
+    .find((l) => l && !l.startsWith('#') && !l.startsWith('!['))
   if (!line) return ''
   return line.replace(/^[#>*`\-\s]+/, '').slice(0, 50)
 }
@@ -83,6 +88,13 @@ hello('Markdown')
 
 > 引用、任务列表、链接自动识别（linkify）都开箱即用~
 
+### 插入图片
+
+- **粘贴**：截图后直接 \`Ctrl+V\`，自动压缩成 WebP 内嵌进笔记
+- **拖拽**：把图片文件拖进编辑器任意位置
+- **按钮**：右上角「插入图片」可多选文件
+- 笔记自包含：导出 \`.md\` 时图片一并带走
+
 - [x] 支持任务列表
 - [ ] 打开右上角菜单试试导出
 
@@ -104,6 +116,7 @@ export const useNotebook = create<NotebookState>()(
         },
       ],
       activeId: 'welcome-note',
+      hydrated: false,
       createNote: (title, content = '') => {
         const id = crypto.randomUUID()
         const note: Note = {
@@ -141,6 +154,7 @@ export const useNotebook = create<NotebookState>()(
           return { notes, activeId }
         }),
       setActive: (id) => set({ activeId: id }),
+      setHydrated: () => set({ hydrated: true }),
       setNoteTheme: (id, themeId) =>
         set((s) => ({
           notes: s.notes.map((n) =>
@@ -172,6 +186,15 @@ export const useNotebook = create<NotebookState>()(
     {
       name: 'md-notebook',
       version: 3,
+      // 存储升级 localStorage → IndexedDB:内嵌 base64 图片的笔记体积超出 LS 配额,
+      // IDB 大几个数量级;适配器自带 LS→IDB 一次性迁移与写入防抖(见 lib/storage.ts)
+      storage: createJSONStorage(() => createIdbStorage()),
+      // hydrated 是运行时标志,不落盘
+      partialize: (s) => ({
+        notes: s.notes,
+        folders: s.folders,
+        activeId: s.activeId,
+      }),
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as { notes?: Note[] } & Record<string, unknown>
         // v1 → v2:补 themeId 字段(默认 undefined = 跟随全局)
@@ -182,6 +205,11 @@ export const useNotebook = create<NotebookState>()(
           state.notes = state.notes.map((n) => ({ ...n, themeId: n.themeId }))
         }
         return state as never
+      },
+      onRehydrateStorage: () => (state, error) => {
+        // 水合失败(如 IDB 被禁)也要放行渲染,否则白屏
+        state?.setHydrated?.()
+        if (error) console.error('笔记存储水合失败:', error)
       },
     },
   ),

@@ -104,8 +104,14 @@ md.renderer.rules.heading_open = (tokens, idx, options, _env, self) => {
 //   return `<div class="code-card" data-lang="${lang}"><pre><code>${md.utils.escapeHtml(token.content)}</code></pre></div>`
 // }
 
-// 示例 3（取消注释即可生效）：给图片加 loading="lazy"
-// md.renderer.rules.image = (tokens, idx, options, env, self) => {
-//   tokens[idx].attrSet('loading', 'lazy')
-//   return self.renderToken(tokens, idx, options)
-// }
+// 图片:懒加载 + 异步解码(内嵌 base64 的截图可能很大,预览首屏别被拖住)。
+// 注意 alt 要从子节点提取(renderInlineAsText)——直接 renderToken 会丢掉它
+md.renderer.rules.image = (tokens, idx, options, _env, self) => {
+  const token = tokens[idx]
+  token.attrSet('loading', 'lazy')
+  token.attrSet('decoding', 'async')
+  if (token.children) {
+    token.attrSet('alt', self.renderInlineAsText(token.children, options, _env))
+  }
+  return self.renderToken(tokens, idx, options)
+}
