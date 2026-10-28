@@ -170,6 +170,11 @@ function FontPicker({
         onChange={(e) => onChange(e.target.value)}
         className="h-7 text-xs"
       />
+      {value.trim() && !isFontAvailable(value) && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          本机未安装「{value}」,当前显示的是回落效果
+        </p>
+      )}
       <p
         className="truncate rounded-md bg-muted/50 px-2 py-1 text-xs text-muted-foreground"
         style={{ fontFamily: value ? `'${value}', sans-serif` : undefined }}
@@ -181,7 +186,29 @@ function FontPicker({
   )
 }
 
-/** 设置分区:标题 + 描述 + 内容的卡片分组 */
+/** canvas 墨迹检测:字体族是否在本机可用(与回退字体测宽比对,不同即存在)。
+ * 每次检测用独立 canvas——复用同一 ctx 时字体解析结果会被缓存污染,
+ * 已安装的字体也会被误判为未安装(实测 Microsoft YaHei 误报) */
+const glyphCheckCache = new Map<string, boolean>()
+function isFontAvailable(family: string): boolean {
+  const name = family.trim().replace(/^['"]|['"]$/g, '')
+  if (!name) return true
+  const cached = glyphCheckCache.get(name)
+  if (cached !== undefined) return cached
+  const probe = (font: string) => {
+    const ctx = document.createElement('canvas').getContext('2d')
+    if (!ctx) return NaN
+    ctx.font = `48px ${font}`
+    return ctx.measureText('笔记 ABC abc 012 {,}').width
+  }
+  const available =
+    probe(`"${name}", monospace`) !== probe('monospace') ||
+    probe(`"${name}", serif`) !== probe('serif')
+  glyphCheckCache.set(name, available)
+  return available
+}
+
+/** 设置分区:标题 + 描述 + 内容(无边框,靠间距与分隔线分组) */
 function Section({
   title,
   description,
@@ -192,9 +219,9 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-xl border bg-card p-3">
+    <section>
       <div className="mb-3">
-        <h3 className="text-sm font-medium">{title}</h3>
+        <h3 className="text-sm font-semibold">{title}</h3>
         {description && (
           <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
         )}
@@ -246,10 +273,16 @@ function FontPair({
         </div>
       </div>
       <p
-        className="rounded-md border bg-background px-2 py-1.5 text-sm"
+        className="rounded-md bg-muted/50 px-2 py-1.5 text-sm"
         style={stack ? { fontFamily: stack } : undefined}
       >
         {SAMPLE_TEXT}
+        {stack && (western.trim() || cjk.trim()) && (
+          <span className="ml-2 text-xs text-muted-foreground">
+            {isFontAvailable(western) ? '' : `西文「${western}」未安装 `}
+            {isFontAvailable(cjk) ? '' : `中文「${cjk}」未安装`}
+          </span>
+        )}
       </p>
     </div>
   )
@@ -294,37 +327,29 @@ export function SettingsSheet({
             <div className="h-16 animate-pulse rounded-xl bg-muted/60" />
           </div>
         ) : (
-        <div className="flex flex-col gap-3 px-4 pb-6">
-          <Section
-            title="字体"
-            description="西文与中文分开设置;汉字自动落到中文字体。"
-          >
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">产品界面</span>
-              <FontPair
-                presets={UI_FONT_PRESETS}
-                western={uiFontWestern}
-                cjk={uiFontCjk}
-                onWestern={(v) => setUiFont(v, uiFontCjk)}
-                onCjk={(v) => setUiFont(uiFontWestern, v)}
-                fallback="sans-serif"
-              />
-            </div>
-            <div className="border-t" />
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">编辑器</span>
-              <FontPair
-                presets={MONO_FONT_PRESETS}
-                western={editorFontWestern}
-                cjk={editorFontCjk}
-                onWestern={(v) => setEditorFont(v, editorFontCjk)}
-                onCjk={(v) => setEditorFont(editorFontWestern, v)}
-                fallback="monospace"
-              />
-            </div>
+        <div className="flex flex-col gap-6 px-4 pb-6">
+          <Section title="界面" description="整个产品的显示字体。">
+            <FontPair
+              presets={UI_FONT_PRESETS}
+              western={uiFontWestern}
+              cjk={uiFontCjk}
+              onWestern={(v) => setUiFont(v, uiFontCjk)}
+              onCjk={(v) => setUiFont(uiFontWestern, v)}
+              fallback="sans-serif"
+            />
           </Section>
 
-          <Section title="编辑器" description="代码编辑区的显示字号。">
+          <div className="border-t" />
+
+          <Section title="编辑器" description="代码编辑区;字体未设置时跟随界面。">
+            <FontPair
+              presets={MONO_FONT_PRESETS}
+              western={editorFontWestern}
+              cjk={editorFontCjk}
+              onWestern={(v) => setEditorFont(v, editorFontCjk)}
+              onCjk={(v) => setEditorFont(editorFontWestern, v)}
+              fallback="monospace"
+            />
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">字体大小</span>
               <div className="flex h-7 items-center overflow-hidden rounded-lg border">
