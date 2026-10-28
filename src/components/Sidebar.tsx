@@ -33,6 +33,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { readFiles, readFolder } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -160,64 +166,80 @@ export function Sidebar() {
     )
 
   return (
-    <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
+    <TooltipProvider delayDuration={300}>
+      <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
       <div className="flex flex-col gap-3 border-b px-4 py-2">
         <div className="flex h-10 items-center justify-between text-foreground">
           <img src="/themd-logo.png" alt="Themd" className="h-5.5 w-auto shrink-0" />
           <div className="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              onClick={() => window.dispatchEvent(new CustomEvent('themd:open-settings'))}
-              aria-label="设置"
-              title="设置"
-            >
-              <Settings />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              onClick={() => window.dispatchEvent(new CustomEvent('themd:collapse-sidebar'))}
-              aria-label="收起侧栏"
-              title="收起侧栏"
-            >
-              <PanelLeftClose />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => window.dispatchEvent(new CustomEvent('themd:open-settings'))}
+                  aria-label="设置"
+                >
+                  <Settings />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>设置</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => window.dispatchEvent(new CustomEvent('themd:collapse-sidebar'))}
+                  aria-label="收起侧栏"
+                >
+                  <PanelLeftClose />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>收起侧栏</TooltipContent>
+            </Tooltip>
           </div>
         </div>
         <div className="flex gap-2">
           <Button className="flex-1" onClick={() => createNote()}>
             <Plus /> 新建
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleCreateFolder}
-            aria-label="新建分组"
-            title="新建分组"
-          >
-            <FolderPlus />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => fileInputRef.current?.click()}
-            aria-label="导入文件"
-            title="导入 .md 文件"
-          >
-            <FolderUp />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => folderInputRef.current?.click()}
-            aria-label="导入文件夹"
-            title="导入文件夹(文件夹即分组)"
-          >
-            <FolderInput />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={handleCreateFolder} aria-label="新建分组">
+                <FolderPlus />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>新建分组</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="导入文件"
+              >
+                <FolderUp />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>导入 .md 文件</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => folderInputRef.current?.click()}
+                aria-label="导入文件夹"
+              >
+                <FolderInput />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>导入文件夹(文件夹即分组)</TooltipContent>
+          </Tooltip>
           <input
             ref={fileInputRef}
             type="file"
@@ -327,7 +349,8 @@ export function Sidebar() {
           </div>
         )}
       </nav>
-    </aside>
+      </aside>
+    </TooltipProvider>
   )
 }
 
