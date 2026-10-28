@@ -1,6 +1,7 @@
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
+import { foldGutter } from '@codemirror/language'
 import { EditorView } from '@codemirror/view'
 import {
   defaultSettingsGithubDark,
@@ -46,7 +47,10 @@ export function EditorPane({
     })]
   }, [fontToken])
 
-  // GitHub 语法配色;背景/行号槽/活动行透明化,观感交给下面的令牌样式
+  // GitHub 语法配色;背景/活动行透明化,行号槽给淡色实体背景(用户感知为
+  // 「行号区应有底色」)。settings 值直接写 CSS 表达式,var() 合法。
+  // 注意:这里的样式模块在 style 表中晚于下方 chromeExt,同特异性下后者写的
+  // gutter 属性会被这里覆盖——gutter 背景只在此处声明,避免双写打架。
   const themeExt = useMemo(
     () =>
       isDark
@@ -54,7 +58,8 @@ export function EditorPane({
             settings: {
               ...defaultSettingsGithubDark,
               background: 'transparent',
-              gutterBackground: 'transparent',
+              gutterBackground: 'color-mix(in oklch, var(--muted) 45%, transparent)',
+              gutterBorder: 'color-mix(in oklch, var(--border) 60%, transparent)',
               lineHighlight: 'transparent',
             },
           })
@@ -62,24 +67,20 @@ export function EditorPane({
             settings: {
               ...defaultSettingsGithubLight,
               background: 'transparent',
-              gutterBackground: 'transparent',
+              gutterBackground: 'color-mix(in oklch, var(--muted) 45%, transparent)',
+              gutterBorder: 'color-mix(in oklch, var(--border) 60%, transparent)',
               lineHighlight: 'transparent',
             },
           }),
     [isDark],
   )
 
-  // 行号槽/活动行/光标走 shadcn 语义令牌;须排在 themeExt 之后,CodeMirror
-  // 的样式模块按插入顺序取胜(普通 css 会被两者都压掉,见 index.css 注释)
+  // 活动行/光标走 shadcn 语义令牌(行号槽背景/边线已由 themeExt settings 接管)
   const chromeExt = useMemo(
     () =>
       EditorView.theme({
-        '.cm-gutters': {
-          borderRight: '1px solid color-mix(in oklch, var(--border) 60%, transparent)',
-          color: 'color-mix(in oklch, var(--muted-foreground) 55%, transparent)',
-        },
         '.cm-activeLineGutter': {
-          backgroundColor: 'color-mix(in oklch, var(--accent) 45%, transparent)',
+          backgroundColor: 'color-mix(in oklch, var(--accent) 55%, transparent)',
           color: 'var(--foreground)',
         },
         '.cm-activeLine': {
@@ -88,6 +89,28 @@ export function EditorPane({
         '.cm-caret': { color: 'var(--primary)' },
       }),
     [],
+  )
+
+  // 折叠箭头:CM 默认用 ⌄/› 字符,在 monospace 字体里墨迹偏上,视觉与行号错位;
+  // 换内联 SVG,基线稳定且可以按状态换色
+  const foldMarkerDOM = useMemo(
+    () => (open: boolean) => {
+      const span = document.createElement('span')
+      span.title = open ? 'Fold line' : 'Unfold line'
+      span.style.cssText = 'display:inline-flex;cursor:pointer;color:inherit'
+      span.innerHTML = open
+        ? '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        : '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3.5 2 6.5 5 3.5 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      return span
+    },
+    [],
+  )
+  const foldExt = useMemo(
+    () =>
+      foldGutter({
+        markerDOM: (open) => foldMarkerDOM(open),
+      }),
+    [foldMarkerDOM],
   )
 
   // 同步滚动:CodeMirror 的滚动容器是内部 .cm-scroller,由 @uiw 在自身
@@ -127,10 +150,13 @@ export function EditorPane({
         height="100%"
         // 关掉 @uiw 默认 light 主题选项(白色背景/行号槽配色),配色完全由上面的扩展接管
         theme="none"
+        // 内置 foldGutter 用字符箭头(视觉错位),关掉换上面自定义 SVG 版
+        basicSetup={{ foldGutter: false }}
         extensions={[
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           themeExt,
           chromeExt,
+          foldExt,
           fontExt,
         ]}
       />

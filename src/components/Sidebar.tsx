@@ -200,8 +200,23 @@ export function Sidebar() {
           >
             <FolderPlus />
           </Button>
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-            <FolderUp /> 导入
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="导入文件"
+            title="导入 .md 文件"
+          >
+            <FolderUp />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => folderInputRef.current?.click()}
+            aria-label="导入文件夹"
+            title="导入文件夹(文件夹即分组)"
+          >
+            <FolderInput />
           </Button>
           <input
             ref={fileInputRef}
@@ -210,6 +225,14 @@ export function Sidebar() {
             multiple
             hidden
             onChange={handleImport}
+          />
+          <input
+            ref={folderInputRef}
+            type="file"
+            // @ts-expect-error 非标准属性,Chromium 支持
+            webkitdirectory=""
+            hidden
+            onChange={handleFolderImport}
           />
         </div>
         <div className="relative">
@@ -304,25 +327,6 @@ export function Sidebar() {
           </div>
         )}
       </nav>
-
-      <div className="border-t p-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start text-muted-foreground"
-          onClick={() => folderInputRef.current?.click()}
-        >
-          <FolderInput /> 导入文件夹…
-        </Button>
-        <input
-          ref={folderInputRef}
-          type="file"
-          // @ts-expect-error 非标准属性,Chromium 支持
-          webkitdirectory=""
-          hidden
-          onChange={handleFolderImport}
-        />
-      </div>
     </aside>
   )
 }
