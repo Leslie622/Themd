@@ -1,10 +1,23 @@
 /**
- * 系统字体枚举。
- * 浏览器无法直接列出全部已装字体;两条路径:
- * 1. Local Font Access API(queryLocalFonts)——完整列表,需用户授权,Chrome/Edge 支持
- * 2. 测量法——用一段预置的常见字体名单逐一探测是否安装(离线可用、全浏览器兼容)
- * 两者合并去重:测量法结果立即可用,授权后补全完整列表。
+ * 系统字体枚举,按运行环境双轨:
+ * - Tauri 桌面端:IPC 调 Rust 侧枚举系统字体注册表,精确全量、无权限弹窗
+ * - 浏览器:queryLocalFonts(需授权)/ canvas 测量法(常见字体名单探测)
  */
+
+/** 是否运行在 Tauri 桌面壳内 */
+export function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
+/** 桌面端:Rust 枚举的完整字体族列表(带会话内缓存) */
+let desktopFontsCache: string[] | null = null
+async function desktopFontList(): Promise<string[]> {
+  if (desktopFontsCache) return desktopFontsCache
+  const { invoke } = await import('@tauri-apps/api/core')
+  const families = await invoke<string[]>('list_system_fonts')
+  desktopFontsCache = families
+  return families
+}
 
 /** 测量法候选名单:常见的 Windows / macOS / Linux 字体 + 若干中文字体 */
 const PROBE_FONTS = [
@@ -79,10 +92,18 @@ export async function localFontPermission(): Promise<
   }
 }
 
-/** 授权完整枚举(Local Font Access)。结果必须区分「被拒」与「成功」——
+/** 授权完整枚举。桌面端走 IPC(无权限概念,直接成功);浏览器走 queryLocalFonts。
  * 新版 Chromium 在权限被拒后不再弹框,且 queryLocalFonts 直接回空数组,
  * 若不检查会被误当成成功、用空列表覆盖探测名单 */
 export async function requestAllFonts(): Promise<FontAccessResult> {
+  if (isTauri()) {
+    try {
+      const fonts = await desktopFontList()
+      return { ok: true, fonts }
+    } catch {
+      return { ok: false, reason: 'error' }
+    }
+  }
   const api = (
     window as unknown as {
       queryLocalFonts?: () => Promise<Array<{ family: string }>>
@@ -122,7 +143,9 @@ export function getCachedFullFontList(): string[] | null {
   }
 }
 
-/** Local Font Access 是否可用(决定 UI 是否显示「获取完整列表」入口) */
+/** Local Font Access 是否可用(决定 UI 是否显示「获取完整列表」入口)。
+ * 桌面端无权限门槛,始终视为可用 */
 export function isLocalFontAccessSupported(): boolean {
+  if (isTauri()) return true
   return typeof window !== 'undefined' && 'queryLocalFonts' in window
 }

@@ -1,0 +1,24 @@
+[package]
+name = "themd"
+version = "0.1.0"
+description = "Themd — 样式自设的本地 Markdown 笔记本"
+edition = "2021"
+
+# Tauri v2 对应的 crates
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.dev]
+incremental = true # 首次编译后增量编译更快
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"   # 体积优先(桌面笔记应用不需要极致运行速度)
+strip = true
