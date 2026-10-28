@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { readFiles } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { ThemdLogo } from '@/components/ThemdLogo'
 import { useNotebook } from '@/store'
 import type { Note } from '@/store'
 
@@ -41,10 +42,10 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-sidebar">
-      <div className="flex flex-col gap-2 border-b p-3">
-        <div className="flex items-baseline gap-2 px-1">
-          <span className="text-base font-semibold tracking-tight">Themd</span>
-          <span className="text-xs text-muted-foreground">样式自设的 MD 笔记本</span>
+      <div className="flex flex-col gap-3 border-b p-4 pb-5">
+        <div className="flex items-center gap-3 px-1 text-foreground">
+          <ThemdLogo className="size-11 shrink-0" />
+          <span className="text-xl font-bold tracking-tight">Themd</span>
         </div>
         <div className="flex gap-2">
           <Button className="flex-1" onClick={() => createNote()}>
