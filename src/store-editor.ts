@@ -51,8 +51,8 @@ const applySize = (px: number) => {
   document.documentElement.style.setProperty('--font-editor-size', `${px}px`)
 }
 
-/** 默认字体链:与 index.css 中 --font-sans 的回落保持一致 */
-const DEFAULT_UI_STACK = "'Geist Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+/** 默认字体链:与 index.css 中 --font-sans 的回落保持一致(中文默认打包的鸿蒙黑体) */
+const DEFAULT_UI_STACK = "'Geist Variable', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif"
 
 const applyFonts = (s: Pick<EditorPrefsState, 'uiFontWestern' | 'uiFontCjk' | 'editorFontWestern' | 'editorFontCjk'>) => {
   const root = document.documentElement.style
@@ -135,6 +135,7 @@ export const EDITOR_FONT_RANGE = { MIN, MAX } as const
 /** 界面/编辑器共用的西文字体候选(预设 + 本机探测列表由 UI 层合并) */
 export const UI_FONT_PRESETS = [
   { label: 'Geist(默认)', value: 'Geist Variable' },
+  { label: 'HarmonyOS Sans SC', value: 'HarmonyOS Sans SC' },
   { label: '系统界面字体', value: 'system-ui' },
   { label: 'Segoe UI(Windows)', value: 'Segoe UI' },
   { label: 'Inter', value: 'Inter' },
@@ -158,6 +159,7 @@ export const MONO_FONT_PRESETS = [
 /** 中文字体候选 */
 export const CJK_FONT_PRESETS = [
   { label: '系统默认', value: '' },
+  { label: 'HarmonyOS Sans SC(打包默认)', value: 'HarmonyOS Sans SC' },
   { label: '微软雅黑', value: 'Microsoft YaHei' },
   { label: '苹方(macOS)', value: 'PingFang SC' },
   { label: '思源黑体', value: 'Source Han Sans SC' },

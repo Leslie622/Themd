@@ -63,3 +63,7 @@ npx shadcn@latest add <组件名>   # 如 tabs、tooltip、command...
 - 暗色模式（主题 CSS 变量已就绪，加个开关切 `.dark` class 即可）
 - KaTeX 数学公式、mermaid 图表、目录/锚点跳转（标题 id 已生成）
 - 存储升级：IndexedDB（大笔记）→ File System Access API（直接读写本地文件夹）→ Tauri 桌面版
+
+## 字体声明
+
+本产品界面默认中文字体使用 [HarmonyOS Sans SC](https://developer.huawei.com/consumer/cn/design/harmonyos-font/)（华为鸿蒙黑体，Regular/Bold 两个字重，打包于 `public/fonts/`），依据《HarmonyOS Sans Fonts License Agreement》免费商用许可内嵌使用，许可文本见 `public/fonts/HarmonyOS_Sans_LICENSE.txt`。
