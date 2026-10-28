@@ -62,16 +62,39 @@ export function detectInstalledFonts(): string[] {
   return installed
 }
 
-/** 授权完整枚举(Local Font Access)。支持并授权 → 完整列表;不支持/拒绝 → null */
-export async function requestAllFonts(): Promise<string[] | null> {
+/** requestAllFonts 的结果:ok 带列表;其余带原因(UI 据此提示) */
+export type FontAccessResult =
+  | { ok: true; fonts: string[] }
+  | { ok: false; reason: 'unsupported' | 'denied' | 'error' }
+
+/** Local Font Access 权限状态;不支持该 API 时返回 null */
+export async function localFontPermission(): Promise<
+  'granted' | 'denied' | 'prompt' | null
+> {
+  try {
+    const st = await navigator.permissions.query({ name: 'local-fonts' as PermissionName })
+    return st.state as 'granted' | 'denied' | 'prompt'
+  } catch {
+    return null // 部分浏览器没有该权限描述符
+  }
+}
+
+/** 授权完整枚举(Local Font Access)。结果必须区分「被拒」与「成功」——
+ * 新版 Chromium 在权限被拒后不再弹框,且 queryLocalFonts 直接回空数组,
+ * 若不检查会被误当成成功、用空列表覆盖探测名单 */
+export async function requestAllFonts(): Promise<FontAccessResult> {
   const api = (
     window as unknown as {
       queryLocalFonts?: () => Promise<Array<{ family: string }>>
     }
   ).queryLocalFonts
-  if (!api) return null
+  if (!api) return { ok: false, reason: 'unsupported' }
   try {
+    // 权限预检:denied 时把「回空数组」拦在覆盖数据之前
+    const perm = await localFontPermission()
+    if (perm === 'denied') return { ok: false, reason: 'denied' }
     const fonts = await api()
+    if (fonts.length === 0) return { ok: false, reason: 'denied' } // 双保险
     const families = [...new Set(fonts.map((f) => f.family))]
     families.sort((a, b) => a.localeCompare(b))
     // 完整列表缓存进 localStorage,后续会话免重复扫描
@@ -80,9 +103,10 @@ export async function requestAllFonts(): Promise<string[] | null> {
     } catch {
       // 配额异常不影响主流程
     }
-    return families
+    return { ok: true, fonts: families }
   } catch {
-    return null // 用户拒绝授权
+    // NotAllowedError 等:用户当场拒绝或浏览器策略阻止
+    return { ok: false, reason: 'denied' }
   }
 }
 

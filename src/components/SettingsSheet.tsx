@@ -31,6 +31,7 @@ import {
   requestAllFonts,
 } from '@/lib/theme/font-list'
 import { Minus, Plus } from 'lucide-react'
+import { toast } from 'sonner'
 
 /** 预览样例:中西文与代码混排,换字体立刻可感知 */
 const SAMPLE_TEXT = '笔记 Aa1 — 字体预览 {code: true}'
@@ -94,11 +95,24 @@ function FontPicker({
 
   const requestFullList = async () => {
     setRequesting(true)
-    const list = await requestAllFonts()
+    const result = await requestAllFonts()
     setRequesting(false)
-    if (list) {
-      fontListPromise = Promise.resolve(list)
-      setLocalFonts(list)
+    if (result.ok) {
+      fontListPromise = Promise.resolve(result.fonts)
+      setLocalFonts(result.fonts)
+      toast.success(`已读取 ${result.fonts.length} 个本机字体`)
+    } else if (result.reason === 'denied') {
+      toast.error('字体访问权限被拒绝', {
+        description:
+          '请点地址栏左侧的图标 → 权限 → 字体,改为「允许」后重试;或在浏览器设置中重置本站点的字体权限。',
+        duration: 10000,
+      })
+    } else if (result.reason === 'unsupported') {
+      toast.error('当前浏览器不支持读取本机字体', {
+        description: '请使用 Chrome / Edge,或直接在输入框中手填字体名。',
+      })
+    } else {
+      toast.error('读取字体列表失败，请重试')
     }
   }
 

@@ -1,4 +1,5 @@
 import { RotateCcw } from 'lucide-react'
+import { toast } from 'sonner'
 import { memo, useEffect, useRef, useState } from 'react'
 import {
   detectInstalledFonts,
@@ -390,9 +391,19 @@ function FontFamilyInput({ value, onChange }: { value: string | undefined; onCha
 
   const requestFullList = async () => {
     setRequesting(true)
-    const list = await requestAllFonts()
+    const result = await requestAllFonts()
     setRequesting(false)
-    if (list) setLocalFonts(list)
+    if (result.ok) {
+      setLocalFonts(result.fonts)
+    } else if (result.reason === 'denied') {
+      toast.error('字体访问权限被拒绝', {
+        description:
+          '请点地址栏左侧的图标 → 权限 → 字体,改为「允许」后重试。',
+        duration: 10000,
+      })
+    } else {
+      toast.error('读取字体列表失败，请重试')
+    }
   }
 
   return (
