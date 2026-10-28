@@ -1,0 +1,212 @@
+/*
+ * 基础样式表 = 「极简」主题。
+ * 每条样式通过 var(--t-*, 回落值) 消费令牌；变量未注入时回落值生效，
+ * 因此回落值的集合就是极简主题的完整观感。
+ * 变量名必须与 lib/theme/tokens.ts 的 TOKEN_VAR 一致。
+ */
+
+.themd-prose {
+  font-family: var(--t-root-font, 'Geist Variable', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif);
+  font-size: var(--t-root-size, 16px);
+  line-height: var(--t-root-leading, 1.75);
+  letter-spacing: var(--t-root-spacing, normal);
+  color: var(--t-root-color, var(--foreground));
+  background: var(--t-root-bg, transparent);
+  max-width: var(--t-root-width, 48rem);
+}
+
+.themd-prose p {
+  margin-bottom: var(--t-p-margin-bottom, 1.25em);
+  text-align: var(--t-p-align, start);
+  text-indent: var(--t-p-indent, 0);
+}
+
+/* ---------- 标题 ---------- */
+
+.themd-prose h1,
+.themd-prose h2,
+.themd-prose h3,
+.themd-prose h4,
+.themd-prose h5,
+.themd-prose h6 {
+  font-family: var(--t-heading-font, inherit);
+  font-weight: var(--t-heading-weight, 650);
+  line-height: var(--t-heading-leading, 1.3);
+  color: var(--t-heading-color, inherit);
+  margin-top: var(--t-heading-margin-top, 1.6em);
+  margin-bottom: var(--t-heading-margin-bottom, 0.6em);
+}
+
+.themd-prose :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
+
+.themd-prose h1 {
+  font-size: var(--t-h1-size, 2em);
+  color: var(--t-h1-color, var(--t-heading-color, inherit));
+  border-bottom: var(--t-h1-border-width, 0) solid var(--t-h1-border-color, oklch(0.9 0 0));
+  padding-bottom: var(--t-h1-padding-bottom, 0);
+}
+.themd-prose h2 {
+  font-size: var(--t-h2-size, 1.5em);
+  color: var(--t-h2-color, var(--t-heading-color, inherit));
+  border-bottom: var(--t-h2-border-width, 0) solid var(--t-h2-border-color, oklch(0.9 0 0));
+  padding-bottom: var(--t-h2-padding-bottom, 0);
+}
+.themd-prose h3 { font-size: var(--t-h3-size, 1.22em); color: var(--t-h3-color, var(--t-heading-color, inherit)); }
+.themd-prose h4 { font-size: var(--t-h4-size, 1.05em); color: var(--t-h4-color, var(--t-heading-color, inherit)); }
+.themd-prose h5 { font-size: var(--t-h5-size, 1em); color: var(--t-h5-color, var(--t-heading-color, inherit)); }
+.themd-prose h6 { font-size: var(--t-h6-size, 0.9em); color: var(--t-h6-color, var(--t-heading-color, inherit)); }
+
+/* ---------- 行内元素 ---------- */
+
+.themd-prose strong {
+  font-weight: var(--t-strong-weight, 700);
+  color: var(--t-strong-color, inherit);
+  background: var(--t-strong-bg, transparent);
+  padding: var(--t-strong-padding, 0);
+  border-radius: 4px;
+}
+.themd-prose em {
+  font-style: var(--t-em-style, italic);
+  color: var(--t-em-color, inherit);
+}
+.themd-prose del {
+  color: var(--t-del-color, inherit);
+  text-decoration-color: var(--t-del-text-color, currentColor);
+}
+
+/* a.underline 令牌值 always/hover/none 由编译器展开为两个变量 */
+.themd-prose a {
+  color: var(--t-a-color, inherit);
+  text-decoration-line: var(--t-a-underline-line, underline);
+  text-underline-offset: 0.2em;
+}
+.themd-prose a:hover {
+  text-decoration-line: var(--t-a-hover-underline, underline);
+}
+
+.themd-prose :not(pre) > code {
+  font-family: var(--t-inline-code-font, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace);
+  font-size: var(--t-inline-code-size, 0.875em);
+  color: var(--t-inline-code-color, inherit);
+  background: var(--t-inline-code-bg, oklch(0.96 0 0));
+  padding: var(--t-inline-code-padding, 0.2em 0.35em);
+  border-radius: var(--t-inline-code-radius, 4px);
+  border: var(--t-inline-code-border-width, 0) solid var(--t-inline-code-border-color, oklch(0.9 0 0));
+}
+
+/* ---------- 代码块 ---------- */
+
+.themd-prose pre {
+  background: var(--t-code-bg, oklch(0.97 0 0));
+  padding: var(--t-code-padding, 1em 1.25em);
+  border-radius: var(--t-code-radius, 8px);
+  border: var(--t-code-border-width, 0) solid var(--t-code-border-color, oklch(0.9 0 0));
+  overflow-x: auto;
+  margin-bottom: 1.25em;
+}
+.themd-prose pre code {
+  font-family: var(--t-code-font, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace);
+  font-size: var(--t-code-size, 0.875em);
+  line-height: var(--t-code-leading, 1.6);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  color: inherit;
+}
+/* hljs 主题表自带底色/前景色，交给上面的令牌控制 */
+.themd-prose pre code.hljs {
+  background: transparent;
+  padding: 0;
+}
+
+/* ---------- 列表 ---------- */
+
+.themd-prose ul,
+.themd-prose ol {
+  padding-left: var(--t-list-indent, 1.5em);
+  margin-bottom: 1.25em;
+}
+.themd-prose li + li {
+  margin-top: var(--t-li-spacing, 0.375em);
+}
+.themd-prose li > p {
+  margin-bottom: 0.375em;
+}
+.themd-prose ul li::marker {
+  color: var(--t-ul-marker, currentColor);
+}
+.themd-prose ol li::marker {
+  color: var(--t-ol-marker, currentColor);
+}
+
+/* 任务列表：去掉圆点，勾选框吃主题色 */
+.themd-prose ul:has(> li.task-list-item) {
+  list-style: none;
+  padding-left: 0.25em;
+}
+.themd-prose input.task-list-item-checkbox {
+  accent-color: var(--t-task-accent, oklch(0.55 0 0));
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+
+/* ---------- 引用 ---------- */
+
+.themd-prose blockquote {
+  border-left: var(--t-quote-border-width, 3px) solid var(--t-quote-border-color, oklch(0.9 0 0));
+  background: var(--t-quote-bg, transparent);
+  color: var(--t-quote-color, inherit);
+  border-radius: var(--t-quote-radius, 0);
+  padding: var(--t-quote-padding, 0.25em 1em);
+  font-style: var(--t-quote-style, normal);
+  margin: 1.5em 0 1.25em;
+}
+.themd-prose blockquote p {
+  margin-bottom: 0;
+}
+.themd-prose blockquote p + p {
+  margin-top: 0.75em;
+}
+
+/* ---------- 表格 ---------- */
+
+.themd-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--t-table-border-color, oklch(0.9 0 0));
+  margin-bottom: 1.5em;
+  display: table;
+  font-size: 0.95em;
+}
+.themd-prose th,
+.themd-prose td {
+  border-top: 1px solid var(--t-table-border-color, oklch(0.9 0 0));
+  padding: var(--t-cell-padding, 0.5em 0.85em);
+  text-align: left;
+}
+.themd-prose thead th {
+  background: var(--t-th-bg, transparent);
+  font-weight: var(--t-th-weight, 600);
+  border-top: none;
+}
+.themd-prose tbody tr:nth-child(2n) {
+  background: var(--t-table-stripe, transparent);
+}
+
+/* ---------- 分割线 / 图片 ---------- */
+
+.themd-prose hr {
+  border: none;
+  height: var(--t-hr-thickness, 1px);
+  background: var(--t-hr-color, oklch(0.9 0 0));
+  margin: 2em 0;
+}
+.themd-prose img {
+  max-width: var(--t-img-max-width, 100%);
+  border-radius: var(--t-img-radius, 4px);
+  border: var(--t-img-border-width, 0) solid var(--t-img-border-color, oklch(0.9 0 0));
+  box-shadow: var(--t-img-shadow, none);
+}

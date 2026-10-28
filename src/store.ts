@@ -8,6 +8,8 @@ export interface Note {
   updatedAt: number
   /** 手动重命名后，标题不再自动跟随正文首行 */
   titleCustom?: boolean
+  /** 本篇笔记专属主题 id（P5）；未设置 = 跟随全局激活主题 */
+  themeId?: string
 }
 
 interface NotebookState {
@@ -18,6 +20,8 @@ interface NotebookState {
   renameNote: (id: string, title: string) => void
   removeNote: (id: string) => void
   setActive: (id: string | null) => void
+  /** 设置/清除本篇笔记的主题覆盖；清除后回落全局主题 */
+  setNoteTheme: (id: string, themeId: string | null) => void
 }
 
 /** 从正文推导标题：优先 # 标题，否则第一个非空行 */
@@ -118,7 +122,29 @@ export const useNotebook = create<NotebookState>()(
           return { notes, activeId }
         }),
       setActive: (id) => set({ activeId: id }),
+      setNoteTheme: (id, themeId) =>
+        set((s) => ({
+          notes: s.notes.map((n) =>
+            n.id === id
+              ? {
+                  ...n,
+                  themeId: themeId ?? undefined,
+                }
+              : n,
+          ),
+        })),
     }),
-    { name: 'md-notebook', version: 1 },
+    {
+      name: 'md-notebook',
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = (persisted ?? {}) as { notes?: Note[] } & Record<string, unknown>
+        // v1 → v2:补 themeId 字段(默认 undefined = 跟随全局)
+        if (version < 2 && Array.isArray(state.notes)) {
+          state.notes = state.notes.map((n) => ({ ...n, themeId: n.themeId }))
+        }
+        return state as never
+      },
+    },
   ),
 )

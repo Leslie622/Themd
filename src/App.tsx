@@ -4,6 +4,7 @@ import {
   Download,
   Eye,
   MoreHorizontal,
+  Palette,
   PenLine,
   Pencil,
   Plus,
@@ -24,7 +25,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -38,7 +44,9 @@ import { Toaster } from '@/components/ui/sonner'
 import { Sidebar } from '@/components/Sidebar'
 import { EditorPane } from '@/components/EditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
+import { ThemeStudio } from '@/components/theme/ThemeStudio'
 import { useNotebook } from '@/store'
+import { listAllThemes, useThemeStore } from '@/store-themes'
 import { downloadNote } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 
@@ -51,10 +59,14 @@ export default function App() {
   const renameNote = useNotebook((s) => s.renameNote)
   const removeNote = useNotebook((s) => s.removeNote)
   const createNote = useNotebook((s) => s.createNote)
+  const setNoteTheme = useNotebook((s) => s.setNoteTheme)
+  const themeList = useThemeStore((s) => s.themes)
+  const themeActiveId = useThemeStore((s) => s.activeId)
 
   const active = notes.find((n) => n.id === activeId) ?? null
 
   const [view, setView] = useState<ViewMode>('split')
+  const [studioOpen, setStudioOpen] = useState(false)
   const [previewText, setPreviewText] = useState('')
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -72,6 +84,15 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [active?.content])
 
+  // 主题工场：全屏接管主区域
+  if (studioOpen) {
+    return (
+      <div className="flex h-full w-full">
+        <ThemeStudio onBack={() => setStudioOpen(false)} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full">
       <Sidebar />
@@ -86,6 +107,14 @@ export default function App() {
                 </span>
               </div>
               <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStudioOpen(true)}
+                  aria-label="打开主题工场"
+                >
+                  <Palette /> 主题
+                </Button>
                 <ToggleGroup
                   type="single"
                   value={view}
@@ -110,6 +139,29 @@ export default function App() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <Palette /> 笔记主题
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuRadioGroup
+                          value={active.themeId ?? ''}
+                          onValueChange={(v) => setNoteTheme(active.id, v || null)}
+                        >
+                          <DropdownMenuRadioItem value="">
+                            跟随全局
+                          </DropdownMenuRadioItem>
+                          {listAllThemes({ themes: themeList, activeId: themeActiveId }).map(
+                            (t) => (
+                              <DropdownMenuRadioItem key={t.id} value={t.id}>
+                                {t.name}
+                              </DropdownMenuRadioItem>
+                            ),
+                          )}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => {
                         setRenameValue(active.title)
@@ -140,7 +192,7 @@ export default function App() {
 
             {view === 'split' ? (
               <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-                <ResizablePanel defaultSize={50} minSize={20}>
+                <ResizablePanel defaultSize="50%" minSize="20%">
                   <EditorPane
                     key={active.id}
                     value={active.content}
@@ -148,8 +200,8 @@ export default function App() {
                   />
                 </ResizablePanel>
                 <ResizableHandle />
-                <ResizablePanel defaultSize={50} minSize={20}>
-                  <PreviewPane content={previewText} />
+                <ResizablePanel defaultSize="50%" minSize="20%">
+                  <PreviewPane content={previewText} noteThemeId={active.themeId} />
                 </ResizablePanel>
               </ResizablePanelGroup>
             ) : view === 'edit' ? (
@@ -162,7 +214,7 @@ export default function App() {
               </div>
             ) : (
               <div className="min-h-0 flex-1">
-                <PreviewPane content={previewText} />
+                <PreviewPane content={previewText} noteThemeId={active.themeId} />
               </div>
             )}
 

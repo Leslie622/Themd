@@ -2,13 +2,48 @@ import { memo, useMemo } from 'react'
 import 'highlight.js/styles/github.css'
 
 import { md } from '@/lib/markdown'
+import { compileTokens } from '@/lib/theme/compile'
+import { resolveActiveTheme, useThemeStore } from '@/store-themes'
+import { useAppearance } from '@/store-appearance'
+import { useExtraCss } from '@/components/theme/useExtraCss'
 
-export const PreviewPane = memo(function PreviewPane({ content }: { content: string }) {
+/**
+ * 预览面板：md.render → .themd-prose 排版。
+ * 样式链路：主题令牌 → compileTokens → 容器 style 变量 → theme-base.css 消费。
+ * 主题来源优先级:笔记级覆盖(noteThemeId) > 全局激活主题。
+ * 有暗色令牌套时按应用暗色模式选择;附加 CSS 经 useExtraCss 作用域注入。
+ */
+export const PreviewPane = memo(function PreviewPane({
+  content,
+  noteThemeId,
+}: {
+  content: string
+  /** 本篇笔记的主题覆盖(P5);未设置跟随全局 */
+  noteThemeId?: string
+}) {
   const html = useMemo(() => md.render(content), [content])
+
+  const activeId = useThemeStore((s) => s.activeId)
+  const themes = useThemeStore((s) => s.themes)
+  const theme = useMemo(() => {
+    if (noteThemeId) {
+      const overridden = themes.find((t) => t.id === noteThemeId)
+      if (overridden) return overridden
+    }
+    return resolveActiveTheme({ themes, activeId })
+  }, [themes, activeId, noteThemeId])
+  const isDark = useAppearance((s) => s.isDark)
+  const cssVars = useMemo(
+    () => compileTokens(theme.tokens, theme.dark, isDark),
+    [theme, isDark],
+  )
+  useExtraCss(theme.id, theme.extraCss)
+
   return (
     <div className="h-full overflow-y-auto">
       <article
-        className="prose prose-neutral mx-auto max-w-3xl px-6 py-8"
+        className="themd-prose mx-auto px-6 py-8"
+        style={cssVars as React.CSSProperties}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>
