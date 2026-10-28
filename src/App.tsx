@@ -25,12 +25,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -40,6 +35,13 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Toaster } from '@/components/ui/sonner'
 import { Sidebar } from '@/components/Sidebar'
 import { EditorPane } from '@/components/EditorPane'
@@ -106,32 +108,73 @@ export default function App() {
                   {active.content.length} 字 · {fromNow(active.updatedAt)}
                 </span>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="flex shrink-0 items-center gap-2">
+                {/* 笔记主题:独立下拉,直接可见当前主题 */}
+                <Select
+                  value={active.themeId ?? ''}
+                  onValueChange={(v) => setNoteTheme(active.id, v || null)}
+                >
+                  <SelectTrigger size="sm" className="w-36 gap-1.5" aria-label="笔记主题">
+                    <Palette className="size-4 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder="笔记主题" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">跟随全局</SelectItem>
+                    {listAllThemes({ themes: themeList, activeId: themeActiveId }).map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                        {active.themeId === t.id && active.themeId ? (
+                          <span className="ml-1 text-xs text-primary">仅此笔记</span>
+                        ) : null}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* 视图切换:一个分组区块 */}
+                <div className="flex overflow-hidden rounded-lg border">
+                  <ToggleGroup
+                    type="single"
+                    className="gap-0"
+                    value={view}
+                    onValueChange={(v) => {
+                      if (v) setView(v as ViewMode)
+                    }}
+                  >
+                    <ToggleGroupItem
+                      value="edit"
+                      aria-label="编辑视图"
+                      className="rounded-none px-3"
+                    >
+                      <PenLine /> 编辑
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="split"
+                      aria-label="分屏视图"
+                      className="rounded-none border-x px-3"
+                    >
+                      <Columns2 /> 分屏
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="preview"
+                      aria-label="预览视图"
+                      className="rounded-none px-3"
+                    >
+                      <Eye /> 预览
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+
+                {/* 主题工厂 + 笔记操作 */}
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setStudioOpen(true)}
-                  aria-label="打开主题工场"
+                  aria-label="打开主题工厂"
+                  title="打开主题工厂:可视化定制渲染样式"
                 >
-                  <Palette /> 主题
+                  <Palette /> 主题工厂
                 </Button>
-                <ToggleGroup
-                  type="single"
-                  value={view}
-                  onValueChange={(v) => {
-                    if (v) setView(v as ViewMode)
-                  }}
-                >
-                  <ToggleGroupItem value="edit" aria-label="编辑">
-                    <PenLine /> 编辑
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="split" aria-label="分屏">
-                    <Columns2 /> 分屏
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="preview" aria-label="预览">
-                    <Eye /> 预览
-                  </ToggleGroupItem>
-                </ToggleGroup>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" aria-label="笔记操作">
@@ -139,29 +182,6 @@ export default function App() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger>
-                        <Palette /> 笔记主题
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent>
-                        <DropdownMenuRadioGroup
-                          value={active.themeId ?? ''}
-                          onValueChange={(v) => setNoteTheme(active.id, v || null)}
-                        >
-                          <DropdownMenuRadioItem value="">
-                            跟随全局
-                          </DropdownMenuRadioItem>
-                          {listAllThemes({ themes: themeList, activeId: themeActiveId }).map(
-                            (t) => (
-                              <DropdownMenuRadioItem key={t.id} value={t.id}>
-                                {t.name}
-                              </DropdownMenuRadioItem>
-                            ),
-                          )}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => {
                         setRenameValue(active.title)
