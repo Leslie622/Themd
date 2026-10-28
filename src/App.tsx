@@ -40,6 +40,7 @@ import { PreviewPane } from '@/components/PreviewPane'
 import { ThemeStudio } from '@/components/theme/ThemeStudio'
 import { useNotebook } from '@/store'
 import { listAllThemes, useThemeStore } from '@/store-themes'
+import { useSyncScroll } from '@/lib/scroll-sync'
 import { downloadNote } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 
@@ -57,6 +58,7 @@ export default function App() {
   const active = notes.find((n) => n.id === activeId) ?? null
 
   const [view, setView] = useState<ViewMode>('split')
+  const { bindEditorScroller, bindPreviewScroller } = useSyncScroll()
   const [studioOpen, setStudioOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -227,11 +229,16 @@ export default function App() {
                     key={active.id}
                     value={active.content}
                     onChange={(v) => updateNote(active.id, v)}
+                    bindScroller={bindEditorScroller}
                   />
                 </ResizablePanel>
                 <ResizableHandle />
                 <ResizablePanel defaultSize="50%" minSize="20%">
-                  <PreviewPane content={previewText} noteThemeId={active.themeId} />
+                  <PreviewPane
+                    content={previewText}
+                    noteThemeId={active.themeId}
+                    bindScroller={bindPreviewScroller}
+                  />
                 </ResizablePanel>
               </ResizablePanelGroup>
             ) : view === 'edit' ? (

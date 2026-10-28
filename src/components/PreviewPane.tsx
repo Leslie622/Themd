@@ -16,10 +16,13 @@ import { useExtraCss } from '@/components/theme/useExtraCss'
 export const PreviewPane = memo(function PreviewPane({
   content,
   noteThemeId,
+  bindScroller,
 }: {
   content: string
   /** 本篇笔记的主题覆盖(P5);未设置跟随全局 */
   noteThemeId?: string
+  /** 绑定滚动容器,用于编辑/预览同步滚动 */
+  bindScroller?: (el: HTMLElement | null) => void
 }) {
   const html = useMemo(() => md.render(content), [content])
 
@@ -44,7 +47,7 @@ export const PreviewPane = memo(function PreviewPane({
   useExtraCss(theme.id, theme.extraCss)
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div ref={bindScroller} className="h-full overflow-y-auto">
       <article
         className="themd-prose mx-auto px-6 py-8"
         style={cssVars as React.CSSProperties}

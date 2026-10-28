@@ -8,7 +8,7 @@ import {
   githubDarkInit,
   githubLightInit,
 } from '@uiw/codemirror-theme-github'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 import { resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
@@ -21,9 +21,12 @@ import { useAppearance } from '@/store-appearance'
 export function EditorPane({
   value,
   onChange,
+  bindScroller,
 }: {
   value: string
   onChange: (value: string) => void
+  /** 绑定内部滚动容器(.cm-scroller),用于编辑/预览同步滚动 */
+  bindScroller?: (el: HTMLElement | null) => void
 }) {
   const activeId = useThemeStore((s) => s.activeId)
   const themes = useThemeStore((s) => s.themes)
@@ -87,8 +90,37 @@ export function EditorPane({
     [],
   )
 
+  // 同步滚动:CodeMirror 的滚动容器是内部 .cm-scroller,由 @uiw 在自身
+  // effect 中挂载——本组件的 effect 先于它执行,查询必为 null。
+  // 用 MutationObserver 等 .cm-scroller 真正出现后再绑定。
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!bindScroller) return
+    const root = rootRef.current
+    if (!root) return
+    let bound = false
+    const tryBind = () => {
+      const sc = root.querySelector('.cm-scroller')
+      if (sc) {
+        bindScroller(sc as HTMLElement)
+        bound = true
+        return true
+      }
+      return false
+    }
+    if (tryBind()) return
+    const mo = new MutationObserver(() => {
+      if (tryBind()) mo.disconnect()
+    })
+    mo.observe(root, { childList: true, subtree: true })
+    return () => {
+      mo.disconnect()
+      if (bound) bindScroller(null)
+    }
+  }, [bindScroller])
+
   return (
-    <div className="h-full overflow-hidden text-sm">
+    <div ref={rootRef} className="h-full overflow-hidden text-sm">
       <CodeMirror
         value={value}
         onChange={onChange}
