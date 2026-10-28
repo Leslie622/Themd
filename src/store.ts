@@ -10,10 +10,20 @@ export interface Note {
   titleCustom?: boolean
   /** 本篇笔记专属主题 id（P5）；未设置 = 跟随全局激活主题 */
   themeId?: string
+  /** 所属分组 id；未设置 = 未分组 */
+    folderId?: string
+}
+
+export interface Folder {
+  id: string
+  name: string
+  /** 展示排序 */
+  order: number
 }
 
 interface NotebookState {
   notes: Note[]
+  folders: Folder[]
   activeId: string | null
   createNote: (title?: string, content?: string) => string
   updateNote: (id: string, content: string) => void
@@ -22,6 +32,14 @@ interface NotebookState {
   setActive: (id: string | null) => void
   /** 设置/清除本篇笔记的主题覆盖；清除后回落全局主题 */
   setNoteTheme: (id: string, themeId: string | null) => void
+  /** 新建分组 */
+  createFolder: (name: string) => string
+  /** 分组重命名 */
+  renameFolder: (id: string, name: string) => void
+  /** 删除分组（组内笔记变为未分组） */
+  removeFolder: (id: string) => void
+  /** 移动笔记到分组；folderId 为空 = 未分组 */
+  setNoteFolder: (id: string, folderId: string | null) => void
 }
 
 /** 从正文推导标题：优先 # 标题，否则第一个非空行 */
@@ -76,6 +94,7 @@ hello('Markdown')
 export const useNotebook = create<NotebookState>()(
   persist(
     (set) => ({
+      folders: [],
       notes: [
         {
           id: 'welcome-note',
@@ -133,13 +152,32 @@ export const useNotebook = create<NotebookState>()(
               : n,
           ),
         })),
+      createFolder: (name) => {
+        const id = crypto.randomUUID()
+        set((s) => ({ folders: [...s.folders, { id, name, order: s.folders.length }] }))
+        return id
+      },
+      renameFolder: (id, name) =>
+        set((s) => ({ folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)) })),
+      removeFolder: (id) =>
+        set((s) => ({
+          folders: s.folders.filter((f) => f.id !== id),
+          notes: s.notes.map((n) => (n.folderId === id ? { ...n, folderId: undefined } : n)),
+        })),
+      setNoteFolder: (id, folderId) =>
+        set((s) => ({
+          notes: s.notes.map((n) => (n.id === id ? { ...n, folderId: folderId ?? undefined } : n)),
+        })),
     }),
     {
       name: 'md-notebook',
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as { notes?: Note[] } & Record<string, unknown>
         // v1 → v2:补 themeId 字段(默认 undefined = 跟随全局)
+        if (version < 3) {
+          state.folders = Array.isArray(state.folders) ? state.folders : []
+        }
         if (version < 2 && Array.isArray(state.notes)) {
           state.notes = state.notes.map((n) => ({ ...n, themeId: n.themeId }))
         }

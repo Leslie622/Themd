@@ -22,3 +22,35 @@ export async function readFiles(
     })),
   )
 }
+
+export interface ImportedFile {
+  /** 相对目录路径(如 docs/notes);顶层为空串 */
+  folderPath: string
+  title: string
+  content: string
+}
+
+/**
+ * 读取文件夹选择器(webkitdirectory)里的所有 .md 文件。
+ * webkitRelativePath 形如 rootName/sub/file.md → folderPath = rootName/sub。
+ */
+export async function readFolder(
+  fileList: FileList,
+): Promise<ImportedFile[]> {
+  const mdFiles = Array.from(fileList).filter((f) =>
+    /\.(md|markdown|txt)$/i.test(f.name),
+  )
+  return Promise.all(
+    mdFiles.map(async (file) => {
+      const rel =
+        (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? ''
+      const parts = rel.split('/')
+      parts.pop() // 去掉文件名
+      return {
+        folderPath: parts.join('/'),
+        title: file.name.replace(/\.(md|markdown|txt)$/i, ''),
+        content: await file.text(),
+      }
+    }),
+  )
+}

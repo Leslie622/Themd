@@ -46,7 +46,6 @@ import {
 import { Toaster } from '@/components/ui/sonner'
 import { Sidebar } from '@/components/Sidebar'
 import { SettingsSheet } from '@/components/SettingsSheet'
-import { EDITOR_FONT_RANGE, useEditorPrefs } from '@/store-editor'
 import { EditorPane } from '@/components/EditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
 import { ThemeStudio } from '@/components/theme/ThemeStudio'
@@ -75,8 +74,6 @@ export default function App() {
   const [studioOpen, setStudioOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const editorFontSize = useEditorPrefs((s) => s.fontSize)
-  const setEditorFontSize = useEditorPrefs((s) => s.setFontSize)
   const sidebarPanelRef = usePanelRef()
   const sidebarResizeRaf = useRef(0)
 
@@ -187,29 +184,6 @@ export default function App() {
                     ))}
                   </SelectContent>
                 </Select>
-
-                {/* 编辑器字号 */}
-                <div className="flex h-7 items-center overflow-hidden rounded-lg border text-xs">
-                  <button
-                    type="button"
-                    className="h-full px-2 transition-colors hover:bg-accent disabled:opacity-40"
-                    aria-label="减小编辑器字号"
-                    disabled={editorFontSize <= EDITOR_FONT_RANGE.MIN}
-                    onClick={() => setEditorFontSize(editorFontSize - 0.5)}
-                  >
-                    A-</button>
-                  <span className="min-w-9 border-x px-1 text-center leading-7 text-muted-foreground" aria-live="polite">
-                    {editorFontSize}
-                  </span>
-                  <button
-                    type="button"
-                    className="h-full px-2 transition-colors hover:bg-accent disabled:opacity-40"
-                    aria-label="增大编辑器字号"
-                    disabled={editorFontSize >= EDITOR_FONT_RANGE.MAX}
-                    onClick={() => setEditorFontSize(editorFontSize + 0.5)}
-                  >
-                    A+</button>
-                </div>
 
                 {/* 视图切换:分段控件 */}
                 <div className="flex h-7 items-center overflow-hidden rounded-lg border">

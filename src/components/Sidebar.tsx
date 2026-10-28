@@ -1,10 +1,33 @@
 import { useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { FileText, FolderUp, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  FolderInput,
+  FolderUp,
+  MoreHorizontal,
+  PanelLeftClose,
+  Pencil,
+  Plus,
+  Search,
+  Settings,
+  Trash2,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { readFiles } from '@/lib/files'
+import { readFiles, readFolder } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useNotebook } from '@/store'
@@ -12,12 +35,24 @@ import type { Note } from '@/store'
 
 export function Sidebar() {
   const notes = useNotebook((s) => s.notes)
+  const folders = useNotebook((s) => s.folders)
   const activeId = useNotebook((s) => s.activeId)
   const setActive = useNotebook((s) => s.setActive)
   const createNote = useNotebook((s) => s.createNote)
+  const renameNote = useNotebook((s) => s.renameNote)
+  const removeNote = useNotebook((s) => s.removeNote)
+  const createFolder = useNotebook((s) => s.createFolder)
+  const renameFolder = useNotebook((s) => s.renameFolder)
+  const removeFolder = useNotebook((s) => s.removeFolder)
+  const setNoteFolder = useNotebook((s) => s.setNoteFolder)
 
   const [keyword, setKeyword] = useState('')
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
+  const [renaming, setRenaming] = useState<
+    { kind: 'note' | 'folder'; id: string; value: string } | null
+>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
 
   const kw = keyword.trim().toLowerCase()
   const filtered = useMemo(
@@ -30,6 +65,15 @@ export function Sidebar() {
       ),
     [notes, kw],
   )
+  const byFolder = useMemo(() => {
+    const map = new Map<string, Note[]>()
+    for (const n of filtered) {
+      const key = n.folderId ?? ''
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(n)
+    }
+    return map
+  }, [filtered])
 
   async function handleImport(e: ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
@@ -38,6 +82,73 @@ export function Sidebar() {
     for (const f of imported) createNote(f.title, f.content)
     e.target.value = '' // 允许再次导入同名文件
   }
+
+  /** 导入文件夹:目录路径 → 自动建分组 */
+  async function handleFolderImport(e: ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files?.length) return
+    const imported = await readFolder(files)
+    const pathToId = new Map<string, string>()
+    for (const f of imported) {
+      let folderId: string | undefined
+      if (f.folderPath) {
+        folderId = pathToId.get(f.folderPath)
+        if (!folderId) {
+          folderId = createFolder(f.folderPath.split('/').pop() || f.folderPath)
+          pathToId.set(f.folderPath, folderId)
+        }
+      }
+      const id = createNote(f.title, f.content)
+      if (folderId) setNoteFolder(id, folderId)
+    }
+    e.target.value = ''
+  }
+
+  const toggleFolder = (id: string) =>
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const commitRename = () => {
+    if (!renaming) return
+    const name = renaming.value.trim()
+    if (name) {
+      if (renaming.kind === 'note') renameNote(renaming.id, name)
+      else renameFolder(renaming.id, name)
+    }
+    setRenaming(null)
+  }
+
+  const renderNoteItem = (n: Note) =>
+    renaming?.kind === 'note' && renaming.id === n.id ? (
+      <div key={n.id} className="flex items-center gap-1 px-2 py-1">
+        <Input
+          value={renaming.value}
+          autoFocus
+          className="h-7 text-xs"
+          onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitRename()
+            if (e.key === 'Escape') setRenaming(null)
+          }}
+        />
+      </div>
+    ) : (
+      <NoteItem
+        key={n.id}
+        note={n}
+        active={n.id === activeId}
+        onClick={() => setActive(n.id)}
+        onRename={() => setRenaming({ kind: "note", id: n.id, value: n.title })}
+        onDelete={() => removeNote(n.id)}
+        folders={folders}
+        currentFolderId={n.folderId ?? null}
+        onMove={(folderId) => setNoteFolder(n.id, folderId)}
+      />
+    )
 
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
@@ -49,7 +160,7 @@ export function Sidebar() {
               variant="ghost"
               size="icon"
               className="size-7"
-              onClick={() => window.dispatchEvent(new CustomEvent("themd:open-settings"))}
+              onClick={() => window.dispatchEvent(new CustomEvent('themd:open-settings'))}
               aria-label="设置"
               title="设置"
             >
@@ -59,7 +170,7 @@ export function Sidebar() {
               variant="ghost"
               size="icon"
               className="size-7"
-              onClick={() => window.dispatchEvent(new CustomEvent("themd:collapse-sidebar"))}
+              onClick={() => window.dispatchEvent(new CustomEvent('themd:collapse-sidebar'))}
               aria-label="收起侧栏"
               title="收起侧栏"
             >
@@ -82,6 +193,14 @@ export function Sidebar() {
             hidden
             onChange={handleImport}
           />
+          <input
+            ref={folderInputRef}
+            type="file"
+            // @ts-expect-error 非标准属性,Chromium 支持
+            webkitdirectory=""
+            hidden
+            onChange={handleFolderImport}
+          />
         </div>
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -95,14 +214,81 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
-        {filtered.map((n) => (
-          <NoteItem
-            key={n.id}
-            note={n}
-            active={n.id === activeId}
-            onClick={() => setActive(n.id)}
-          />
-        ))}
+        {folders.map((f) => {
+          const items = byFolder.get(f.id) ?? []
+          const collapsed = collapsedFolders.has(f.id)
+          const isRenaming = renaming?.kind === 'folder' && renaming.id === f.id
+          return (
+            <div key={f.id}>
+              {isRenaming ? (
+                <div className="flex items-center gap-1 px-2 py-1">
+                  <Input
+                    value={renaming.value}
+                    autoFocus
+                    className="h-7 text-xs"
+                    onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename()
+                      if (e.key === 'Escape') setRenaming(null)
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="group flex items-center rounded-lg transition-colors hover:bg-sidebar-accent">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium"
+                    onClick={() => toggleFolder(f.id)}
+                  >
+                    {collapsed ? (
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="truncate">{f.name}</span>
+                    <span className="text-xs text-muted-foreground">{items.length}</span>
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+                        aria-label={`分组 ${f.name} 操作`}
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => setRenaming({ kind: "folder", id: f.id, value: f.name })}
+                      >
+                        <Pencil /> 重命名分组
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const id = createNote()
+                          setNoteFolder(id, f.id)
+                          setActive(id)
+                        }}
+                      >
+                        <Plus /> 新笔记到此分组
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onClick={() => removeFolder(f.id)}>
+                        <Trash2 /> 删除分组
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+              {!collapsed && items.map(renderNoteItem)}
+            </div>
+          )
+        })}
+
+        {(byFolder.get('') ?? []).map(renderNoteItem)}
+
         {notes.length > 0 && filtered.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-muted-foreground">
             没有匹配的笔记
@@ -117,6 +303,25 @@ export function Sidebar() {
           </div>
         )}
       </nav>
+
+      <div className="border-t p-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground"
+          onClick={() => folderInputRef.current?.click()}
+        >
+          <FolderInput /> 导入文件夹…
+        </Button>
+        <input
+          ref={folderInputRef}
+          type="file"
+          // @ts-expect-error 非标准属性,Chromium 支持
+          webkitdirectory=""
+          hidden
+          onChange={handleFolderImport}
+        />
+      </div>
     </aside>
   )
 }
@@ -125,27 +330,80 @@ function NoteItem({
   note,
   active,
   onClick,
+  onRename,
+  onDelete,
+  folders,
+  currentFolderId,
+  onMove,
 }: {
   note: Note
   active: boolean
   onClick: () => void
+  onRename: () => void
+  onDelete: () => void
+  folders: { id: string; name: string }[]
+  currentFolderId: string | null
+  onMove: (folderId: string | null) => void
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={cn(
-        'flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-sidebar-accent',
-        active && 'bg-sidebar-accent font-medium',
+        'group flex w-full items-center gap-2 rounded-lg pr-1 transition-colors hover:bg-sidebar-accent',
+        active ? 'bg-sidebar-accent' : '',
       )}
     >
-      <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate">{note.title}</span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {fromNow(note.updatedAt)}
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex min-w-0 flex-1 items-start gap-2 px-2 py-2 text-left text-sm"
+      >
+        <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className={cn('block truncate', active && 'font-medium')}>
+            {note.title}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {fromNow(note.updatedAt)}
+          </span>
         </span>
-      </span>
-    </button>
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+            aria-label={`笔记 ${note.title} 操作`}
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onRename}>
+            <Pencil /> 重命名
+          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <FolderInput /> 移动到分组
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => onMove(null)}>
+                {currentFolderId === null ? '✓ ' : ''}未分组
+              </DropdownMenuItem>
+              {folders.map((f) => (
+                <DropdownMenuItem key={f.id} onClick={() => onMove(f.id)}>
+                  {currentFolderId === f.id ? '✓ ' : ''}
+                  {f.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={onDelete}>
+            <Trash2 /> 删除
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }
