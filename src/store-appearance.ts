@@ -10,6 +10,11 @@ interface AppearanceState {
   toggleDark: () => void
 }
 
+/** 把 isDark 同步到 html.dark(滚动条等全局样式跟随明暗令牌) */
+function applyDarkClass(isDark: boolean) {
+  document.documentElement.classList.toggle('dark', isDark)
+}
+
 export const useAppearance = create<AppearanceState>()(
   persist(
     (set) => ({
@@ -18,17 +23,18 @@ export const useAppearance = create<AppearanceState>()(
     }),
     {
       name: 'themd-appearance',
-      // 状态驱动 class,避免渲染期副作用
+      version: 1,
       onRehydrateStorage: () => (state) => {
-        document.documentElement.classList.toggle('dark', !!state?.isDark)
+        applyDarkClass(!!state?.isDark)
       },
     },
   ),
 )
 
-/** 订阅 class 同步(运行时切换) */
+/** 运行时切换同步 + 模块加载即兜底一次(水合时序无关,防 class 丢失) */
 if (typeof window !== 'undefined') {
+  applyDarkClass(useAppearance.getState().isDark)
   useAppearance.subscribe((state) => {
-    document.documentElement.classList.toggle('dark', state.isDark)
+    applyDarkClass(state.isDark)
   })
 }
