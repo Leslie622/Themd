@@ -34,6 +34,7 @@ import {
 import { Toaster } from '@/components/ui/sonner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Sidebar } from '@/components/Sidebar'
+import { WindowControls } from '@/components/WindowControls'
 import { SettingsSheet } from '@/components/SettingsSheet'
 import { EditorPane } from '@/components/EditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
@@ -90,7 +91,7 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [active?.content])
 
-  // 主题工场：全屏接管主区域
+  // 主题工场:全屏接管主区域(窗口按钮由 ThemeStudio 顶栏提供)
   if (studioOpen) {
     return (
       <div className="flex h-full w-full">
@@ -126,7 +127,10 @@ export default function App() {
           <main className="flex h-full min-w-0 flex-col">
         {active ? (
           <>
-            <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
+            <header
+              data-tauri-drag-region
+              className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4"
+            >
               <div className="flex min-w-0 items-center gap-3">
                 {sidebarCollapsed && (
                   <Button
@@ -140,7 +144,9 @@ export default function App() {
                     <PanelLeft />
                   </Button>
                 )}
-                <h1 className="truncate text-sm font-semibold">{active.title}</h1>
+                <h1 data-tauri-drag-region className="truncate text-sm font-semibold">
+                  {active.title}
+                </h1>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {active.content.length} 字 · {fromNow(active.updatedAt)}
                 </span>
@@ -170,7 +176,7 @@ export default function App() {
                   </SelectContent>
                 </Select>
 
-                {/* 视图切换:shadcn ToggleGroup(spacing=0 即连体分段样式) */}
+                {/* 视图切换:纯图标减密度,悬停看含义 */}
                 <ToggleGroup
                   type="single"
                   variant="outline"
@@ -181,14 +187,14 @@ export default function App() {
                     if (v) setView(v as ViewMode)
                   }}
                 >
-                  <ToggleGroupItem value="edit" aria-label="编辑视图">
-                    <PenLine /> 编辑
+                  <ToggleGroupItem value="edit" aria-label="编辑视图" title="编辑视图">
+                    <PenLine />
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="split" aria-label="分屏视图">
-                    <Columns2 /> 分屏
+                  <ToggleGroupItem value="split" aria-label="分屏视图" title="分屏视图">
+                    <Columns2 />
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="preview" aria-label="预览视图">
-                    <Eye /> 预览
+                  <ToggleGroupItem value="preview" aria-label="预览视图" title="预览视图">
+                    <Eye />
                   </ToggleGroupItem>
                 </ToggleGroup>
 
@@ -219,6 +225,7 @@ export default function App() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <WindowControls />
               </div>
             </header>
 

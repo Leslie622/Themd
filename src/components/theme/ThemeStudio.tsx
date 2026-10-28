@@ -34,6 +34,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import { Toaster } from '@/components/ui/sonner'
+import { WindowControls } from '@/components/WindowControls'
 import { CssEditorPanel } from '@/components/theme/CssEditorPanel'
 import { FieldRow } from '@/components/theme/FieldControls'
 import { ColorFieldRow } from '@/components/theme/FieldControls'
@@ -280,12 +281,17 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex h-full w-full flex-1 flex-col">
       {/* 顶栏 */}
-      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
+      <header
+        data-tauri-drag-region
+        className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4"
+      >
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft /> 返回
           </Button>
-          <span className="text-sm font-semibold">主题工场</span>
+          <span data-tauri-drag-region className="text-sm font-semibold">
+            主题工场
+          </span>
           <span className="text-xs text-muted-foreground">正在编辑：{editing.name}</span>
         </div>
         <div className="flex items-center gap-1">
@@ -331,6 +337,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <WindowControls />
         </div>
       </header>
 

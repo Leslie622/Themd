@@ -168,9 +168,18 @@ export function Sidebar() {
   return (
     <TooltipProvider delayDuration={300}>
       <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
-      <div className="flex flex-col gap-3 border-b px-4 py-2">
-        <div className="flex h-10 items-center justify-between text-foreground">
-          <img src="/themd-logo.png" alt="Themd" className="h-5.5 w-auto shrink-0" />
+      <div className="flex flex-col gap-3.5 border-b px-4 pb-3.5 pt-3">
+        <div
+          data-tauri-drag-region
+          className="flex h-10 items-center justify-between text-foreground"
+        >
+          {/* 桌面端无原生标题栏,logo 行即窗口左上角的拖拽区 */}
+          <img
+            src="/themd-logo.png"
+            alt="Themd"
+            data-tauri-drag-region
+            className="h-4 w-auto shrink-0"
+          />
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -202,13 +211,20 @@ export function Sidebar() {
             </Tooltip>
           </div>
         </div>
-        <div className="flex gap-2">
+        {/* 主操作实心,次级操作 ghost 降噪,整行只剩一个视觉重心 */}
+        <div className="flex items-center gap-1">
           <Button className="flex-1" onClick={() => createNote()}>
             <Plus /> 新建
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={handleCreateFolder} aria-label="新建分组">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground"
+                onClick={handleCreateFolder}
+                aria-label="新建分组"
+              >
                 <FolderPlus />
               </Button>
             </TooltipTrigger>
@@ -217,8 +233,9 @@ export function Sidebar() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="text-muted-foreground"
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="导入文件"
               >
@@ -230,8 +247,9 @@ export function Sidebar() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="text-muted-foreground"
                 onClick={() => folderInputRef.current?.click()}
                 aria-label="导入文件夹"
               >
@@ -258,12 +276,12 @@ export function Sidebar() {
           />
         </div>
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="搜索笔记..."
-            className="pl-8"
+            className="rounded-full pl-8"
           />
         </div>
       </div>
