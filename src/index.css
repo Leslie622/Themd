@@ -178,3 +178,48 @@ pre::-webkit-scrollbar,
   width: 8px;
   height: 8px;
 }
+/* ---------- CodeMirror 编辑器主题化 ----------
+ * 与 shadcn 令牌联动:明暗模式自动跟随;行号、活动行、选区、光标统一观感 */
+.cm-editor {
+  font-size: 13.5px;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-scroller {
+  padding-top: 12px;
+  padding-bottom: 16px;
+  line-height: 1.7;
+}
+/* 行号槽 */
+.cm-gutters {
+  background: transparent;
+  border-right: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+  color: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
+}
+.cm-activeLineGutter {
+  background: color-mix(in oklch, var(--accent) 45%, transparent);
+  color: var(--foreground);
+}
+/* 当前行 */
+.cm-activeLine {
+  background: color-mix(in oklch, var(--accent) 30%, transparent);
+}
+/* 选区 */
+.cm-selectionBackground,
+.cm-content ::selection {
+  background: color-mix(in oklch, var(--primary) 18%, transparent) !important;
+}
+.cm-focused .cm-selectionBackground {
+  background: color-mix(in oklch, var(--primary) 18%, transparent) !important;
+}
+/* 光标 */
+.cm-caret {
+  color: var(--primary);
+  border-left-width: 2px;
+}
+/* 括号匹配等高亮走 token 色 */
+.cm-editor .cm-matchingBracket {
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  outline: 1px solid color-mix(in oklch, var(--primary) 30%, transparent);
+}

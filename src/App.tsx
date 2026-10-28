@@ -114,17 +114,19 @@ export default function App() {
                   value={active.themeId ?? ''}
                   onValueChange={(v) => setNoteTheme(active.id, v || null)}
                 >
-                  <SelectTrigger size="sm" className="w-36 gap-1.5" aria-label="笔记主题">
+                  <SelectTrigger size="sm" className="w-fit max-w-44 gap-1.5" aria-label="笔记主题">
                     <Palette className="size-4 shrink-0 text-muted-foreground" />
                     <SelectValue placeholder="笔记主题" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">跟随全局</SelectItem>
+                  <SelectContent position="popper" className="min-w-(--radix-select-trigger-width)">
+                    <SelectItem value="">
+                      <span className="truncate">跟随全局</span>
+                    </SelectItem>
                     {listAllThemes({ themes: themeList, activeId: themeActiveId }).map((t) => (
                       <SelectItem key={t.id} value={t.id}>
-                        {t.name}
+                        <span className="truncate">{t.name}</span>
                         {active.themeId === t.id && active.themeId ? (
-                          <span className="ml-1 text-xs text-primary">仅此笔记</span>
+                          <span className="ml-auto pl-2 text-xs text-primary">仅此笔记</span>
                         ) : null}
                       </SelectItem>
                     ))}

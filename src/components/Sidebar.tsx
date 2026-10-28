@@ -41,8 +41,8 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-sidebar">
-      <div className="flex flex-col gap-3 border-b p-4 pb-5">
-        <div className="flex items-center px-1 text-foreground">
+      <div className="flex flex-col gap-3 border-b p-3">
+        <div className="flex h-14 items-center justify-center text-foreground">
           <img src="/themd-logo.png" alt="Themd" className="h-8 w-auto shrink-0" />
         </div>
         <div className="flex gap-2">
