@@ -3,7 +3,7 @@ import 'highlight.js/styles/github.css'
 
 import { md } from '@/lib/markdown'
 import { compileTokens } from '@/lib/theme/compile'
-import { resolveActiveTheme, useThemeStore } from '@/store-themes'
+import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
 import { useExtraCss } from '@/components/theme/useExtraCss'
 
@@ -27,7 +27,11 @@ export const PreviewPane = memo(function PreviewPane({
   const themes = useThemeStore((s) => s.themes)
   const theme = useMemo(() => {
     if (noteThemeId) {
-      const overridden = themes.find((t) => t.id === noteThemeId)
+      // listAllThemes = 内置 + 用户主题;笔记覆盖选内置主题时也能命中
+      // (id 失效如主题已删除,则回落全局)
+      const overridden = listAllThemes({ themes, activeId }).find(
+        (t) => t.id === noteThemeId,
+      )
       if (overridden) return overridden
     }
     return resolveActiveTheme({ themes, activeId })
