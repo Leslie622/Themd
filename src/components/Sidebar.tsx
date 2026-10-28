@@ -2,11 +2,11 @@ import { useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import {
   ChevronRight,
+  FileInput,
   FileText,
   Folder,
   FolderInput,
   FolderPlus,
-  FolderUp,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -239,7 +239,7 @@ export function Sidebar() {
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="导入文件"
               >
-                <FolderUp />
+                <FileInput />
               </Button>
             </TooltipTrigger>
             <TooltipContent>导入 .md 文件</TooltipContent>
@@ -404,7 +404,7 @@ function NoteItem({
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm"
       >
         <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400">
-          <FileText className="size-3.5" />
+          <FileText className="size-4" />
         </span>
         <span className="min-w-0 flex-1">
           <span className={cn('block truncate', active && 'font-medium')}>

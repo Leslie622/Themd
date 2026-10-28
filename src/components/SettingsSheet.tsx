@@ -316,7 +316,7 @@ export function SettingsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-80 gap-0 overflow-y-auto sm:max-w-80">
+      <SheetContent side="left" className="w-80 gap-0 overflow-y-auto sm:max-w-80">
         <SheetHeader>
           <SheetTitle>设置</SheetTitle>
           <SheetDescription>实时生效并自动保存。</SheetDescription>

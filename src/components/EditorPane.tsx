@@ -2,17 +2,45 @@ import CodeMirror from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldGutter } from '@codemirror/language'
-import { EditorView } from '@codemirror/view'
+import { EditorView, lineNumbers as cmLineNumbers } from '@codemirror/view'
 import {
   defaultSettingsGithubDark,
   defaultSettingsGithubLight,
   githubDarkInit,
   githubLightInit,
 } from '@uiw/codemirror-theme-github'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type ChangeEvent } from 'react'
+import { toast } from 'sonner'
 
+import { fileToEmbeddedImage, insertImageMarkdown } from '@/lib/image'
 import { useAppearance } from '@/store-appearance'
 import { buildFontStack, useEditorPrefs } from '@/store-editor'
+
+/** 批量处理图片文件并插入;全部为图片才接管事件,返回是否接管 */
+async function insertImageFiles(
+  view: EditorView,
+  files: File[],
+  pos: number,
+): Promise<boolean> {
+  if (!files.length || !files.every((f) => f.type.startsWith('image/'))) return false
+  const alt = (name: string) => name.replace(/\.[^.]+$/, '') || '图片'
+  toast.info(files.length > 1 ? `正在插入 ${files.length} 张图片…` : '正在插入图片…')
+  let at = pos
+  let ok = 0
+  for (const file of files) {
+    try {
+      const dataUrl = await fileToEmbeddedImage(file)
+      insertImageMarkdown(view, at, dataUrl, alt(file.name))
+      // 上一张插入后光标停在其行尾(空行上),从这里续插下一张
+      at = view.state.selection.main.head
+      ok++
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `「${file.name}」处理失败`)
+    }
+  }
+  if (ok) toast.success(`已插入 ${ok} 张图片`)
+  return true
+}
 
 /**
  * CodeMirror 编辑器封装。
@@ -31,6 +59,9 @@ export function EditorPane({
   bindScroller?: (el: HTMLElement | null) => void
 }) {
   const isDark = useAppearance((s) => s.isDark)
+  // CodeMirror view 引用:粘贴/拖拽/菜单插图都要在精确光标处 dispatch
+  const viewRef = useRef<EditorView | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   // 编辑器字体默认跟产品 UI(index.css 的 .cm-editor 消费 --font-ui-sans);
   // 设置里自定义后 store 注入 --font-editor。无论哪种,都要用样式模块覆盖
   // .cm-scroller——CodeMirror 基础主题在那里硬编码了 monospace
@@ -45,6 +76,14 @@ export function EditorPane({
       EditorView.theme({
         '&': { fontFamily: editorFont },
         '.cm-scroller': { fontFamily: editorFont },
+        // 行号必须等宽对齐:未自定义编辑器字体时 .cm-scroller 走 UI 比例字体
+        // (Geist),数字 30/31 宽窄不一;行号槽单独用 --font-mono——
+        // 自定义编辑器字体时 store 已注入 --font-editor,行号自动跟随;
+        // 未自定义时回落系统等宽链。tabular-nums 兜底数字宽度
+        '.cm-lineNumbers .cm-gutterElement': {
+          fontFamily: 'var(--font-mono)',
+          fontVariantNumeric: 'tabular-nums',
+        },
       }),
     [editorFont],
   )
@@ -89,9 +128,68 @@ export function EditorPane({
           backgroundColor: 'color-mix(in oklch, var(--accent) 30%, transparent)',
         },
         '.cm-caret': { color: 'var(--primary)' },
+        // 行号在带内左右等距:折叠槽固定 10px 在左侧,行号居中且右 padding 多 10px
+        // 恰好抵消——有箭头/没箭头两个状态下数字到着色带两边缘的距离都相等
+        '.cm-lineNumbers .cm-gutterElement': {
+          padding: '0 10px 0 0',
+          textAlign: 'center',
+        },
+        '.cm-foldGutter .cm-gutterElement': {
+          minWidth: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0',
+        },
       }),
     [],
   )
+
+  // 图片插入:粘贴截图 / 拖拽文件 / 菜单选择(经 themd:insert-image 事件)三入口
+  const imageExt = useMemo(
+    () =>
+      EditorView.domEventHandlers({
+        paste: (event, view) => {
+          const files = [...(event.clipboardData?.files ?? [])]
+          if (!files.length || !files.every((f) => f.type.startsWith('image/'))) return false
+          event.preventDefault()
+          void insertImageFiles(view, files, view.state.selection.main.head)
+          return true
+        },
+        drop: (event, view) => {
+          const files = [...(event.dataTransfer?.files ?? [])]
+          if (!files.length || !files.every((f) => f.type.startsWith('image/'))) return false
+          event.preventDefault()
+          const pos =
+            view.posAtCoords({ x: event.clientX, y: event.clientY }) ??
+            view.state.selection.main.head
+          void insertImageFiles(view, files, pos)
+          return true
+        },
+        dragover: (event) => {
+          // 不阻止默认行为,浏览器会直接打开拖入的图片文件
+          if (event.dataTransfer?.types.includes('Files')) event.preventDefault()
+          return false
+        },
+      }),
+    [],
+  )
+
+  // 菜单/App 通过事件总线触发文件选择器(光标位置由 view 实时决定)
+  useEffect(() => {
+    const open = () => fileInputRef.current?.click()
+    window.addEventListener('themd:insert-image', open)
+    return () => window.removeEventListener('themd:insert-image', open)
+  }, [])
+
+  const handlePick = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(e.target.files ?? [])]
+    e.target.value = '' // 允许再次选择同一文件
+    const view = viewRef.current
+    if (view && files.length) {
+      void insertImageFiles(view, files, view.state.selection.main.head)
+    }
+  }
 
   // 折叠箭头:CM 默认用 ⌄/› 字符,在 monospace 字体里墨迹偏上,视觉与行号错位;
   // 换内联 SVG,基线稳定且可以按状态换色
@@ -149,18 +247,33 @@ export function EditorPane({
       <CodeMirror
         value={value}
         onChange={onChange}
+        onCreateEditor={(view) => {
+          viewRef.current = view
+        }}
         height="100%"
         // 关掉 @uiw 默认 light 主题选项(白色背景/行号槽配色),配色完全由上面的扩展接管
         theme="none"
-        // 内置 foldGutter 用字符箭头(视觉错位),关掉换上面自定义 SVG 版
-        basicSetup={{ foldGutter: false }}
+        // 行号与折叠槽都从 basicSetup 摘出来手动排:折叠槽注册在行号之前,
+        // 箭头在行号左侧(VSCode 同款解剖)——否则 12px 空折叠槽会插在行号和
+        // 正文之间,数字悬浮、左右边距肉眼不对称
+        basicSetup={{ foldGutter: false, lineNumbers: false }}
         extensions={[
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           themeExt,
           chromeExt,
           foldExt,
+          cmLineNumbers(),
           fontExt,
+          imageExt,
         ]}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handlePick}
       />
     </div>
   )

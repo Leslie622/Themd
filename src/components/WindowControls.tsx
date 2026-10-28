@@ -52,7 +52,7 @@ export function WindowControls() {
         aria-label={maximized ? '向下还原' : '最大化'}
         onClick={() => void appWindow.toggleMaximize()}
       >
-        {maximized ? <Copy className="size-3.5" /> : <Square className="size-3.5" />}
+        {maximized ? <Copy className="size-4" /> : <Square className="size-4" />}
       </button>
       <button type="button" className={BTN_CLOSE} aria-label="关闭" onClick={() => void appWindow.close()}>
         <X className="size-4" />
