@@ -385,7 +385,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
           </div>
         </ResizablePanel>
 
-        <ResizableHandle />
+        <ResizableHandle withHandle />
 
         {/* 中栏：实时预览 */}
         <ResizablePanel defaultSize="48%" minSize="25%">
@@ -477,7 +477,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
           </div>
         </ResizablePanel>
 
-        <ResizableHandle />
+        <ResizableHandle withHandle />
 
         {/* 右栏：属性面板 + 元素效果小预览 */}
         <ResizablePanel defaultSize="30%" minSize="20%" maxSize="45%">

@@ -182,18 +182,20 @@
 
 /* ---------- 全局滚动条 ----------
  * 细轨圆角、muted 配色、hover 加深,暗色模式自动跟随(--border/--muted-foreground 语义令牌)。
- * Firefox 走 scrollbar-width/color 标准属性;Chromium 走 ::-webkit-scrollbar 伪元素。
- * 预览正文的滚动条同样生效(作用于所有元素,含 .cm-scroller 与 .themd-prose 容器)。
+ * 只用 ::-webkit-scrollbar 伪元素,不设标准 scrollbar-width/color——
+ * Chromium 121+ 两套互斥:一旦设置标准属性,伪元素整套失效,滚动条回退
+ * 系统默认样式(带步进箭头)。桌面端固定 WebView2,无 Firefox 场景。
  */
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
-}
 
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
+}
+/* 隐藏滚动条两端的上下/左右步进箭头(Chromium 默认渲染),只留轨道+滑块 */
+::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -218,6 +220,43 @@ pre::-webkit-scrollbar,
   width: 8px;
   height: 8px;
 }
+
+/* ---------- 打印 / 导出 PDF ----------
+ * 只打印笔记正文(.themd-prose):visibility 方案不动布局,正文绝对定位后
+ * 从页首完整流动分页;主题令牌/hljs/附加 CSS 随 DOM 原样输出。
+ * 颜色不做白纸转换:所见即所得,暗色主题(如暗色终端)导出即黑底。
+ * WebView2 PrintToPdf 默认打印背景图形;系统打印对话框则依赖用户勾选
+ * 「背景图形」——勾掉时暗色主题只有文字色,底色靠 body 的显式背景兜底。
+ * unlayered 规则优先级高于 Tailwind utilities 层,可直接压过 px-6/py-8。
+ */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .themd-prose,
+  .themd-prose * {
+    visibility: visible !important;
+  }
+  .themd-prose {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    padding: 0;
+    /* 暗色主题下 prose 自身底色即纸张色;min-height 保证内容不足一页也铺满首页 */
+    background: var(--t-root-bg, transparent);
+    min-height: 100vh;
+    print-color-adjust: exact;
+  }
+  /* 全链路吃掉浏览器打印时的默认白底假设:正文底色铺满每页 */
+  html,
+  body {
+    background: var(--t-root-bg, transparent) !important;
+    print-color-adjust: exact;
+  }
+}
+
 /* ---------- CodeMirror 编辑器主题化 ----------
  * 语法配色:GitHub Light/Dark(EditorPane 内随明暗切换)。
  * 行号槽/活动行/光标的令牌化观感写在 EditorPane 的 EditorView.theme 里——

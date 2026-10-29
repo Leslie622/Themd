@@ -12,11 +12,20 @@ import {
   Pencil,
   Plus,
   Search,
-  Settings,
   Trash2,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Collapsible,
   CollapsibleContent,
@@ -39,7 +48,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { readFiles, readFolder } from '@/lib/files'
+import { isTauri } from '@/lib/theme/font-list'
+import { readFiles, readFolder, readFolderDesktop } from '@/lib/files'
+import type { ImportedFile } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useNotebook } from '@/store'
@@ -56,12 +67,15 @@ export function Sidebar() {
   const createFolder = useNotebook((s) => s.createFolder)
   const renameFolder = useNotebook((s) => s.renameFolder)
   const removeFolder = useNotebook((s) => s.removeFolder)
+  const removeFolderWithNotes = useNotebook((s) => s.removeFolderWithNotes)
   const setNoteFolder = useNotebook((s) => s.setNoteFolder)
 
   const [keyword, setKeyword] = useState('')
   const [renaming, setRenaming] = useState<
     { kind: 'note' | 'folder'; id: string; value: string } | null
   >(null)
+  // 待删除的分组:弹确认框,由用户选择「仅删分组」还是「连笔记一起删」
+  const [deletingFolder, setDeletingFolder] = useState<{ id: string; name: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
@@ -99,6 +113,19 @@ export function Sidebar() {
     const files = e.target.files
     if (!files?.length) return
     const imported = await readFolder(files)
+    importFolderFiles(imported)
+    e.target.value = ''
+  }
+
+  /** 桌面端走原生目录选择(Rust 递归读取,无 WebView2 上传确认弹窗) */
+  async function handleFolderImportDesktop() {
+    const imported = await readFolderDesktop()
+    if (!imported?.length) return
+    importFolderFiles(imported)
+  }
+
+  /** 把导入的文件落库:每个目录路径自动建一个分组 */
+  function importFolderFiles(imported: ImportedFile[]) {
     const pathToId = new Map<string, string>()
     for (const f of imported) {
       let folderId: string | undefined
@@ -112,7 +139,12 @@ export function Sidebar() {
       const id = createNote(f.title, f.content)
       if (folderId) setNoteFolder(id, folderId)
     }
-    e.target.value = ''
+  }
+
+  /** 导入文件夹入口:桌面端原生对话框,浏览器端 webkitdirectory 兜底 */
+  const handleImportFolderClick = () => {
+    if (isTauri()) void handleFolderImportDesktop()
+    else folderInputRef.current?.click()
   }
 
   /** 新建分组:建完立即进入内联重命名 */
@@ -187,20 +219,6 @@ export function Sidebar() {
                   variant="ghost"
                   size="icon"
                   className="size-7"
-                  onClick={() => window.dispatchEvent(new CustomEvent('themd:open-settings'))}
-                  aria-label="设置"
-                >
-                  <Settings />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>设置</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
                   onClick={() => window.dispatchEvent(new CustomEvent('themd:collapse-sidebar'))}
                   aria-label="收起侧栏"
                 >
@@ -250,7 +268,7 @@ export function Sidebar() {
                 variant="ghost"
                 size="icon"
                 className="text-muted-foreground"
-                onClick={() => folderInputRef.current?.click()}
+                onClick={handleImportFolderClick}
                 aria-label="导入文件夹"
               >
                 <FolderInput />
@@ -331,7 +349,10 @@ export function Sidebar() {
                         <Plus /> 新笔记到此分组
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onClick={() => removeFolder(f.id)}>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => setDeletingFolder({ id: f.id, name: f.name })}
+                      >
                         <Trash2 /> 删除分组
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -368,6 +389,40 @@ export function Sidebar() {
         )}
       </nav>
       </aside>
+
+      <AlertDialog
+        open={deletingFolder !== null}
+        onOpenChange={(open) => !open && setDeletingFolder(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除分组</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除分组「{deletingFolder?.name}」会删除该分组下所有文件，是否继续删除？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deletingFolder) removeFolder(deletingFolder.id)
+                setDeletingFolder(null)
+              }}
+            >
+              仅删除分组
+            </AlertDialogAction>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (deletingFolder) removeFolderWithNotes(deletingFolder.id)
+                setDeletingFolder(null)
+              }}
+            >
+              删除所有文件
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   )
 }

@@ -2,6 +2,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldGutter } from '@codemirror/language'
+import { Compartment } from '@codemirror/state'
 import { EditorView, lineNumbers as cmLineNumbers } from '@codemirror/view'
 import {
   defaultSettingsGithubDark,
@@ -12,6 +13,7 @@ import {
 import { useEffect, useMemo, useRef, type ChangeEvent } from 'react'
 import { toast } from 'sonner'
 
+import { imagePlaceholder } from '@/lib/image-decorator'
 import { fileToEmbeddedImage, insertImageMarkdown } from '@/lib/image'
 import { useAppearance } from '@/store-appearance'
 import { buildFontStack, useEditorPrefs } from '@/store-editor'
@@ -99,7 +101,7 @@ export function EditorPane({
             settings: {
               ...defaultSettingsGithubDark,
               background: 'transparent',
-              gutterBackground: 'color-mix(in oklch, var(--muted) 45%, transparent)',
+              gutterBackground: 'var(--muted)',
               gutterBorder: 'color-mix(in oklch, var(--border) 60%, transparent)',
               lineHighlight: 'transparent',
             },
@@ -108,7 +110,7 @@ export function EditorPane({
             settings: {
               ...defaultSettingsGithubLight,
               background: 'transparent',
-              gutterBackground: 'color-mix(in oklch, var(--muted) 45%, transparent)',
+              gutterBackground: 'var(--muted)',
               gutterBorder: 'color-mix(in oklch, var(--border) 60%, transparent)',
               lineHighlight: 'transparent',
             },
@@ -128,18 +130,23 @@ export function EditorPane({
           backgroundColor: 'color-mix(in oklch, var(--accent) 30%, transparent)',
         },
         '.cm-caret': { color: 'var(--primary)' },
-        // 行号在带内左右等距:折叠槽固定 10px 在左侧,行号居中且右 padding 多 10px
-        // 恰好抵消——有箭头/没箭头两个状态下数字到着色带两边缘的距离都相等
+        // 行号区几何:「左空白|箭头|行号|右空白」左右等宽(10px),箭头+行号作为
+        // 一个整体居中——折叠槽 20px = 左空白 10px + 箭头 10px(贴右,紧邻行号),
+        // 行号槽只带右侧 10px,两侧空白必然相等,与折叠箭头显隐无关
         '.cm-lineNumbers .cm-gutterElement': {
           padding: '0 10px 0 0',
           textAlign: 'center',
         },
         '.cm-foldGutter .cm-gutterElement': {
-          minWidth: '10px',
+          width: '20px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'flex-end',
           padding: '0',
+        },
+        // 关闭折叠开关后折叠槽消失,行号槽自带左空白,保持左右对称
+        '.cm-gutters:not(:has(.cm-foldGutter)) .cm-lineNumbers .cm-gutterElement': {
+          paddingLeft: '10px',
         },
       }),
     [],
@@ -174,6 +181,9 @@ export function EditorPane({
       }),
     [],
   )
+
+  // 内嵌图片徽章:编辑器里把超长 base64 换成短占位(纯显示层,原文不动)
+  const imageChipExt = useMemo(() => imagePlaceholder(), [])
 
   // 菜单/App 通过事件总线触发文件选择器(光标位置由 view 实时决定)
   useEffect(() => {
@@ -212,6 +222,23 @@ export function EditorPane({
       }),
     [foldMarkerDOM],
   )
+
+  // 折叠开关:经 Compartment 动态装卸,切换时不重建编辑器(滚动位置与撤销历史保留)
+  const foldEnabled = useEditorPrefs((s) => s.foldEnabled)
+  const foldComp = useMemo(() => new Compartment(), [])
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: foldComp.reconfigure(foldEnabled ? foldExt : []) })
+  }, [foldEnabled, foldComp, foldExt])
+
+  // 自动换行开关:同 Compartment 模式。CodeMirror 默认不换行(长行横向滚动),
+  // 笔记场景默认开启 lineWrapping
+  const lineWrapEnabled = useEditorPrefs((s) => s.lineWrapEnabled)
+  const wrapComp = useMemo(() => new Compartment(), [])
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: wrapComp.reconfigure(lineWrapEnabled ? EditorView.lineWrapping : []),
+    })
+  }, [lineWrapEnabled, wrapComp])
 
   // 同步滚动:CodeMirror 的滚动容器是内部 .cm-scroller,由 @uiw 在自身
   // effect 中挂载——本组件的 effect 先于它执行,查询必为 null。
@@ -261,10 +288,12 @@ export function EditorPane({
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           themeExt,
           chromeExt,
-          foldExt,
+          foldComp.of(foldEnabled ? foldExt : []),
+          wrapComp.of(lineWrapEnabled ? EditorView.lineWrapping : []),
           cmLineNumbers(),
           fontExt,
           imageExt,
+          imageChipExt,
         ]}
       />
       <input

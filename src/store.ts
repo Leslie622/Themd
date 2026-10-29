@@ -43,6 +43,8 @@ interface NotebookState {
   renameFolder: (id: string, name: string) => void
   /** 删除分组（组内笔记变为未分组） */
   removeFolder: (id: string) => void
+  /** 删除分组并连同组内所有笔记一起删除 */
+  removeFolderWithNotes: (id: string) => void
   /** 移动笔记到分组；folderId 为空 = 未分组 */
   setNoteFolder: (id: string, folderId: string | null) => void
 }
@@ -178,6 +180,18 @@ export const useNotebook = create<NotebookState>()(
           folders: s.folders.filter((f) => f.id !== id),
           notes: s.notes.map((n) => (n.folderId === id ? { ...n, folderId: undefined } : n)),
         })),
+      removeFolderWithNotes: (id) =>
+        set((s) => {
+          const notes = s.notes.filter((n) => n.folderId !== id)
+          // 当前激活笔记在被删组里时,切到剩余第一条
+          const removedActive =
+            s.activeId != null && s.notes.some((n) => n.id === s.activeId && n.folderId === id)
+          return {
+            folders: s.folders.filter((f) => f.id !== id),
+            notes,
+            activeId: removedActive ? (notes[0]?.id ?? null) : s.activeId,
+          }
+        }),
       setNoteFolder: (id, folderId) =>
         set((s) => ({
           notes: s.notes.map((n) => (n.id === id ? { ...n, folderId: folderId ?? undefined } : n)),

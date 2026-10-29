@@ -66,6 +66,9 @@ export const md = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
+  // 段内单个换行渲染为 <br>(Typora/Obsidian 同款)。CommonMark 默认把软换行
+  // 折叠成空格,笔记场景里「敲了换行预览却不换」非常反直觉
+  breaks: true,
   highlight(code, lang) {
     if (lang && hljs.getLanguage(lang)) {
       try {

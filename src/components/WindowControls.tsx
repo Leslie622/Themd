@@ -5,7 +5,8 @@ import { Copy, Minus, Square, X } from 'lucide-react'
 import { isTauri } from '@/lib/theme/font-list'
 
 const BTN_BASE = 'flex size-8 items-center justify-center rounded-md transition-colors'
-// 关闭键单独一组 hover 色,避免与 hover:bg-accent 同优先级冲突导致红色失效
+// 关闭键单独一组 hover 色,避免与 hover:bg-accent 同优先级冲突导致红色失效;
+// #c42b1c 是 Win11 官方规范关闭键红——窗口 chrome 刻意不走主题令牌,以贴近系统原生观感
 const BTN = `${BTN_BASE} text-muted-foreground hover:bg-accent hover:text-foreground`
 const BTN_CLOSE = `${BTN_BASE} text-muted-foreground hover:bg-[#c42b1c] hover:text-white`
 

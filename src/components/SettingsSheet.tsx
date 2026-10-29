@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { listAllThemes, useThemeStore } from '@/store-themes'
 import {
   CJK_FONT_PRESETS,
   EDITOR_FONT_RANGE,
@@ -31,6 +32,7 @@ import {
   requestAllFonts,
 } from '@/lib/theme/font-list'
 import { Minus, Plus } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 
 /** 预览样例:中西文与代码混排,换字体立刻可感知 */
@@ -304,6 +306,15 @@ export function SettingsSheet({
   const editorFontWestern = useEditorPrefs((s) => s.editorFontWestern)
   const editorFontCjk = useEditorPrefs((s) => s.editorFontCjk)
   const setEditorFont = useEditorPrefs((s) => s.setEditorFont)
+  const foldEnabled = useEditorPrefs((s) => s.foldEnabled)
+  const setFoldEnabled = useEditorPrefs((s) => s.setFoldEnabled)
+  const syncScrollEnabled = useEditorPrefs((s) => s.syncScrollEnabled)
+  const setSyncScrollEnabled = useEditorPrefs((s) => s.setSyncScrollEnabled)
+  const lineWrapEnabled = useEditorPrefs((s) => s.lineWrapEnabled)
+  const setLineWrapEnabled = useEditorPrefs((s) => s.setLineWrapEnabled)
+  const themeList = useThemeStore((s) => s.themes)
+  const themeActiveId = useThemeStore((s) => s.activeId)
+  const setActiveTheme = useThemeStore((s) => s.setActive)
 
   // 首次打开时 4 个 Select + 8 个控件的挂载开销会与滑入动画同帧竞争(实测
   // 256ms long task,动画掉帧);延迟到动画结束后再挂载表单主体,动画期只渲染骨架
@@ -328,6 +339,26 @@ export function SettingsSheet({
           </div>
         ) : (
         <div className="flex flex-col gap-6 px-4 pb-6">
+          <Section title="主题" description="全局默认;笔记可在顶栏单独覆盖。">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">全局主题</span>
+              <Select value={themeActiveId} onValueChange={setActiveTheme}>
+                <SelectTrigger size="sm" className="w-36" aria-label="全局主题">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {listAllThemes({ themes: themeList, activeId: themeActiveId }).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </Section>
+
+          <div className="border-t" />
+
           <Section title="界面" description="整个产品的显示字体。">
             <FontPair
               presets={UI_FONT_PRESETS}
@@ -378,6 +409,30 @@ export function SettingsSheet({
                   <Plus className="size-3.5" />
                 </button>
               </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">代码折叠箭头</span>
+              <Switch
+                checked={foldEnabled}
+                onCheckedChange={setFoldEnabled}
+                aria-label="切换代码折叠箭头"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">编辑/预览同步滚动</span>
+              <Switch
+                checked={syncScrollEnabled}
+                onCheckedChange={setSyncScrollEnabled}
+                aria-label="切换同步滚动"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">自动换行</span>
+              <Switch
+                checked={lineWrapEnabled}
+                onCheckedChange={setLineWrapEnabled}
+                aria-label="切换自动换行"
+              />
             </div>
           </Section>
         </div>

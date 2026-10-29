@@ -40,9 +40,18 @@ interface EditorPrefsState {
   editorFontWestern: string
   /** 编辑器中文字体:空 = 跟随界面 */
   editorFontCjk: string
+  /** 代码折叠箭头开关 */
+  foldEnabled: boolean
+  /** 编辑↔预览同步滚动开关 */
+  syncScrollEnabled: boolean
+  /** 编辑器自动换行(关闭时长行横向滚动) */
+  lineWrapEnabled: boolean
   setFontSize: (px: number) => void
   setUiFont: (western: string, cjk: string) => void
   setEditorFont: (western: string, cjk: string) => void
+  setFoldEnabled: (v: boolean) => void
+  setSyncScrollEnabled: (v: boolean) => void
+  setLineWrapEnabled: (v: boolean) => void
 }
 
 const MIN = 11
@@ -80,6 +89,9 @@ const DEFAULTS = {
   uiFontCjk: '',
   editorFontWestern: '',
   editorFontCjk: '',
+  foldEnabled: true,
+  syncScrollEnabled: true,
+  lineWrapEnabled: true,
 }
 
 export const useEditorPrefs = create<EditorPrefsState>()(
@@ -99,6 +111,9 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         applyFonts({ ...useEditorPrefs.getState(), editorFontWestern: western, editorFontCjk: cjk })
         set({ editorFontWestern: western, editorFontCjk: cjk })
       },
+      setFoldEnabled: (v) => set({ foldEnabled: v }),
+      setSyncScrollEnabled: (v) => set({ syncScrollEnabled: v }),
+      setLineWrapEnabled: (v) => set({ lineWrapEnabled: v }),
     }),
     {
       name: 'themd-editor',
