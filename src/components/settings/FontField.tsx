@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,22 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
 import { isFontAvailable } from './is-font-available'
 import { useLocalFontList } from './use-local-font-list'
 import { Check, ChevronDown, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 
 /**
- * 字体选择弹窗(Dialog 形式):shadcn Dialog 外壳 + 内嵌 Command 面板。
- * Command 提供搜索过滤/键盘导航/空态;逐行复制按钮与底部自由输入框
- * (font-family 多族名)是超出 Command 语义的产品点,以允许的组合方式保留。
+ * 字体选择弹窗:完整本机字体列表 + 搜索 + 复制。
+ * 打开时自动请求完整列表(桌面端 IPC 直出;浏览器端弹一次授权,
+ * 拒绝后回落探测名单)。点击字体行应用到所属槽位;行内按钮单独复制族名。
+ * 值输入框支持粘贴多个逗号分隔的族名(font-family 语义)。
  */
 function FontListDialog({
   open,
@@ -43,13 +37,20 @@ function FontListDialog({
   mono?: boolean
   fonts: string[]
 }) {
+  const [query, setQuery] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
   const { requesting, requestFullList } = useLocalFontList()
 
-  // 打开弹窗时自动刷新完整列表;首次授权后,后续会话用缓存免重复授权
+  // 每次打开弹窗自动刷新完整列表;首次授权后,后续会话用缓存免重复授权
   useEffect(() => {
     if (open) void requestFullList(true)
   }, [open, requestFullList])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return fonts
+    return fonts.filter((f) => f.toLowerCase().includes(q))
+  }, [fonts, query])
 
   const copy = async (name: string) => {
     try {
@@ -63,46 +64,51 @@ function FontListDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* p-0 + overflow-hidden:Command 占满,自身圆角被 Dialog 裁齐;
-          showCloseButton=false:关闭走 Esc/点外部,搜索框右上不留悬停 X */}
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[28rem] flex-col gap-0 overflow-hidden p-0 sm:max-w-md [&_[cmdk-root]]:rounded-none"
-      >
-        <DialogHeader className="sr-only">
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>从本机字体列表中选择或复制字体名称</DialogDescription>
+      <DialogContent className="flex h-[28rem] max-w-md flex-col gap-0 p-0 sm:max-w-md">
+        <DialogHeader className="border-b px-4 py-3">
+          <DialogTitle className="text-sm">{title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            从本机字体列表中选择或复制字体名称
+          </DialogDescription>
         </DialogHeader>
-        <Command className="min-h-0 flex-1">
-          <CommandInput
+        <div className="border-b px-4 py-2.5">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder={requesting ? '正在读取本机字体…' : `搜索 ${fonts.length} 个字体…`}
+            className="h-7 text-xs"
           />
-          <CommandList className="min-h-0 flex-1 max-h-none">
-            <CommandEmpty>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-8 text-center text-xs text-muted-foreground">
               {requesting || fonts.length === 0 ? '正在读取本机字体…' : '没有匹配的字体'}
-            </CommandEmpty>
-            {fonts.map((f) => {
+            </p>
+          ) : (
+            filtered.map((f) => {
               const active = value.trim().toLowerCase() === f.toLowerCase()
               return (
-                <CommandItem
+                <div
                   key={f}
-                  value={f}
-                  onSelect={() => {
-                    onChange(f)
-                    onOpenChange(false)
-                  }}
-                  style={{ fontFamily: `'${f}', ${mono ? 'monospace' : 'sans-serif'}` }}
+                  className="group flex items-center gap-1 rounded-md pr-1 hover:bg-accent"
                 >
-                  <span className="min-w-0 flex-1 truncate">{f}</span>
-                  {/* 复制是面板内第二动作,嵌套按钮阻止 onSelect 冒泡 */}
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left"
+                    style={{ fontFamily: `'${f}', ${mono ? 'monospace' : 'sans-serif'}` }}
+                    onClick={() => {
+                      onChange(f)
+                      onOpenChange(false)
+                    }}
+                  >
+                    <span className="truncate text-sm">{f}</span>
+                    {active && <Check className="size-3.5 shrink-0 text-primary" />}
+                  </button>
                   <Button
                     variant="ghost"
                     size="icon-xs"
                     aria-label={`复制 ${f}`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      void copy(f)
-                    }}
+                    onClick={() => void copy(f)}
                   >
                     {copied === f ? (
                       <Check className="size-3 text-primary" />
@@ -110,13 +116,12 @@ function FontListDialog({
                       <Copy className="size-3" />
                     )}
                   </Button>
-                  {active && <Check className="size-3.5 shrink-0 text-primary" />}
-                </CommandItem>
+                </div>
               )
-            })}
-          </CommandList>
-        </Command>
-        <div className="border-t p-1.5">
+            })
+          )}
+        </div>
+        <div className="border-t px-4 py-2.5">
           <Input
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -130,8 +135,8 @@ function FontListDialog({
 }
 
 /**
- * 单个字体槽位字段:展示当前字体(以自身渲染预览),点击打开字体弹窗。
- * 触发器观感对齐 SelectTrigger(size=sm);值为自由文本,支持多族名。
+ * 单个字体槽位字段:展示当前字体(以自身渲染预览),点击打开字体列表弹窗。
+ * 值为自由文本,支持 font-family 式多族名。
  */
 export function FontField({
   label,
@@ -156,6 +161,8 @@ export function FontField({
   return (
     <div className="flex flex-col gap-1">
       {label && <span className="text-xs text-muted-foreground">{label}</span>}
+      {/* 观感对齐 shadcn SelectTrigger(size=sm):同内边距/圆角/字号/下拉箭头,
+          让设置页所有选择类控件视觉语言一致 */}
       <button
         type="button"
         onClick={() => setOpen(true)}
