@@ -1,13 +1,13 @@
 /** Compatibility facade. New code should import NotebookController directly. */
 import { useSyncExternalStore } from 'react'
 import { applicationServices } from '@/app/services'
-import { deriveTitle, type Folder, type Note } from '@/modules/notebook/domain/note'
+import { countWords, deriveTitle, type Folder, type Note } from '@/modules/notebook/domain/note'
 
 const controller = applicationServices.notebook
 void controller.hydrate().catch((error: unknown) => console.error('笔记初始化失败:', error))
 
 export type { Folder, Note }
-export { deriveTitle }
+export { countWords, deriveTitle }
 
 export interface NotebookFacade {
   notes: Note[]

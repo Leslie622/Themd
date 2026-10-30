@@ -109,3 +109,14 @@ pub(crate) fn write_text_file(path: String, contents: String) -> Result<(), Stri
     std::fs::write(&path, contents).map_err(|e| format!("写入失败: {}", e))
 }
 
+/// 图片落盘(本地 assets 模式):写入图片二进制,自动创建父目录。
+/// bytes 走 Tauri IPC 的二进制数组(Vec<u8>),无需 base64 编解码;
+/// 文件名由前端生成(带随机后缀防重名),路径来自设置里用户选定的根目录。
+#[tauri::command]
+pub(crate) fn write_image_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+    std::fs::write(&path, bytes).map_err(|e| format!("写入失败: {}", e))
+}
+

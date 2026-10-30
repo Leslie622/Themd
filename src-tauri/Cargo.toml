@@ -9,11 +9,13 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tauri-plugin-single-instance = "2.5.5"
+tauri-plugin-autostart = "2.7.0"
 
 # 导出 PDF:走 WebView2 的 PrintToPdf COM 接口(ICoreWebView2_7),
 # 版本须与 wry 所用的 webview2-com/windows 对齐,避免接口重复注册

@@ -15,6 +15,7 @@ import { SettingsSheet } from '@/components/SettingsSheet'
 import { EditorPane } from '@/components/EditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
 import { fromNow } from '@/lib/time'
+import { countWords } from '@/modules/notebook/domain/note'
 import { appEvents } from '@/shared/events/app-events'
 import type { Note } from '@/modules/notebook/domain/note'
 import type { ThemeFile } from '@/lib/theme/schema'
@@ -74,7 +75,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   {active.title}
                 </h1>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {active.content.length} 字 · {fromNow(active.updatedAt)}
+                  {countWords(active.content)} 字 · {fromNow(active.updatedAt)}
                 </span>
               </>
             )}
@@ -160,18 +161,23 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   </Button>
                 </IconTip>
                 {/* 导出:三种格式进下拉;FileSymlink 箭头向右穿出文件,
-                    与侧栏 FileInput/FolderInput(箭头指入)构成导入/导出一对 */}
+                    与侧栏 FileInput/FolderInput(箭头指入)构成导入/导出一对。
+                    IconTip 必须包在 DropdownMenu 内、套住 Trigger:
+                    DropdownMenu Root 是纯 Context 不渲染 DOM,包在外面
+                    TooltipTrigger 的 asChild 会静默失效 */}
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8"
-                      aria-label="导出笔记"
-                    >
-                      <FileSymlink />
-                    </Button>
-                  </DropdownMenuTrigger>
+                  <IconTip label="导出笔记:Markdown / HTML / PDF">
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        aria-label="导出笔记"
+                      >
+                        <FileSymlink />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </IconTip>
                   {/* 基类把菜单宽度锁在触发按钮宽度,导出条目文本长,抬个下限防换行 */}
                   <DropdownMenuContent align="end" style={{ minWidth: '12rem' }}>
                     <DropdownMenuItem onClick={() => void exportNoteFile('md')}>

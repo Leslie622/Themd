@@ -17,11 +17,19 @@
         "height": 800,
         "minWidth": 1024,
         "minHeight": 560,
-        "decorations": false
+        "decorations": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["$APPDATA/assets/*"],
+          "deny": []
+        }
+      }
     }
   },
   "bundle": {

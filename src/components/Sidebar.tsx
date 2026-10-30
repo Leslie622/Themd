@@ -72,6 +72,9 @@ export function Sidebar() {
   const setNoteFolder = useNotebook((s) => s.setNoteFolder)
 
   const [keyword, setKeyword] = useState('')
+  // 分组展开状态受控:搜索时强制全开(命中笔记所在的分组必须可见),
+  // 清空搜索后回到用户手动控制的展开/收起
+  const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set())
   const [renaming, setRenaming] = useState<
     { kind: 'note' | 'folder'; id: string; value: string } | null
   >(null)
@@ -189,6 +192,7 @@ export function Sidebar() {
         key={n.id}
         note={n}
         active={n.id === activeId}
+        keyword={kw}
         onClick={() => setActive(n.id)}
         onRename={() => setRenaming({ kind: 'note', id: n.id, value: n.title })}
         onDelete={() => removeNote(n.id)}
@@ -308,9 +312,24 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
         {folders.map((f) => {
           const items = byFolder.get(f.id) ?? []
+          // 搜索态:没有命中笔记的分组整个隐藏,连"空分组"占位一起
+          if (kw && items.length === 0) return null
           const isRenaming = renaming?.kind === 'folder' && renaming.id === f.id
+          // 搜索时强制展开(忽略手动收起),无搜索时按用户手动状态
+          const open = kw ? true : !closedFolders.has(f.id)
           return (
-            <Collapsible key={f.id} defaultOpen>
+            <Collapsible
+              key={f.id}
+              open={open}
+              onOpenChange={(v) =>
+                setClosedFolders((prev) => {
+                  const next = new Set(prev)
+                  if (v) next.delete(f.id)
+                  else next.add(f.id)
+                  return next
+                })
+              }
+            >
               {isRenaming ? (
                 <div className="flex items-center gap-1 px-2 py-1">{renameInput}</div>
               ) : (
@@ -428,9 +447,44 @@ export function Sidebar() {
   )
 }
 
+/** 把文本按命中关键字切片高亮;大小写不敏感,纯展示用 */
+function Highlight({ text, keyword }: { text: string; keyword: string }) {
+  if (!keyword) return <>{text}</>
+  const lower = text.toLowerCase()
+  const kw = keyword.toLowerCase()
+  const parts: React.ReactNode[] = []
+  let i = 0
+  let key = 0
+  while (i < text.length) {
+    const hit = lower.indexOf(kw, i)
+    if (hit === -1) {
+      parts.push(text.slice(i))
+      break
+    }
+    if (hit > i) parts.push(text.slice(i, hit))
+    parts.push(
+      <mark key={key++} className="rounded-xs bg-amber-200/70 text-inherit dark:bg-amber-400/30">
+        {text.slice(hit, hit + kw.length)}
+      </mark>,
+    )
+    i = hit + kw.length
+  }
+  return <>{parts}</>
+}
+
+/** 内容命中时截取关键字前后各约 30 字符做摘要行,让用户知道命中在哪 */
+function matchSnippet(content: string, keyword: string): string | null {
+  const hit = content.toLowerCase().indexOf(keyword.toLowerCase())
+  if (hit === -1) return null
+  const start = Math.max(0, hit - 30)
+  const end = Math.min(content.length, hit + keyword.length + 30)
+  return (start > 0 ? '…' : '') + content.slice(start, end).replace(/\s+/g, ' ') + (end < content.length ? '…' : '')
+}
+
 function NoteItem({
   note,
   active,
+  keyword,
   onClick,
   onRename,
   onDelete,
@@ -440,6 +494,8 @@ function NoteItem({
 }: {
   note: Note
   active: boolean
+  /** 搜索关键字:空串表示非搜索态,不做高亮、不显示摘要 */
+  keyword: string
   onClick: () => void
   onRename: () => void
   onDelete: () => void
@@ -447,6 +503,8 @@ function NoteItem({
   currentFolderId: string | null
   onMove: (folderId: string | null) => void
 }) {
+  const titleHit = keyword && note.title.toLowerCase().includes(keyword.toLowerCase())
+  const snippet = keyword && !titleHit ? matchSnippet(note.content, keyword) : null
   return (
     <div
       className={cn(
@@ -464,11 +522,17 @@ function NoteItem({
         </span>
         <span className="min-w-0 flex-1">
           <span className={cn('block truncate', active && 'font-medium')}>
-            {note.title}
+            <Highlight text={note.title} keyword={keyword} />
           </span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {fromNow(note.updatedAt)}
-          </span>
+          {snippet ? (
+            <span className="block truncate text-xs text-muted-foreground">
+              <Highlight text={snippet} keyword={keyword} />
+            </span>
+          ) : (
+            <span className="block truncate text-xs text-muted-foreground">
+              {fromNow(note.updatedAt)}
+            </span>
+          )}
         </span>
       </button>
       <DropdownMenu>

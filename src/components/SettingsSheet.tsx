@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -17,281 +14,76 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { listAllThemes, useThemeStore } from '@/store-themes'
-import {
-  CJK_FONT_PRESETS,
-  EDITOR_FONT_RANGE,
-  MONO_FONT_PRESETS,
-  UI_FONT_PRESETS,
-  buildFontStack,
-  useEditorPrefs,
-} from '@/store-editor'
-import {
-  detectInstalledFonts,
-  getCachedFullFontList,
-  isLocalFontAccessSupported,
-  requestAllFonts,
-} from '@/lib/theme/font-list'
-import { Minus, Plus } from 'lucide-react'
+import { EDITOR_FONT_RANGE, useEditorPrefs } from '@/store-editor'
+import { useAppearance } from '@/store-appearance'
+import { platformServices } from '@/app/platform'
+import { Minus, Plus, Settings } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
-import { notebookController } from '@/store'
-import { importLegacyNotebook } from '@/modules/notebook/application/legacy-import'
-import { themeController } from '@/store-themes'
-import { importLegacyThemes } from '@/modules/themes/application/legacy-import'
-import { importLegacyPreferences } from '@/modules/editor/application/legacy-import'
-import { useAppearance } from '@/store-appearance'
-
-/** 预览样例:中西文与代码混排,换字体立刻可感知 */
-const SAMPLE_TEXT = '笔记 Aa1 — 字体预览 {code: true}'
-const SAMPLE_CJK = '笔记字体预览'
-const SAMPLE_LATIN = 'Aa Bb 012'
-
-let fontListPromise: Promise<string[]> | null = null
-/** 全局共享的本机字体列表:首个 picker 触发,其余复用;idle 后跑,不阻塞抽屉动画 */
-function loadLocalFonts(): Promise<string[]> {
-  if (!fontListPromise) {
-    fontListPromise = new Promise<string[]>((resolve) => {
-      const cached = getCachedFullFontList()
-      if (cached) return resolve(cached)
-      const run = () => resolve(detectInstalledFonts())
-      if ('requestIdleCallback' in window) {
-        ;(window as never as { requestIdleCallback(cb: () => void): void }).requestIdleCallback(run)
-      } else {
-        setTimeout(run, 400)
-      }
-    })
-  }
-  return fontListPromise
-}
+import { FontField } from './settings/FontField'
+import { useLocalFontList } from './settings/use-local-font-list'
 
 /**
- * 单个字体族选择:预设下拉(本机字体动态并入)+ 自定义输入(VSCode 式,
- * 可填任意族名)。下拉选项用自身字体预览。
+ * 单个字体字段:显示当前值,点击打开完整字体列表弹窗。
+ * 值本身是自由文本——支持像 font-family 一样填多个逗号分隔的族名。
  */
-function FontPicker({
-  presets,
+function FontSlot({
+  label,
   value,
   onChange,
   placeholder,
-  sample,
+  mono,
 }: {
-  presets: { label: string; value: string }[]
+  label: string
   value: string
   onChange: (v: string) => void
   placeholder: string
-  sample: string
+  mono?: boolean
 }) {
-  const [localFonts, setLocalFonts] = useState<string[]>([])
-  const [accessSupported, setAccessSupported] = useState(false)
-  const [requesting, setRequesting] = useState(false)
-  useEffect(() => {
-    let alive = true
-    void loadLocalFonts().then((list) => {
-      if (alive) setLocalFonts(list)
-    })
-    // isLocalFontAccessSupported 只读一次性能力探测,微任务延迟以满足 lint
-    Promise.resolve().then(() => {
-      if (alive) setAccessSupported(isLocalFontAccessSupported())
-    })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const presetValues = useMemo(() => new Set(presets.map((p) => p.value)), [presets])
-  const isKnown = presetValues.has(value) || localFonts.includes(value)
-
-  const requestFullList = async () => {
-    setRequesting(true)
-    const result = await requestAllFonts()
-    setRequesting(false)
-    if (result.ok) {
-      fontListPromise = Promise.resolve(result.fonts)
-      setLocalFonts(result.fonts)
-      toast.success(`已读取 ${result.fonts.length} 个本机字体`)
-    } else if (result.reason === 'denied') {
-      toast.error('字体访问权限被拒绝', {
-        description:
-          '请点地址栏左侧的图标 → 权限 → 字体,改为「允许」后重试;或在浏览器设置中重置本站点的字体权限。',
-        duration: 10000,
-      })
-    } else if (result.reason === 'unsupported') {
-      toast.error('当前浏览器不支持读取本机字体', {
-        description: '请使用 Chrome / Edge,或直接在输入框中手填字体名。',
-      })
-    } else {
-      toast.error('读取字体列表失败，请重试')
-    }
-  }
-
+  const { fonts } = useLocalFontList()
   return (
-    <div className="flex flex-col gap-1.5">
-      <Select
-        value={isKnown ? value : 'custom'}
-        onValueChange={(v) => {
-          if (v !== 'custom') onChange(v)
-        }}
-      >
-        <SelectTrigger size="sm" className="w-full" aria-label={placeholder}>
-          <SelectValue placeholder="自定义" />
-        </SelectTrigger>
-        <SelectContent className="max-h-72">
-          {presets.map((p) => (
-            <SelectItem key={p.label} value={p.value}>
-              <span style={{ fontFamily: p.value ? `'${p.value}', sans-serif` : undefined }}>
-                {p.label}
-              </span>
-            </SelectItem>
-          ))}
-          {localFonts.length > 0 && (
-            <>
-              <div className="flex items-center justify-between gap-1 border-t px-2 py-1">
-                <span className="text-xs font-medium text-muted-foreground">
-                  本机字体({localFonts.length})
-                </span>
-                {accessSupported && (
-                  <button
-                    type="button"
-                    disabled={requesting}
-                    onClick={() => void requestFullList()}
-                    className="text-xs text-primary hover:underline disabled:opacity-50"
-                  >
-                    {requesting ? '读取中…' : '获取完整列表'}
-                  </button>
-                )}
-              </div>
-              {localFonts.map((f) => (
-                <SelectItem key={f} value={f}>
-                  <span className="truncate" style={{ fontFamily: `'${f}', monospace` }}>
-                    {f}
-                  </span>
-                </SelectItem>
-              ))}
-            </>
-          )}
-          <SelectItem value="custom">自定义…</SelectItem>
-        </SelectContent>
-      </Select>
-      <Input
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-7 text-xs"
-      />
-      {value.trim() && !isFontAvailable(value) && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          本机未安装「{value}」,当前显示的是回落效果
-        </p>
-      )}
-      <p
-        className="truncate rounded-md bg-muted/50 px-2 py-1 text-xs text-muted-foreground"
-        style={{ fontFamily: value ? `'${value}', sans-serif` : undefined }}
-        title={sample}
-      >
-        {sample}
-      </p>
-    </div>
+    <FontField
+      label={label}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      mono={mono}
+      fonts={fonts}
+    />
   )
 }
 
-/** canvas 墨迹检测:字体族是否在本机可用(与回退字体测宽比对,不同即存在)。
- * 每次检测用独立 canvas——复用同一 ctx 时字体解析结果会被缓存污染,
- * 已安装的字体也会被误判为未安装(实测 Microsoft YaHei 误报) */
-const glyphCheckCache = new Map<string, boolean>()
-function isFontAvailable(family: string): boolean {
-  const name = family.trim().replace(/^['"]|['"]$/g, '')
-  if (!name) return true
-  const cached = glyphCheckCache.get(name)
-  if (cached !== undefined) return cached
-  const probe = (font: string) => {
-    const ctx = document.createElement('canvas').getContext('2d')
-    if (!ctx) return NaN
-    ctx.font = `48px ${font}`
-    return ctx.measureText('笔记 ABC abc 012 {,}').width
-  }
-  const available =
-    probe(`"${name}", monospace`) !== probe('monospace') ||
-    probe(`"${name}", serif`) !== probe('serif')
-  glyphCheckCache.set(name, available)
-  return available
-}
-
-/** 设置分区:标题 + 描述 + 内容(无边框,靠间距与分隔线分组) */
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section>
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        {description && (
-          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-        )}
-      </div>
-      <div className="flex flex-col gap-3">{children}</div>
-    </section>
-  )
-}
-
-/** 字体对:西文 + 中文(浏览器按字符分流),底部整行实时预览 */
+/** 字体对:西文 + 中文(浏览器按字符分流) */
 function FontPair({
-  presets,
   western,
   cjk,
   onWestern,
   onCjk,
-  fallback,
+  mono,
 }: {
-  presets: { label: string; value: string }[]
   western: string
   cjk: string
   onWestern: (v: string) => void
   onCjk: (v: string) => void
-  fallback: string
+  mono?: boolean
 }) {
-  const stack = western.trim() || cjk.trim() ? buildFontStack(western, cjk, fallback) : undefined
   return (
-    <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs text-muted-foreground">西文</Label>
-          <FontPicker
-            presets={presets}
-            value={western}
-            onChange={onWestern}
-            placeholder="默认"
-            sample={SAMPLE_LATIN}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs text-muted-foreground">中文</Label>
-          <FontPicker
-            presets={CJK_FONT_PRESETS}
-            value={cjk}
-            onChange={onCjk}
-            placeholder="系统默认"
-            sample={SAMPLE_CJK}
-          />
-        </div>
-      </div>
-      <p
-        className="rounded-md bg-muted/50 px-2 py-1.5 text-sm"
-        style={stack ? { fontFamily: stack } : undefined}
-      >
-        {SAMPLE_TEXT}
-        {stack && (western.trim() || cjk.trim()) && (
-          <span className="ml-2 text-xs text-muted-foreground">
-            {isFontAvailable(western) ? '' : `西文「${western}」未安装 `}
-            {isFontAvailable(cjk) ? '' : `中文「${cjk}」未安装`}
-          </span>
-        )}
-      </p>
+    <div className="grid grid-cols-2 gap-2">
+      <FontSlot
+        label="西文"
+        value={western}
+        onChange={onWestern}
+        placeholder="默认"
+        mono={mono}
+      />
+      <FontSlot
+        label="中文"
+        value={cjk}
+        onChange={onCjk}
+        placeholder="系统默认"
+        mono={mono}
+      />
     </div>
   )
 }
@@ -318,13 +110,38 @@ export function SettingsSheet({
   const setSyncScrollEnabled = useEditorPrefs((s) => s.setSyncScrollEnabled)
   const lineWrapEnabled = useEditorPrefs((s) => s.lineWrapEnabled)
   const setLineWrapEnabled = useEditorPrefs((s) => s.setLineWrapEnabled)
-  const setDark = useAppearance((s) => s.setDark)
+  const imageMode = useEditorPrefs((s) => s.imageMode)
+  const setImageMode = useEditorPrefs((s) => s.setImageMode)
+  const assetsRoot = useEditorPrefs((s) => s.assetsRoot)
+  const setAssetsRoot = useEditorPrefs((s) => s.setAssetsRoot)
   const themeList = useThemeStore((s) => s.themes)
   const themeActiveId = useThemeStore((s) => s.activeId)
   const setActiveTheme = useThemeStore((s) => s.setActive)
+  const isDark = useAppearance((s) => s.isDark)
+  const toggleDark = useAppearance((s) => s.toggleDark)
+  const { isDesktop } = platformServices
 
-  // 首次打开时 4 个 Select + 8 个控件的挂载开销会与滑入动画同帧竞争(实测
-  // 256ms long task,动画掉帧);延迟到动画结束后再挂载表单主体,动画期只渲染骨架
+  // 开机自启:仅桌面端有此能力。开关状态以系统注册表为准,
+  // 抽屉打开时拉一次,不落本地状态(避免与真实状态漂移)
+  const [autostartEnabled, setAutostartEnabled] = useState(false)
+  useEffect(() => {
+    if (!open || !isDesktop) return
+    let alive = true
+    void platformServices.autostart.isEnabled().then((v) => {
+      if (alive) setAutostartEnabled(v)
+    })
+    return () => {
+      alive = false
+    }
+  }, [open, isDesktop])
+  const toggleAutostart = () => {
+    const next = !autostartEnabled
+    setAutostartEnabled(next) // 乐观更新,失败回滚
+    void platformServices.autostart.setEnabled(next).catch(() => setAutostartEnabled(!next))
+  }
+
+  // 首次打开时控件挂载开销会与滑入动画同帧竞争(实测 256ms long task,动画掉帧);
+  // 延迟到动画结束后再挂载表单主体,动画期只渲染骨架
   const [contentReady, setContentReady] = useState(false)
   useEffect(() => {
     if (!open) return
@@ -335,9 +152,16 @@ export function SettingsSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-80 gap-0 overflow-y-auto sm:max-w-80">
-        <SheetHeader>
-          <SheetTitle>设置</SheetTitle>
-          <SheetDescription>实时生效并自动保存。</SheetDescription>
+        {/* 抽屉盖住顶栏后窗口拖拽区随之失效,头部补一块拖拽区:
+            属性必须落在 mousedown 的实际目标上,所以 header 与标题都带 */}
+        <SheetHeader
+          data-tauri-drag-region
+          className="flex-row items-center gap-2 shrink-0 border-b p-4"
+        >
+          {/* svg 的内部 path 会成为 mousedown 目标导致拖拽失效,
+              pointer-events-none 让事件落到带 drag-region 的父级上 */}
+          <Settings className="pointer-events-none size-4 text-muted-foreground" />
+          <SheetTitle data-tauri-drag-region className="text-sm">设置</SheetTitle>
         </SheetHeader>
         {!contentReady ? (
           <div className="flex flex-col gap-4 px-4">
@@ -345,12 +169,13 @@ export function SettingsSheet({
             <div className="h-16 animate-pulse rounded-xl bg-muted/60" />
           </div>
         ) : (
-        <div className="flex flex-col gap-6 px-4 pb-6">
-          <Section title="主题" description="全局默认;笔记可在顶栏单独覆盖。">
+        <div className="flex flex-col gap-6 px-4 pt-5 pb-6">
+          <section>
+            <h3 className="mb-3 text-sm font-semibold">主题</h3>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">全局主题</span>
+              <span className="text-[13px] text-muted-foreground">全局 MD 主题</span>
               <Select value={themeActiveId} onValueChange={setActiveTheme}>
-                <SelectTrigger size="sm" className="w-36" aria-label="全局主题">
+                <SelectTrigger size="sm" className="w-[10.5rem]" aria-label="全局 MD 主题">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -362,63 +187,115 @@ export function SettingsSheet({
                 </SelectContent>
               </Select>
             </div>
-          </Section>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">暗色模式</span>
+              <Switch
+                checked={isDark}
+                onCheckedChange={toggleDark}
+                aria-label="切换暗色模式"
+              />
+            </div>
+          </section>
 
-          <Section title="数据恢复" description="仅在你主动点击时读取旧版笔记存储。">
-            <button
-              type="button"
-              className="w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
-              onClick={() => {
-                const result = importLegacyNotebook(notebookController)
-                const themes = importLegacyThemes(themeController)
-                let preferences = false
-                const importedPreferences = importLegacyPreferences()
-                const old = importedPreferences.editor
-                if (typeof old.fontSize === 'number') setFontSize(old.fontSize)
-                if (typeof old.uiFontWestern === 'string' && typeof old.uiFontCjk === 'string') setUiFont(old.uiFontWestern, old.uiFontCjk)
-                if (typeof old.editorFontWestern === 'string' && typeof old.editorFontCjk === 'string') setEditorFont(old.editorFontWestern, old.editorFontCjk)
-                if (typeof old.foldEnabled === 'boolean') setFoldEnabled(old.foldEnabled)
-                if (typeof old.syncScrollEnabled === 'boolean') setSyncScrollEnabled(old.syncScrollEnabled)
-                if (typeof old.lineWrapEnabled === 'boolean') setLineWrapEnabled(old.lineWrapEnabled)
-                preferences = Object.keys(old).length > 0
-                if (typeof importedPreferences.isDark === 'boolean') {
-                  setDark(importedPreferences.isDark)
-                  preferences = true
-                }
-                if (result.imported || themes > 0 || preferences) toast.success(`已恢复 ${result.notes} 篇笔记、${result.folders} 个分组、${themes} 个主题及偏好设置`)
-                else toast.info('没有找到可恢复的旧版笔记数据')
-              }}
-            >
-              从旧版存储恢复笔记
-            </button>
-          </Section>
-
-          <div className="border-t" />
-
-          <Section title="界面" description="整个产品的显示字体。">
+          <section>
+            <h3 className="mb-3 text-sm font-semibold">应用</h3>
             <FontPair
-              presets={UI_FONT_PRESETS}
               western={uiFontWestern}
               cjk={uiFontCjk}
               onWestern={(v) => setUiFont(v, uiFontCjk)}
               onCjk={(v) => setUiFont(uiFontWestern, v)}
-              fallback="sans-serif"
             />
-          </Section>
+            {/* 图片存储:桌面端可选本地文件夹(Web 无文件能力,锁定内嵌) */}
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">图片存储</span>
+              <Select
+                value={isDesktop ? imageMode : 'embedded'}
+                onValueChange={(v) => setImageMode(v as 'assets' | 'embedded')}
+                disabled={!isDesktop}
+              >
+                <SelectTrigger size="sm" className="w-[10.5rem]" aria-label="图片存储模式">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="assets">本地文件夹</SelectItem>
+                  <SelectItem value="embedded">内嵌笔记</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isDesktop && imageMode === 'assets' && (
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <span className="min-w-0 shrink-0 text-[13px] text-muted-foreground">图片目录</span>
+                <div className="flex min-w-0 items-center gap-1">
+                  <span
+                    className="min-w-0 flex-1 truncate rounded-md bg-muted/50 px-2 py-1 text-right text-xs text-muted-foreground"
+                    title={assetsRoot || '默认(应用数据目录)'}
+                  >
+                    {assetsRoot || '默认(应用数据目录)'}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    title="打开图片目录"
+                    onClick={() => {
+                      void (async () => {
+                        const dir = assetsRoot || (await platformServices.files.defaultAssetsRoot())
+                        try {
+                          // 打开前确保目录存在:首图未插时也能查看未来存放位置
+                          await platformServices.files.writeBinaryFile(
+                            `${dir.replace(/[\\/]+$/, '')}/.keep`,
+                            new Uint8Array(),
+                          )
+                          await platformServices.files.openPath(dir)
+                        } catch {
+                          toast.error('打开目录失败')
+                        }
+                      })()
+                    }}
+                  >
+                    打开
+                  </Button>
+                  {assetsRoot && (
+                    <Button variant="ghost" size="xs" onClick={() => setAssetsRoot('')}>
+                      恢复默认
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => {
+                      void platformServices.files.pickDirectory().then((dir) => {
+                        if (dir) setAssetsRoot(dir)
+                      })
+                    }}
+                  >
+                    更改
+                  </Button>
+                </div>
+              </div>
+            )}
+            {isDesktop && (
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-[13px] text-muted-foreground">开机自启</span>
+                <Switch
+                  checked={autostartEnabled}
+                  onCheckedChange={toggleAutostart}
+                  aria-label="切换开机自启"
+                />
+              </div>
+            )}
+          </section>
 
-          <div className="border-t" />
-
-          <Section title="编辑器" description="代码编辑区;默认使用随应用打包的 JetBrains Mono。">
+          <section>
+            <h3 className="mb-3 text-sm font-semibold">编辑器</h3>
             <FontPair
-              presets={MONO_FONT_PRESETS}
               western={editorFontWestern}
               cjk={editorFontCjk}
               onWestern={(v) => setEditorFont(v, editorFontCjk)}
               onCjk={(v) => setEditorFont(editorFontWestern, v)}
-              fallback="monospace"
+              mono
             />
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">字体大小</span>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">字体大小</span>
               <div className="flex h-7 items-center overflow-hidden rounded-lg border">
                 <button
                   type="button"
@@ -446,31 +323,31 @@ export function SettingsSheet({
                 </button>
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">代码折叠箭头</span>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">代码折叠箭头</span>
               <Switch
                 checked={foldEnabled}
                 onCheckedChange={setFoldEnabled}
                 aria-label="切换代码折叠箭头"
               />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">编辑/预览同步滚动</span>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">编辑/预览同步滚动</span>
               <Switch
                 checked={syncScrollEnabled}
                 onCheckedChange={setSyncScrollEnabled}
                 aria-label="切换同步滚动"
               />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">自动换行</span>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">自动换行</span>
               <Switch
                 checked={lineWrapEnabled}
                 onCheckedChange={setLineWrapEnabled}
                 aria-label="切换自动换行"
               />
             </div>
-          </Section>
+          </section>
         </div>
         )}
       </SheetContent>

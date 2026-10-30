@@ -48,12 +48,25 @@ interface EditorPrefsState {
   syncScrollEnabled: boolean
   /** 编辑器自动换行(关闭时长行横向滚动) */
   lineWrapEnabled: boolean
+  /**
+   * 图片存储模式。assets = 本地文件夹(默认,markdown 写 assets/xxx 相对路径,
+   * 导出的 .md 干净可读);embedded = base64 内嵌正文(单文件自包含)。
+   * 浏览器端无本地文件能力,UI 强制 embedded。
+   */
+  imageMode: 'assets' | 'embedded'
+  /**
+   * 本地图片根目录(绝对路径)。空 = 用平台默认(桌面端为应用数据目录)。
+   * 图片实际落在 `${assetsRoot}/assets/`,正文引用 `assets/<文件名>` 相对路径。
+   */
+  assetsRoot: string
   setFontSize: (px: number) => void
   setUiFont: (western: string, cjk: string) => void
   setEditorFont: (western: string, cjk: string) => void
   setFoldEnabled: (v: boolean) => void
   setSyncScrollEnabled: (v: boolean) => void
   setLineWrapEnabled: (v: boolean) => void
+  setImageMode: (mode: 'assets' | 'embedded') => void
+  setAssetsRoot: (root: string) => void
 }
 
 const MIN = 11
@@ -85,13 +98,18 @@ const applyFonts = (s: Pick<EditorPrefsState, 'uiFontWestern' | 'uiFontCjk' | 'e
 
 const DEFAULTS = {
   fontSize: 13.5,
+  /** 空 = 西文不单独指定,由中文字体/通用族承担(中文字体通常自带拉丁字形) */
   uiFontWestern: '',
-  uiFontCjk: '',
+  uiFontCjk: 'HarmonyOS Sans SC',
   editorFontWestern: 'JetBrains Mono',
   editorFontCjk: 'HarmonyOS Sans SC',
   foldEnabled: true,
   syncScrollEnabled: true,
   lineWrapEnabled: true,
+  /** 默认本地文件夹:导出的 .md 干净,base64 内嵌退为可选项 */
+  imageMode: 'assets' as 'assets' | 'embedded',
+  /** 空 = 平台默认(桌面端应用数据目录);浏览器端被 UI 强制 embedded,不走此值 */
+  assetsRoot: '',
 }
 
 export const useEditorPrefs = create<EditorPrefsState>()(
@@ -114,17 +132,28 @@ export const useEditorPrefs = create<EditorPrefsState>()(
       setFoldEnabled: (v) => set({ foldEnabled: v }),
       setSyncScrollEnabled: (v) => set({ syncScrollEnabled: v }),
       setLineWrapEnabled: (v) => set({ lineWrapEnabled: v }),
+      setImageMode: (mode) => set({ imageMode: mode }),
+      setAssetsRoot: (root) => set({ assetsRoot: root }),
     }),
     {
       name: 'themd/ui-preferences/v1',
-      version: 2,
+      version: 4,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<EditorPrefsState>
         const next = { ...DEFAULTS, ...state }
-        // v1 的空值表示“跟随界面”;新协议默认使用内置的双字体。
+        // v1 的空值表示“跟随界面”;v2 起编辑器字体落到具体默认值。
+        // v3 界面中文字体落具体值(设置槽位可回显);西文保持空 = 不单独指定。
+        // v4 图片存储模式登场,存量用户一律落新默认 assets(旧数据是内嵌态,
+        // 正文不受影响,只是新插入的图片开始走本地文件夹)
         if (version < 2) {
           if (!next.editorFontWestern?.trim()) next.editorFontWestern = 'JetBrains Mono'
           if (!next.editorFontCjk?.trim()) next.editorFontCjk = 'HarmonyOS Sans SC'
+        }
+        if (version < 3) {
+          if (!next.uiFontCjk?.trim()) next.uiFontCjk = 'HarmonyOS Sans SC'
+        }
+        if (version < 4) {
+          if (next.imageMode !== 'assets' && next.imageMode !== 'embedded') next.imageMode = 'assets'
         }
         return next
       },

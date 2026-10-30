@@ -1,5 +1,6 @@
 import MarkdownIt from 'markdown-it'
 import taskLists from 'markdown-it-task-lists'
+import { resolveImageSrcSync } from '@/lib/image-src'
 // 只注册常用语言，避免把整个 highlight.js（200+ 语言、2MB+）打进主包
 import hljs from 'highlight.js/lib/core'
 import bash from 'highlight.js/lib/languages/bash'
@@ -108,11 +109,16 @@ md.renderer.rules.heading_open = (tokens, idx, options, _env, self) => {
 // }
 
 // 图片:懒加载 + 异步解码(内嵌 base64 的截图可能很大,预览首屏别被拖住)。
+// assets/ 相对路径在渲染时同步改写为可加载的真实地址(桌面端 asset:// 协议,
+// 见 lib/image-src.ts)——解析依赖已注入的根目录与 convertFileSrc,
+// 这里用缓存的同步版本避免 renderer 引入异步复杂度。
 // 注意 alt 要从子节点提取(renderInlineAsText)——直接 renderToken 会丢掉它
 md.renderer.rules.image = (tokens, idx, options, _env, self) => {
   const token = tokens[idx]
   token.attrSet('loading', 'lazy')
   token.attrSet('decoding', 'async')
+  const src = token.attrGet('src')
+  if (typeof src === 'string') token.attrSet('src', resolveImageSrcSync(src))
   if (token.children) {
     token.attrSet('alt', self.renderInlineAsText(token.children, options, _env))
   }

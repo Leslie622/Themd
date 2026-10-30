@@ -33,6 +33,25 @@ export function createWebFileGateway(): FileGateway {
       void input
       return { kind: 'web' }
     },
+    async pickDirectory() {
+      // 浏览器无本地目录能力:本地图片模式在 Web 端被 UI 强制关闭,不应到达这里
+      return null
+    },
+    async writeBinaryFile(path: string, bytes: Uint8Array) {
+      void bytes
+      throw new Error(`浏览器端不支持写入本地文件: ${path}`)
+    },
+    async defaultAssetsRoot() {
+      return ''
+    },
+    async openPath(path: string) {
+      void path
+      throw new Error('浏览器端不支持打开本地文件')
+    },
+    async revealItemInDir(path: string) {
+      void path
+      throw new Error('浏览器端不支持打开本地文件')
+    },
   }
 }
 

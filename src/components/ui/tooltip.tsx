@@ -22,9 +22,26 @@ function Tooltip({
 }
 
 function TooltipTrigger({
+  onFocus,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      onFocus={(event) => {
+        // Radix 在 trigger 获得焦点时会立即弹出 tooltip(键盘可达性设计)。
+        // 但文件对话框/下拉菜单关闭会把焦点还给按钮,鼠标点击也会聚焦,
+        // 表现为"点了别处 tooltip 自己冒出来"。只保留键盘聚焦(:focus-visible)
+        // 的弹出,指针来源的焦点一律 preventDefault 抑制(composeEventHandlers
+        // 见 defaultPrevented 会跳过 Radix 内部的弹出)。
+        if (!event.currentTarget.matches(":focus-visible")) {
+          event.preventDefault()
+        }
+        onFocus?.(event)
+      }}
+      {...props}
+    />
+  )
 }
 
 function TooltipContent({

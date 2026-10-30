@@ -6,4 +6,6 @@
 
 架构约束：domain 不依赖 React/Zustand/DOM/Tauri；应用与组件通过 Repository/Platform contracts 访问存储和平台能力；组件不得直接调用 Tauri `invoke` 或 IndexedDB。旧 Store 文件仅作为迁移兼容入口，新功能不要继续扩展。
 
+**UI 组件硬规范：一律优先使用 shadcn/ui 官方组件**（`npx shadcn@latest add <组件名>`），禁止手写等价物；需要定制时只允许通过组件 props/`className` 覆盖（shadcn 文档明确支持的方式），不得在业务代码里复刻组件内部结构或改 `components/ui` 的生成物。官方没有对应组件时（如字体选择弹窗），优先组合现有 shadcn 基件（Dialog/Popover/Command/Input/Button）搭建，触发器观感对齐对应 shadcn 组件。
+
 常用命令：`npm run dev`（开发）/ `npm run build`（类型检查 + 构建）/ `npm run lint` / `npm run test` / `npm run tauri:dev` / `cargo check --manifest-path src-tauri/Cargo.toml` / `npx shadcn@latest add <组件名>`（加 UI 组件）。

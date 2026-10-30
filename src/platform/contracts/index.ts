@@ -2,3 +2,4 @@ export type { FileGateway, ImportedFile, SavePathInput, SaveResult, SaveTextInpu
 export type { PdfGateway } from './pdf-gateway'
 export type { FontGateway } from './font-gateway'
 export type { WindowGateway } from './window-gateway'
+export type { AutostartGateway } from './autostart-gateway'

@@ -174,6 +174,20 @@
   #root {
     height: 100%;
   }
+  /* 只允许在可编辑处与输入框选中文字:应用是工具型 UI,
+     非正文区域拖选只会产生意外的蓝色高亮。可编辑区域
+     (CodeMirror 的 .cm-content、预览正文 .themd-prose)显式放开,
+     shadcn 输入框(Input/Textarea)自带的 select-text 不受影响 */
+  body {
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable="true"],
+  [contenteditable=""],
+  .themd-prose {
+    user-select: text;
+  }
   /* Tailwind v4 preflight 故意把按钮 cursor 改成 default,官方文档推荐这样恢复手型 */
   button:not(:disabled),
   [role="button"]:not(:disabled),

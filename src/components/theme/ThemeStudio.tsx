@@ -10,8 +10,6 @@ import {
   Download,
   FilePlus2,
   FileUp,
-  Moon,
-  Sun,
   Pencil,
   RotateCcw,
   Trash2,
@@ -79,7 +77,6 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const activeId = useThemeStore((s) => s.activeId)
   const setActive = useThemeStore((s) => s.setActive)
   const isDark = useAppearance((s) => s.isDark)
-  const toggleDark = useAppearance((s) => s.toggleDark)
   const updateTokens = useThemeStore((s) => s.updateTokens)
   const updateTokensDark = useThemeStore((s) => s.updateTokensDark)
   const setExtraCss = useThemeStore((s) => s.setExtraCss)
@@ -295,15 +292,6 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
           <span className="text-xs text-muted-foreground">正在编辑：{editing.name}</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleDark}
-            aria-label="切换明暗模式"
-            title="切换应用明暗模式(预览与暗色令牌套随之切换)"
-          >
-            {isDark ? <Sun /> : <Moon />}
-          </Button>
           <Button variant="outline" size="sm" onClick={() => jsonInputRef.current?.click()}>
             <Upload /> 导入
           </Button>

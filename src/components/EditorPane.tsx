@@ -14,7 +14,9 @@ import { useEffect, useMemo, useRef, type ChangeEvent } from 'react'
 import { toast } from 'sonner'
 
 import { imagePlaceholder } from '@/lib/image-decorator'
-import { fileToEmbeddedImage, insertImageMarkdown } from '@/lib/image'
+import { fileToAssetImage, fileToEmbeddedImage, insertImageMarkdown } from '@/lib/image'
+import { assetsPathToAbsolute } from '@/lib/image-src'
+import { platformServices } from '@/app/platform'
 import { useAppearance } from '@/store-appearance'
 import { appEvents } from '@/shared/events/app-events'
 import { DEFAULT_EDITOR_STACK, buildFontStack, useEditorPrefs } from '@/store-editor'
@@ -28,12 +30,22 @@ async function insertImageFiles(
   if (!files.length || !files.every((f) => f.type.startsWith('image/'))) return false
   const alt = (name: string) => name.replace(/\.[^.]+$/, '') || '图片'
   toast.info(files.length > 1 ? `正在插入 ${files.length} 张图片…` : '正在插入图片…')
+  // 本地 assets 模式:图片落盘 `${root}/assets/`,正文引用相对路径;
+  // assetsRoot 未自定义时用平台默认(桌面端应用数据目录)。Web 端 gateway 无能力,
+  // UI 已强制 embedded,这里兜底回落内嵌,不因模式残留导致插入失败
+  const { imageMode, assetsRoot } = useEditorPrefs.getState()
+  const useAssets = imageMode === 'assets' && platformServices.isDesktop
+  const root = useAssets && assetsRoot.trim()
+    ? assetsRoot.trim()
+    : await platformServices.files.defaultAssetsRoot()
   let at = pos
   let ok = 0
   for (const file of files) {
     try {
-      const dataUrl = await fileToEmbeddedImage(file)
-      insertImageMarkdown(view, at, dataUrl, alt(file.name))
+      const insertValue = useAssets
+        ? (await fileToAssetImage(file, root, platformServices.files.writeBinaryFile)).relativePath
+        : await fileToEmbeddedImage(file)
+      insertImageMarkdown(view, at, insertValue, alt(file.name))
       // 上一张插入后光标停在其行尾(空行上),从这里续插下一张
       at = view.state.selection.main.head
       ok++
@@ -43,6 +55,63 @@ async function insertImageFiles(
   }
   if (ok) toast.success(`已插入 ${ok} 张图片`)
   return true
+}
+
+/** 光标文档位置命中的 assets/ 图片链接;未命中返回 null */
+function assetLinkAt(view: EditorView, pos: number): string | null {
+  const line = view.state.doc.lineAt(pos)
+  const match = /\]\((assets\/[^\s)]+\.[\w]+)\)/.exec(line.text)
+  if (!match) return null
+  const from = line.from + match.index + 2
+  if (pos < from || pos > line.from + match.index + match[0].length) return null
+  return match[1]
+}
+
+/** 用系统方式打开图片:优先文件管理器定位,失败回落默认程序 */
+function openAsset(absolute: string): void {
+  platformServices.files.revealItemInDir(absolute).catch(() =>
+    platformServices.files.openPath(absolute).catch(() => toast.error('打开图片失败')),
+  )
+}
+
+/** hover 浮层:全局单例按钮,挂 body 上,点击打开命中的图片 */
+let assetHoverEl: HTMLButtonElement | null = null
+let assetHoverTimer: ReturnType<typeof setTimeout> | undefined
+
+function showAssetHoverButton(x: number, y: number, relativePath: string): void {
+  if (assetHoverTimer) {
+    clearTimeout(assetHoverTimer)
+    assetHoverTimer = undefined
+  }
+  if (!assetHoverEl) {
+    assetHoverEl = document.createElement('button')
+    assetHoverEl.type = 'button'
+    assetHoverEl.textContent = '打开图片位置'
+    assetHoverEl.style.cssText =
+      'position:fixed;z-index:60;display:none;transform:translate(8px,14px);padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:var(--popover);color:var(--popover-foreground);font-size:12px;line-height:1.6;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap'
+    assetHoverEl.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const target = assetHoverEl?.dataset.path
+      hideAssetHoverButton()
+      if (target) openAsset(target)
+    })
+    document.body.appendChild(assetHoverEl)
+  }
+  assetHoverEl.dataset.path = assetsPathToAbsolute(relativePath) ?? ''
+  assetHoverEl.style.left = `${x}px`
+  assetHoverEl.style.top = `${y}px`
+  assetHoverEl.style.display = 'block'
+}
+
+function hideAssetHoverButton(): void {
+  if (!assetHoverEl || assetHoverEl.style.display === 'none') return
+  // 延迟 150ms 再隐藏:给鼠标从路径文本移到按钮上的间隙,
+  // 期间再次 hover 会取消定时器,按钮不闪
+  assetHoverTimer = setTimeout(() => {
+    if (assetHoverEl) assetHoverEl.style.display = 'none'
+    assetHoverTimer = undefined
+  }, 150)
 }
 
 /**
@@ -127,23 +196,25 @@ export function EditorPane({
           backgroundColor: 'color-mix(in oklch, var(--accent) 30%, transparent)',
         },
         '.cm-caret': { color: 'var(--primary)' },
-        // 行号区几何:「左空白|箭头|行号|右空白」左右等宽(10px),箭头+行号作为
-        // 一个整体居中——折叠槽 20px = 左空白 10px + 箭头 10px(贴右,紧邻行号),
-        // 行号槽只带右侧 10px,两侧空白必然相等,与折叠箭头显隐无关
+        // 行号区几何:以「图形到 gutter 色带左右边缘的距离」对称,各 10px。
+        // 箭头槽 22px(左 10px 空白 + 箭头 12px 贴右紧邻行号);行号数字
+        // text-align:right + 右 padding 10px——数字永远精确落在右 10px 处,
+        // 一位数/多位数都稳(text-align:center 的居中余量会随位数变化,不可靠)
         '.cm-lineNumbers .cm-gutterElement': {
+          textAlign: 'right',
           padding: '0 10px 0 0',
-          textAlign: 'center',
         },
         '.cm-foldGutter .cm-gutterElement': {
-          width: '20px',
+          width: '22px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-end',
-          padding: '0',
+          padding: '0 0 0 10px',
         },
-        // 关闭折叠开关后折叠槽消失,行号槽自带左空白,保持左右对称
+        // 关闭折叠开关后折叠槽消失,行号槽回到居中 + 左右各 10px
         '.cm-gutters:not(:has(.cm-foldGutter)) .cm-lineNumbers .cm-gutterElement': {
-          paddingLeft: '10px',
+          textAlign: 'center',
+          padding: '0 10px',
         },
       }),
     [],
@@ -174,6 +245,40 @@ export function EditorPane({
           // 不阻止默认行为,浏览器会直接打开拖入的图片文件
           if (event.dataTransfer?.types.includes('Files')) event.preventDefault()
           return false
+        },
+        mousemove: (event, view) => {
+          // hover assets/ 路径:浮出「打开图片位置」按钮(共享单例浮层)。
+          // posAtCoords 对视口外坐标会就近吸附到最近行,必须先用行包围盒
+          // 做几何判定,否则鼠标离开路径后按钮不消失。
+          // lineBlockAtHeight 收文档坐标:clientY 换算 = 视口y - 编辑器top + 滚动量
+          const editorTop = view.dom.getBoundingClientRect().top
+          const docY = event.clientY - editorTop + view.scrollDOM.scrollTop
+          const block = view.lineBlockAtHeight(docY)
+          const inside =
+            event.clientY >= block.top - view.scrollDOM.scrollTop + editorTop &&
+            event.clientY <= block.top - view.scrollDOM.scrollTop + editorTop + block.height &&
+            event.clientX >= view.scrollDOM.getBoundingClientRect().left &&
+            event.clientX <= view.scrollDOM.getBoundingClientRect().right
+          const hit = inside ? assetLinkAt(view, view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? 0) : null
+          if (hit) {
+            showAssetHoverButton(event.clientX, event.clientY, hit)
+          } else {
+            hideAssetHoverButton()
+          }
+          return false
+        },
+        mousedown: (event, view) => {
+          // Ctrl/Cmd+点击 assets/ 路径同样可打开(键盘偏好用户的保留路径)
+          if (!(event.ctrlKey || event.metaKey) || event.button !== 0) return false
+          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
+          if (pos == null) return false
+          const hit = assetLinkAt(view, pos)
+          if (!hit) return false
+          const absolute = assetsPathToAbsolute(hit)
+          if (!absolute) return false
+          event.preventDefault()
+          openAsset(absolute)
+          return true
         },
       }),
     [],
