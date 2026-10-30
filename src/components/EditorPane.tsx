@@ -74,11 +74,24 @@ function openAsset(absolute: string): void {
   )
 }
 
-/** hover 浮层:全局单例按钮,挂 body 上,点击打开命中的图片 */
+/**
+ * hover assets/ 图片行 → 行尾出现「打开图片位置」按钮。
+ * 按钮固定锚在路径所在行的行尾(不跟鼠标),从路径移到按钮全程
+ * 都在该行包围盒内,浮层不消失、必然点得中。
+ */
 let assetHoverEl: HTMLButtonElement | null = null
 let assetHoverTimer: ReturnType<typeof setTimeout> | undefined
 
-function showAssetHoverButton(x: number, y: number, relativePath: string): void {
+function hideAssetHoverButton(): void {
+  if (!assetHoverEl || assetHoverEl.style.display === 'none') return
+  // 延迟 120ms 隐藏:给鼠标移到按钮的间隙;期间再次 hover 会取消定时器
+  assetHoverTimer = setTimeout(() => {
+    if (assetHoverEl) assetHoverEl.style.display = 'none'
+    assetHoverTimer = undefined
+  }, 120)
+}
+
+function showAssetHoverButton(lineRect: DOMRect, relativePath: string): void {
   if (assetHoverTimer) {
     clearTimeout(assetHoverTimer)
     assetHoverTimer = undefined
@@ -88,7 +101,7 @@ function showAssetHoverButton(x: number, y: number, relativePath: string): void 
     assetHoverEl.type = 'button'
     assetHoverEl.textContent = '打开图片位置'
     assetHoverEl.style.cssText =
-      'position:fixed;z-index:60;display:none;transform:translate(8px,14px);padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:var(--popover);color:var(--popover-foreground);font-size:12px;line-height:1.6;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap'
+      'position:fixed;z-index:60;display:none;padding:1px 8px;border-radius:6px;border:1px solid var(--border);background:var(--popover);color:var(--popover-foreground);font-size:12px;line-height:1.7;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap'
     assetHoverEl.addEventListener('mousedown', (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -99,19 +112,10 @@ function showAssetHoverButton(x: number, y: number, relativePath: string): void 
     document.body.appendChild(assetHoverEl)
   }
   assetHoverEl.dataset.path = assetsPathToAbsolute(relativePath) ?? ''
-  assetHoverEl.style.left = `${x}px`
-  assetHoverEl.style.top = `${y}px`
+  // 垂直居中对齐所在行,水平锚在行右侧再往右 12px(行尾空白区)
+  assetHoverEl.style.left = `${lineRect.right + 12}px`
+  assetHoverEl.style.top = `${lineRect.top + lineRect.height / 2 - 14}px`
   assetHoverEl.style.display = 'block'
-}
-
-function hideAssetHoverButton(): void {
-  if (!assetHoverEl || assetHoverEl.style.display === 'none') return
-  // 延迟 150ms 再隐藏:给鼠标从路径文本移到按钮上的间隙,
-  // 期间再次 hover 会取消定时器,按钮不闪
-  assetHoverTimer = setTimeout(() => {
-    if (assetHoverEl) assetHoverEl.style.display = 'none'
-    assetHoverTimer = undefined
-  }, 150)
 }
 
 /**
@@ -247,24 +251,32 @@ export function EditorPane({
           return false
         },
         mousemove: (event, view) => {
-          // hover assets/ 路径:浮出「打开图片位置」按钮(共享单例浮层)。
-          // posAtCoords 对视口外坐标会就近吸附到最近行,必须先用行包围盒
-          // 做几何判定,否则鼠标离开路径后按钮不消失。
+          // hover assets/ 图片行 → 行尾浮出「打开图片位置」按钮。
+          // 命中判定用行包围盒(横向扩到编辑器右缘,含行尾空白):
+          // 鼠标从路径移向行尾按钮全程都在盒内,浮层不消失。
           // lineBlockAtHeight 收文档坐标:clientY 换算 = 视口y - 编辑器top + 滚动量
           const editorTop = view.dom.getBoundingClientRect().top
+          const editorRight = view.scrollDOM.getBoundingClientRect().right
           const docY = event.clientY - editorTop + view.scrollDOM.scrollTop
           const block = view.lineBlockAtHeight(docY)
+          const lineTop = block.top - view.scrollDOM.scrollTop + editorTop
           const inside =
-            event.clientY >= block.top - view.scrollDOM.scrollTop + editorTop &&
-            event.clientY <= block.top - view.scrollDOM.scrollTop + editorTop + block.height &&
+            event.clientY >= lineTop &&
+            event.clientY <= lineTop + block.height &&
             event.clientX >= view.scrollDOM.getBoundingClientRect().left &&
-            event.clientX <= view.scrollDOM.getBoundingClientRect().right
-          const hit = inside ? assetLinkAt(view, view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? 0) : null
-          if (hit) {
-            showAssetHoverButton(event.clientX, event.clientY, hit)
-          } else {
-            hideAssetHoverButton()
+            event.clientX <= editorRight
+          if (inside) {
+            const line = view.state.doc.lineAt(block.from)
+            const match = /\]\((assets\/[^\s)]+\.[\w]+)\)/.exec(line.text)
+            if (match) {
+              showAssetHoverButton(
+                new DOMRect(view.scrollDOM.getBoundingClientRect().left, lineTop, editorRight - view.scrollDOM.getBoundingClientRect().left, block.height),
+                match[1],
+              )
+              return false
+            }
           }
+          hideAssetHoverButton()
           return false
         },
         mousedown: (event, view) => {
