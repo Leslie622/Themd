@@ -15,13 +15,27 @@ interface SidebarResizeHandleProps {
 type SeparatorState = 'inactive' | 'hover' | 'active'
 
 /**
+ * 水平拖拽光标,移植库的内部逻辑:Chromium/Gecko 上 ew-resize 渲染为
+ * 系统标准「左右箭头」,WebKit 上该字形异常故回落 col-resize。
+ * 与库相同的选择,保证两条分隔线光标字形逐像素一致。
+ */
+let cursorCache: string | undefined
+function horizontalResizeCursor(): string {
+  if (cursorCache === undefined) {
+    const ua = typeof window !== 'undefined' ? window.navigator.userAgent : ''
+    cursorCache = ua.includes('Chrome') || ua.includes('Firefox') ? 'ew-resize' : 'col-resize'
+  }
+  return cursorCache
+}
+
+/**
  * 侧栏自绘拖拽条。侧栏不参与 react-resizable-panels 的百分比引擎,
  * 宽度由普通 CSS 像素值保证,窗口缩放零 JS 参与不抖动。
  *
  * 样式与 shadcn ResizableHandle(components/ui/resizable.tsx,withHandle 形态)
  * 完全一致:1px bg-border 线 + after 伪元素 4px 热区 + 中央把手圆条。
  * hover/active 行为对齐库的 Separator:hover 时 data-separator="hover" +
- * 全局 col-resize 光标(库经 adoptedStyleSheets 注入 *:hover 规则实现),
+ * 平台对应的全局拖拽光标(库经 adoptedStyleSheets 注入 *:hover 规则实现),
  * 拖拽中变 "active",均直写 DOM 不触发 React 渲染。
  */
 export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: SidebarResizeHandleProps) {
@@ -33,17 +47,19 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
   }
 
   /** 与库一致:hover/active 期间全局锁定光标,离开/松手恢复 */
-  const setGlobalCursor = (cursor: 'col-resize' | null) => {
+  const setGlobalCursor = (cursor: string | null) => {
     document.body.style.cursor = cursor ?? ''
     document.body.style.userSelect = cursor ? 'none' : ''
   }
+
+  const resizeCursor = horizontalResizeCursor()
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
     setState('active')
-    setGlobalCursor('col-resize')
+    setGlobalCursor(resizeCursor)
     const startX = event.clientX
     // 起点以 DOM 实际宽度为准,不依赖任何 React 状态
     const startWidth = targetRef.current?.getBoundingClientRect().width ?? min
@@ -87,7 +103,7 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
   const handlePointerEnter = () => {
     if (elementRef.current?.dataset.separator !== 'active') {
       setState('hover')
-      setGlobalCursor('col-resize')
+      setGlobalCursor(resizeCursor)
     }
   }
 
