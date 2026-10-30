@@ -48,12 +48,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { isTauri } from '@/lib/theme/font-list'
 import { readFiles, readFolder, readFolderDesktop } from '@/lib/files'
+import { platformServices } from '@/app/platform'
 import type { ImportedFile } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useNotebook } from '@/store'
+import { appEvents } from '@/shared/events/app-events'
 import type { Note } from '@/store'
 
 export function Sidebar() {
@@ -143,7 +144,7 @@ export function Sidebar() {
 
   /** 导入文件夹入口:桌面端原生对话框,浏览器端 webkitdirectory 兜底 */
   const handleImportFolderClick = () => {
-    if (isTauri()) void handleFolderImportDesktop()
+    if (platformServices.isDesktop) void handleFolderImportDesktop()
     else folderInputRef.current?.click()
   }
 
@@ -219,7 +220,7 @@ export function Sidebar() {
                   variant="ghost"
                   size="icon"
                   className="size-7"
-                  onClick={() => window.dispatchEvent(new CustomEvent('themd:collapse-sidebar'))}
+                  onClick={() => appEvents.emit('collapseSidebar')}
                   aria-label="收起侧栏"
                 >
                   <PanelLeftClose />

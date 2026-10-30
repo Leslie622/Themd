@@ -1,7 +1,7 @@
 import { memo, useMemo } from 'react'
 import 'highlight.js/styles/github.css'
 
-import { md } from '@/lib/markdown'
+import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
 import { compileTokens } from '@/lib/theme/compile'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
@@ -24,7 +24,7 @@ export const PreviewPane = memo(function PreviewPane({
   /** 绑定滚动容器,用于编辑/预览同步滚动 */
   bindScroller?: (el: HTMLElement | null) => void
 }) {
-  const html = useMemo(() => md.render(content), [content])
+  const html = useMemo(() => renderMarkdown(content).html, [content])
 
   const activeId = useThemeStore((s) => s.activeId)
   const themes = useThemeStore((s) => s.themes)

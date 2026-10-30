@@ -16,7 +16,8 @@ import { toast } from 'sonner'
 import { imagePlaceholder } from '@/lib/image-decorator'
 import { fileToEmbeddedImage, insertImageMarkdown } from '@/lib/image'
 import { useAppearance } from '@/store-appearance'
-import { buildFontStack, useEditorPrefs } from '@/store-editor'
+import { appEvents } from '@/shared/events/app-events'
+import { DEFAULT_EDITOR_STACK, buildFontStack, useEditorPrefs } from '@/store-editor'
 
 /** 批量处理图片文件并插入;全部为图片才接管事件,返回是否接管 */
 async function insertImageFiles(
@@ -48,7 +49,7 @@ async function insertImageFiles(
  * CodeMirror 编辑器封装。
  * 语法配色用 GitHub Light/Dark 跟随明暗开关,与内置 GitHub 渲染主题呼应;
  * 背景/行号槽/活动行设为透明或语义令牌色,编辑区观感与整体 UI 联动。
- * 字体默认跟产品 UI;设置抽屉自定义后按设置走。
+ * 英文字体默认使用随应用打包的 JetBrains Mono;设置抽屉自定义后按设置走。
  */
 export function EditorPane({
   value,
@@ -64,13 +65,12 @@ export function EditorPane({
   // CodeMirror view 引用:粘贴/拖拽/菜单插图都要在精确光标处 dispatch
   const viewRef = useRef<EditorView | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  // 编辑器字体默认跟产品 UI(index.css 的 .cm-editor 消费 --font-ui-sans);
-  // 设置里自定义后 store 注入 --font-editor。无论哪种,都要用样式模块覆盖
+  // 编辑器默认使用打包字体;设置里自定义后 store 注入 --font-editor。无论哪种,都要用样式模块覆盖
   // .cm-scroller——CodeMirror 基础主题在那里硬编码了 monospace
   const editorFont = useEditorPrefs((s) =>
     s.editorFontWestern || s.editorFontCjk
       ? buildFontStack(s.editorFontWestern, s.editorFontCjk, 'monospace')
-      : 'var(--font-ui-sans)', // 未自定义 = 跟随产品界面
+      : DEFAULT_EDITOR_STACK,
   )
 
   const fontExt = useMemo(
@@ -78,10 +78,7 @@ export function EditorPane({
       EditorView.theme({
         '&': { fontFamily: editorFont },
         '.cm-scroller': { fontFamily: editorFont },
-        // 行号必须等宽对齐:未自定义编辑器字体时 .cm-scroller 走 UI 比例字体
-        // (Geist),数字 30/31 宽窄不一;行号槽单独用 --font-mono——
-        // 自定义编辑器字体时 store 已注入 --font-editor,行号自动跟随;
-        // 未自定义时回落系统等宽链。tabular-nums 兜底数字宽度
+        // 行号必须等宽对齐,统一使用编辑器字体链。tabular-nums 兜底数字宽度
         '.cm-lineNumbers .cm-gutterElement': {
           fontFamily: 'var(--font-mono)',
           fontVariantNumeric: 'tabular-nums',
@@ -152,7 +149,7 @@ export function EditorPane({
     [],
   )
 
-  // 图片插入:粘贴截图 / 拖拽文件 / 菜单选择(经 themd:insert-image 事件)三入口
+  // 图片插入:粘贴截图 / 拖拽文件 / 菜单选择(经 appEvents)三入口
   const imageExt = useMemo(
     () =>
       EditorView.domEventHandlers({
@@ -188,8 +185,8 @@ export function EditorPane({
   // 菜单/App 通过事件总线触发文件选择器(光标位置由 view 实时决定)
   useEffect(() => {
     const open = () => fileInputRef.current?.click()
-    window.addEventListener('themd:insert-image', open)
-    return () => window.removeEventListener('themd:insert-image', open)
+    const off = appEvents.on('insertImage', open)
+    return () => { off() }
   }, [])
 
   const handlePick = (e: ChangeEvent<HTMLInputElement>) => {

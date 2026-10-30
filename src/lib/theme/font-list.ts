@@ -13,7 +13,7 @@ export function isTauri(): boolean {
 let desktopFontsCache: string[] | null = null
 async function desktopFontList(): Promise<string[]> {
   if (desktopFontsCache) return desktopFontsCache
-  const { invoke } = await import('@tauri-apps/api/core')
+  const { invoke } = await import('@/platform/tauri/commands')
   const families = await invoke<string[]>('list_system_fonts')
   desktopFontsCache = families
   return families

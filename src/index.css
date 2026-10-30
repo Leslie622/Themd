@@ -2,10 +2,25 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/jetbrains-mono";
 @plugin "@tailwindcss/typography";
 
+/*
+ * JetBrains Mono is the editor's bundled English default. The package uses
+ * the family name "JetBrains Mono Variable"; this alias keeps the public
+ * preference value stable as "JetBrains Mono" while retaining the variable
+ * font's full weight range in the application bundle.
+ */
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+    font-weight: 100 800;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* HarmonyOS Sans SC(华为鸿蒙黑体,免费商用):打包于 public/fonts,
-   作为全产品默认中文字体(西文仍由 Geist 承担,浏览器按字符自动分流)。
+   作为全产品默认中文字体(西文由各自的打包字体承担,浏览器按字符自动分流)。
    仅打包 Regular/Bold 两个字重,按许可要求不可修改、需随附许可与声明,
    见 public/fonts/HarmonyOS_Sans_LICENSE.txt */
 @font-face {
@@ -29,12 +44,12 @@
 @theme inline {
     --font-heading: var(--font-sans);
     /* 界面/编辑器字体可在设置里自定义(store-editor 注入 --font-ui-*),
-       这里是未设置时的默认值:Geist(打包) + HarmonyOS Sans SC(打包中文字体)
-       + 系统中文链兜底;编辑器默认跟界面,--font-editor 用 --font-ui-sans 取值,
-       西文相同、汉字自动分流到中文字体 */
+       这里是未设置时的默认值:Geist(界面) + HarmonyOS Sans SC(打包中文字体)。
+       编辑器默认使用打包的 JetBrains Mono + HarmonyOS Sans SC,
+       西文与汉字按字符自动分流。 */
     --font-editor-size: 13.5px;
     --font-sans: var(--font-ui-sans, 'Geist Variable', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif);
-    --font-mono: var(--font-editor, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace);
+    --font-mono: var(--font-editor, 'JetBrains Mono', 'HarmonyOS Sans SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'PingFang SC', 'Microsoft YaHei', monospace);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -261,7 +276,7 @@ pre::-webkit-scrollbar,
  * 语法配色:GitHub Light/Dark(EditorPane 内随明暗切换)。
  * 行号槽/活动行/光标的令牌化观感写在 EditorPane 的 EditorView.theme 里——
  * CodeMirror 的样式模块按插入顺序覆盖普通 css,这些规则写在这里会被压掉。
- * 编辑器默认字体跟随界面(--font-ui-sans),设置里自定义后切到 --font-editor */
+ * 编辑器默认使用打包的 JetBrains Mono,设置里自定义后切到 --font-editor */
 .cm-editor {
   font-size: var(--font-editor-size);
   font-family: var(--font-editor, var(--font-ui-sans, inherit));

@@ -47,7 +47,7 @@ import { TOKEN_VAR } from '@/lib/theme/tokens'
 import type { FieldDef } from '@/lib/theme/elements'
 import { resolveFallbackColors } from '@/lib/theme/color-fallbacks'
 import { inspectElementId } from '@/lib/theme/inspect'
-import { md } from '@/lib/markdown'
+import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
 import { SAMPLE_DOC } from '@/lib/theme/sample'
 import type { ThemeFile } from '@/lib/theme/schema'
 import type { ThemeTokens, TokenKey } from '@/lib/theme/tokens'
@@ -647,7 +647,7 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
   inspect?: boolean
   onInspect?: (elementId: string) => void
 }) {
-  const html = useMemo(() => md.render(content), [content])
+  const html = useMemo(() => renderMarkdown(content).html, [content])
   const isDark = useAppearance((s) => s.isDark)
   const cssVars = useMemo(
     () => compileTokens(theme.tokens, theme.dark, forceDark || isDark),

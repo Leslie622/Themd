@@ -1,4 +1,5 @@
 import type { Note } from '@/store'
+import { platformServices } from '@/app/platform'
 
 /**
  * 桌面端:原生「另存为」对话框选位置后直接写盘。
@@ -10,17 +11,15 @@ export async function saveTextViaDialog(
   filterName: string,
   extensions: string[],
 ): Promise<string | 'canceled' | 'web'> {
-  const { isTauri } = await import('@/lib/theme/font-list')
-  if (!isTauri()) return 'web'
-  const { save } = await import('@tauri-apps/plugin-dialog')
-  const path = await save({
-    defaultPath: defaultName,
-    filters: [{ name: filterName, extensions }],
+  const result = await platformServices.files.saveText({
+    defaultName,
+    contents,
+    filterName,
+    extensions,
   })
-  if (!path) return 'canceled'
-  const { invoke } = await import('@tauri-apps/api/core')
-  await invoke('write_text_file', { path, contents })
-  return path
+  if (result.kind === 'web') return 'web'
+  if (result.kind === 'canceled') return 'canceled'
+  return result.path
 }
 
 /** 导出单篇笔记为 .md 文件下载(浏览器端) */
@@ -59,13 +58,8 @@ export interface ImportedFile {
  * 返回结构与 readFolder 一致;用户取消返回 null。浏览器端调用返回 null。
  */
 export async function readFolderDesktop(): Promise<ImportedFile[] | null> {
-  const { isTauri } = await import('@/lib/theme/font-list')
-  if (!isTauri()) return null
-  const { open } = await import('@tauri-apps/plugin-dialog')
-  const dir = await open({ directory: true, multiple: false, title: '选择要导入的文件夹' })
-  if (typeof dir !== 'string') return null
-  const { invoke } = await import('@tauri-apps/api/core')
-  return invoke<ImportedFile[]>('read_folder_notes', { root: dir })
+  if (!platformServices.isDesktop) return null
+  return platformServices.files.pickFolder()
 }
 
 /**

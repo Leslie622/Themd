@@ -8,6 +8,7 @@ import { persist } from 'zustand/middleware'
 interface AppearanceState {
   isDark: boolean
   toggleDark: () => void
+  setDark: (value: boolean) => void
 }
 
 /** 把 isDark 同步到 html.dark(滚动条等全局样式跟随明暗令牌) */
@@ -20,9 +21,10 @@ export const useAppearance = create<AppearanceState>()(
     (set) => ({
       isDark: false,
       toggleDark: () => set((s) => ({ isDark: !s.isDark })),
+      setDark: (isDark) => set({ isDark }),
     }),
     {
-      name: 'themd-appearance',
+      name: 'themd/ui-appearance/v1',
       version: 1,
       onRehydrateStorage: () => (state) => {
         applyDarkClass(!!state?.isDark)

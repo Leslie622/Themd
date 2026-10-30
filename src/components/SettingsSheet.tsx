@@ -34,6 +34,12 @@ import {
 import { Minus, Plus } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
+import { notebookController } from '@/store'
+import { importLegacyNotebook } from '@/modules/notebook/application/legacy-import'
+import { themeController } from '@/store-themes'
+import { importLegacyThemes } from '@/modules/themes/application/legacy-import'
+import { importLegacyPreferences } from '@/modules/editor/application/legacy-import'
+import { useAppearance } from '@/store-appearance'
 
 /** 预览样例:中西文与代码混排,换字体立刻可感知 */
 const SAMPLE_TEXT = '笔记 Aa1 — 字体预览 {code: true}'
@@ -312,6 +318,7 @@ export function SettingsSheet({
   const setSyncScrollEnabled = useEditorPrefs((s) => s.setSyncScrollEnabled)
   const lineWrapEnabled = useEditorPrefs((s) => s.lineWrapEnabled)
   const setLineWrapEnabled = useEditorPrefs((s) => s.setLineWrapEnabled)
+  const setDark = useAppearance((s) => s.setDark)
   const themeList = useThemeStore((s) => s.themes)
   const themeActiveId = useThemeStore((s) => s.activeId)
   const setActiveTheme = useThemeStore((s) => s.setActive)
@@ -357,6 +364,35 @@ export function SettingsSheet({
             </div>
           </Section>
 
+          <Section title="数据恢复" description="仅在你主动点击时读取旧版笔记存储。">
+            <button
+              type="button"
+              className="w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+              onClick={() => {
+                const result = importLegacyNotebook(notebookController)
+                const themes = importLegacyThemes(themeController)
+                let preferences = false
+                const importedPreferences = importLegacyPreferences()
+                const old = importedPreferences.editor
+                if (typeof old.fontSize === 'number') setFontSize(old.fontSize)
+                if (typeof old.uiFontWestern === 'string' && typeof old.uiFontCjk === 'string') setUiFont(old.uiFontWestern, old.uiFontCjk)
+                if (typeof old.editorFontWestern === 'string' && typeof old.editorFontCjk === 'string') setEditorFont(old.editorFontWestern, old.editorFontCjk)
+                if (typeof old.foldEnabled === 'boolean') setFoldEnabled(old.foldEnabled)
+                if (typeof old.syncScrollEnabled === 'boolean') setSyncScrollEnabled(old.syncScrollEnabled)
+                if (typeof old.lineWrapEnabled === 'boolean') setLineWrapEnabled(old.lineWrapEnabled)
+                preferences = Object.keys(old).length > 0
+                if (typeof importedPreferences.isDark === 'boolean') {
+                  setDark(importedPreferences.isDark)
+                  preferences = true
+                }
+                if (result.imported || themes > 0 || preferences) toast.success(`已恢复 ${result.notes} 篇笔记、${result.folders} 个分组、${themes} 个主题及偏好设置`)
+                else toast.info('没有找到可恢复的旧版笔记数据')
+              }}
+            >
+              从旧版存储恢复笔记
+            </button>
+          </Section>
+
           <div className="border-t" />
 
           <Section title="界面" description="整个产品的显示字体。">
@@ -372,7 +408,7 @@ export function SettingsSheet({
 
           <div className="border-t" />
 
-          <Section title="编辑器" description="代码编辑区;字体未设置时跟随界面。">
+          <Section title="编辑器" description="代码编辑区;默认使用随应用打包的 JetBrains Mono。">
             <FontPair
               presets={MONO_FONT_PRESETS}
               western={editorFontWestern}
