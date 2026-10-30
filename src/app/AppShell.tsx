@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Sidebar } from '@/components/Sidebar'
+import { clampSidebarWidth, SIDEBAR_MIN_WIDTH } from '@/app/workspace-preferences'
 import { WindowControls } from '@/components/WindowControls'
 import { SettingsSheet } from '@/components/SettingsSheet'
 import { EditorPane } from '@/components/EditorPane'
@@ -19,24 +20,40 @@ import type { Note } from '@/modules/notebook/domain/note'
 import type { ThemeFile } from '@/lib/theme/schema'
 export type ViewMode = 'edit' | 'split' | 'preview'
 const FOLLOW_GLOBAL = '__follow__'
+const SIDEBAR_PANEL_ID = 'sidebar'
 function IconTip({ label, children }: { label: string; children: ReactElement }) { return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent side="bottom">{label}</TooltipContent></Tooltip> }
-export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; setSidebarCollapsed: (collapsed: boolean) => void; sidebarPanelRef: RefObject<PanelImperativeHandle | null>; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void }
-export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, setSidebarCollapsed, sidebarPanelRef, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, bindEditorScroller, bindPreviewScroller }: AppShellProps) {
+export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; setSidebarCollapsed: (collapsed: boolean) => void; sidebarPanelRef: RefObject<PanelImperativeHandle | null>; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void }
+export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, setSidebarCollapsed, sidebarPanelRef, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, bindEditorScroller, bindPreviewScroller }: AppShellProps) {
   return (
     /* Provider 包整个根:顶栏左侧的"展开侧栏"按钮(仅折叠时渲染)也在 Tooltip
        作用域内,否则一折叠就 Tooltip 脱离 Provider 导致 React 崩溃白屏 */
     <TooltipProvider delayDuration={300}>
     <div className="flex h-full">
-      <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 flex-1"
+        /* 侧栏像素宽度只在用户手势结束时落库:isUserInteraction 过滤掉
+           折叠命令、窗口缩放等程序性布局变化,避免把 0/压缩值写进存储。
+           layout 是百分比,像素从面板 ref 现取(手势刚结束,数值已落定) */
+        onLayoutChanged={(layout, meta) => {
+          if (!meta.isUserInteraction) return
+          const percentage = layout[SIDEBAR_PANEL_ID]
+          if (typeof percentage !== 'number' || percentage <= 0) return
+          const pixels = sidebarPanelRef.current?.getSize().inPixels
+          if (typeof pixels === 'number') onSidebarWidthCommit(clampSidebarWidth(pixels))
+        }}
+      >
         <ResizablePanel
+          id={SIDEBAR_PANEL_ID}
           panelRef={sidebarPanelRef}
-          /* 回归原有按比例布局:窗口缩放时侧栏按比例跟随。 */
-          defaultSize="24%"
-          minSize={240}
-          maxSize="45%"
+          /* 侧栏按像素记忆与保持:defaultSize 用像素,窗口缩放时增量全给主区。 */
+          defaultSize={`${sidebarWidth}px`}
+          minSize={SIDEBAR_MIN_WIDTH}
+          maxSize={560}
           collapsible
           collapsedSize="0"
           collapsedThreshold={120}
+          groupResizeBehavior="preserve-pixel-size"
           onResize={(size) => {
             setSidebarCollapsed(size.inPixels < 120)
           }}

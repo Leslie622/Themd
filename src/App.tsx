@@ -6,6 +6,7 @@ import { useSyncScroll } from '@/lib/scroll-sync'
 import { appEvents } from '@/shared/events/app-events'
 import { usePanelRef } from 'react-resizable-panels'
 import { AppShell, type ViewMode } from '@/app/AppShell'
+import { clampSidebarWidth, useWorkspacePrefs } from '@/app/workspace-preferences'
 import { useExportActions } from '@/modules/export/application/use-export-actions'
 
 export default function App() {
@@ -33,6 +34,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewText, setPreviewText] = useState('')
   const sidebarPanelRef = usePanelRef()
+  const sidebarWidth = useWorkspacePrefs((state) => state.sidebarWidth)
+  const setSidebarWidth = useWorkspacePrefs((state) => state.setSidebarWidth)
   const { exportPdf, exportNoteFile } = useExportActions({ active, view, setView })
 
   useEffect(() => {
@@ -72,6 +75,8 @@ export default function App() {
       sidebarCollapsed={sidebarCollapsed}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarPanelRef={sidebarPanelRef}
+      sidebarWidth={clampSidebarWidth(sidebarWidth)}
+      onSidebarWidthCommit={setSidebarWidth}
       settingsOpen={settingsOpen}
       setSettingsOpen={setSettingsOpen}
       setStudioOpen={setStudioOpen}
