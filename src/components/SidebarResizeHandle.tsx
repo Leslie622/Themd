@@ -12,24 +12,38 @@ interface SidebarResizeHandleProps {
   onReset: () => void
 }
 
+type SeparatorState = 'inactive' | 'hover' | 'active'
+
 /**
  * 侧栏自绘拖拽条。侧栏不参与 react-resizable-panels 的百分比引擎,
  * 宽度由普通 CSS 像素值保证,窗口缩放零 JS 参与不抖动。
  *
  * 样式与 shadcn ResizableHandle(components/ui/resizable.tsx,withHandle 形态)
  * 完全一致:1px bg-border 线 + after 伪元素 4px 热区 + 中央把手圆条。
- * shadcn 默认没有 hover 变色,一致地只以 col-resize 光标提示;布局宽度同为 1px。
- *
- * 拖拽性能:逐条 pointermove 若走 setState 会以事件频率重渲染整棵树,
- * 这里 rAF 合并后直写目标节点 style.width,松手才提交一次状态。
+ * hover/active 行为对齐库的 Separator:hover 时 data-separator="hover" +
+ * 全局 col-resize 光标(库经 adoptedStyleSheets 注入 *:hover 规则实现),
+ * 拖拽中变 "active",均直写 DOM 不触发 React 渲染。
  */
 export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: SidebarResizeHandleProps) {
   const frame = useRef<number | null>(null)
+  const elementRef = useRef<HTMLDivElement | null>(null)
+
+  const setState = (state: SeparatorState) => {
+    if (elementRef.current) elementRef.current.dataset.separator = state
+  }
+
+  /** 与库一致:hover/active 期间全局锁定光标,离开/松手恢复 */
+  const setGlobalCursor = (cursor: 'col-resize' | null) => {
+    document.body.style.cursor = cursor ?? ''
+    document.body.style.userSelect = cursor ? 'none' : ''
+  }
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
+    setState('active')
+    setGlobalCursor('col-resize')
     const startX = event.clientX
     // 起点以 DOM 实际宽度为准,不依赖任何 React 状态
     const startWidth = targetRef.current?.getBoundingClientRect().width ?? min
@@ -53,21 +67,35 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
       // 松手同步直写,防止最后一次 rAF 被取消后宽度回跳一格
       if (targetRef.current) targetRef.current.style.width = `${final}px`
       cleanup()
+      // 指针仍在线上则回到 hover,否则 inactive(与库状态机一致)
+      const rect = elementRef.current?.getBoundingClientRect()
+      const stillInside = rect && upEvent.clientX >= rect.left && upEvent.clientX <= rect.right
+      setState(stillInside ? 'hover' : 'inactive')
+      setGlobalCursor(null)
       onCommit(final)
     }
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', finish)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', finish)
     window.addEventListener('pointercancel', finish)
-    // 拖拽期间锁定光标与禁选,指针移出拖拽条也保持反馈
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
+  }
+
+  const handlePointerEnter = () => {
+    if (elementRef.current?.dataset.separator !== 'active') {
+      setState('hover')
+      setGlobalCursor('col-resize')
+    }
+  }
+
+  const handlePointerLeave = () => {
+    if (elementRef.current?.dataset.separator !== 'active') {
+      setState('inactive')
+      setGlobalCursor(null)
+    }
   }
 
   /** 键盘微调,对齐库 Separator 的键盘可操作性 */
@@ -82,17 +110,20 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
 
   return (
     <div
+      ref={elementRef}
       role="separator"
       aria-orientation="vertical"
       aria-label="调整侧栏宽度"
       tabIndex={0}
       data-slot="resizable-handle"
+      data-separator="inactive"
       onPointerDown={handlePointerDown}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
       onDoubleClick={onReset}
       onKeyDown={handleKeyDown}
       /* 类名与 components/ui/resizable.tsx 的 Separator 逐字一致(省略库托管的水平变体),
-         仅补 shrink-0——shadcn 形态下由库注入。静止光标同 shadcn 为默认箭头,
-         拖拽中才全局切 col-resize(pointerdown 时写 body.cursor,与库行为一致) */
+         仅补 shrink-0——shadcn 形态下由库注入 */
       className="bg-border focus-visible:ring-1 focus-visible:ring-ring relative flex w-px shrink-0 items-center justify-center after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-hidden"
       style={{ touchAction: 'none' }}
     >
