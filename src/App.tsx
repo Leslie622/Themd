@@ -4,7 +4,6 @@ import { useNotebook } from '@/store'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useSyncScroll } from '@/lib/scroll-sync'
 import { appEvents } from '@/shared/events/app-events'
-import { usePanelRef } from 'react-resizable-panels'
 import { AppShell, type ViewMode } from '@/app/AppShell'
 import { clampSidebarWidth, useWorkspacePrefs } from '@/app/workspace-preferences'
 import { useExportActions } from '@/modules/export/application/use-export-actions'
@@ -33,19 +32,18 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewText, setPreviewText] = useState('')
-  const sidebarPanelRef = usePanelRef()
   const sidebarWidth = useWorkspacePrefs((state) => state.sidebarWidth)
   const setSidebarWidth = useWorkspacePrefs((state) => state.setSidebarWidth)
   const { exportPdf, exportNoteFile } = useExportActions({ active, view, setView })
 
   useEffect(() => {
-    const offCollapse = appEvents.on('collapseSidebar', () => sidebarPanelRef.current?.collapse())
+    const offCollapse = appEvents.on('collapseSidebar', () => setSidebarCollapsed(true))
     const offSettings = appEvents.on('openSettings', () => setSettingsOpen(true))
     return () => {
       offCollapse()
       offSettings()
     }
-  }, [sidebarPanelRef])
+  }, [])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -73,8 +71,7 @@ export default function App() {
       setView={setView}
       previewText={previewText}
       sidebarCollapsed={sidebarCollapsed}
-      setSidebarCollapsed={setSidebarCollapsed}
-      sidebarPanelRef={sidebarPanelRef}
+      onSidebarExpand={() => setSidebarCollapsed(false)}
       sidebarWidth={clampSidebarWidth(sidebarWidth)}
       onSidebarWidthCommit={setSidebarWidth}
       settingsOpen={settingsOpen}

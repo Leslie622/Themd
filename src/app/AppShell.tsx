@@ -1,15 +1,15 @@
-import { type ReactElement, type RefObject } from 'react'
+import { type ReactElement, useRef } from 'react'
 import { Columns2, Eye, FileCode2, FileSymlink, FileText, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import type { PanelImperativeHandle } from 'react-resizable-panels'
 import { Toaster } from '@/components/ui/sonner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Sidebar } from '@/components/Sidebar'
-import { clampSidebarWidth, SIDEBAR_MIN_WIDTH } from '@/app/workspace-preferences'
+import { SidebarResizeHandle } from '@/components/SidebarResizeHandle'
+import { SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from '@/app/workspace-preferences'
 import { WindowControls } from '@/components/WindowControls'
 import { SettingsSheet } from '@/components/SettingsSheet'
 import { EditorPane } from '@/components/EditorPane'
@@ -20,49 +20,34 @@ import type { Note } from '@/modules/notebook/domain/note'
 import type { ThemeFile } from '@/lib/theme/schema'
 export type ViewMode = 'edit' | 'split' | 'preview'
 const FOLLOW_GLOBAL = '__follow__'
-const SIDEBAR_PANEL_ID = 'sidebar'
 function IconTip({ label, children }: { label: string; children: ReactElement }) { return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent side="bottom">{label}</TooltipContent></Tooltip> }
-export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; setSidebarCollapsed: (collapsed: boolean) => void; sidebarPanelRef: RefObject<PanelImperativeHandle | null>; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void }
-export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, setSidebarCollapsed, sidebarPanelRef, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, bindEditorScroller, bindPreviewScroller }: AppShellProps) {
+export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void }
+export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, bindEditorScroller, bindPreviewScroller }: AppShellProps) {
+  /* 侧栏容器:拖拽期间 SidebarResizeHandle 直改它的 style.width,绕开 React */
+  const sidebarRef = useRef<HTMLDivElement | null>(null)
   return (
     /* Provider 包整个根:顶栏左侧的"展开侧栏"按钮(仅折叠时渲染)也在 Tooltip
        作用域内,否则一折叠就 Tooltip 脱离 Provider 导致 React 崩溃白屏 */
     <TooltipProvider delayDuration={300}>
     <div className="flex h-full">
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className="min-h-0 flex-1"
-        /* 侧栏像素宽度只在用户手势结束时落库:isUserInteraction 过滤掉
-           折叠命令、窗口缩放等程序性布局变化,避免把 0/压缩值写进存储。
-           layout 是百分比,像素从面板 ref 现取(手势刚结束,数值已落定) */
-        onLayoutChanged={(layout, meta) => {
-          if (!meta.isUserInteraction) return
-          const percentage = layout[SIDEBAR_PANEL_ID]
-          if (typeof percentage !== 'number' || percentage <= 0) return
-          const pixels = sidebarPanelRef.current?.getSize().inPixels
-          if (typeof pixels === 'number') onSidebarWidthCommit(clampSidebarWidth(pixels))
-        }}
-      >
-        <ResizablePanel
-          id={SIDEBAR_PANEL_ID}
-          panelRef={sidebarPanelRef}
-          /* 侧栏按像素记忆与保持:defaultSize 用像素,窗口缩放时增量全给主区。 */
-          defaultSize={`${sidebarWidth}px`}
-          minSize={SIDEBAR_MIN_WIDTH}
-          maxSize={560}
-          collapsible
-          collapsedSize="0"
-          collapsedThreshold={120}
-          groupResizeBehavior="preserve-pixel-size"
-          onResize={(size) => {
-            setSidebarCollapsed(size.inPixels < 120)
-          }}
-        >
-          <Sidebar />
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel minSize={400} groupResizeBehavior="preserve-relative-size">
-          <main className="flex h-full min-w-0 flex-col">
+      {/* 侧栏是固定像素宽的普通 flex 区块,不参与 react-resizable-panels:
+          百分比引擎靠 JS 追赶校正,窗口缩放时浏览器先按旧百分比画脏帧
+          导致内容抖动;纯 CSS 像素宽由布局层逐帧保证,零 JS 参与。 */}
+      {sidebarCollapsed ? null : (
+        <>
+          <div ref={sidebarRef} className="h-full shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
+            <Sidebar />
+          </div>
+          <SidebarResizeHandle
+            targetRef={sidebarRef}
+            min={SIDEBAR_MIN_WIDTH}
+            max={SIDEBAR_MAX_WIDTH}
+            onCommit={onSidebarWidthCommit}
+            onReset={() => onSidebarWidthCommit(SIDEBAR_DEFAULT_WIDTH)}
+          />
+        </>
+      )}
+      <main className="flex h-full min-w-0 flex-1 flex-col">
         {/* 顶栏常驻:decorations:false 下窗口按钮与拖拽区只在这里,空状态也不能丢;
             笔记标题/主题/视图等控件仅在选中笔记时显示 */}
         <header
@@ -76,7 +61,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   variant="ghost"
                   size="icon"
                   className="size-8 shrink-0"
-                  onClick={() => sidebarPanelRef.current?.expand()}
+                  onClick={onSidebarExpand}
                   aria-label="展开侧栏"
                 >
                   <PanelLeft />
@@ -280,13 +265,10 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
           </div>
         )}
           </main>
-        </ResizablePanel>
-      </ResizablePanelGroup>
       <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
       <Toaster />
     </div>
     </TooltipProvider>
   )
 }
-
 
