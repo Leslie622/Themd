@@ -63,16 +63,21 @@ function FontListDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[28rem] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+      {/* p-0 + overflow-hidden:Command 占满,自身圆角被 Dialog 裁齐;
+          showCloseButton=false:关闭走 Esc/点外部,搜索框右上不留悬停 X */}
+      <DialogContent
+        showCloseButton={false}
+        className="flex h-[28rem] flex-col gap-0 overflow-hidden p-0 sm:max-w-md [&_[cmdk-root]]:rounded-none"
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>从本机字体列表中选择或复制字体名称</DialogDescription>
         </DialogHeader>
-        <Command>
+        <Command className="min-h-0 flex-1">
           <CommandInput
             placeholder={requesting ? '正在读取本机字体…' : `搜索 ${fonts.length} 个字体…`}
           />
-          <CommandList className="max-h-64">
+          <CommandList className="min-h-0 flex-1 max-h-none">
             <CommandEmpty>
               {requesting || fonts.length === 0 ? '正在读取本机字体…' : '没有匹配的字体'}
             </CommandEmpty>
