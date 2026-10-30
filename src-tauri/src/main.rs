@@ -24,6 +24,9 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // 图床上传:HTTP 请求经本插件在 Rust 层发出,绕开 WebView CORS;
+        // 域名白名单放在 capabilities/default.json 的 http:default 配置里
+        .plugin(tauri_plugin_http::init())
         // 开机自启:写 HKCU\...\Run 注册表键,开关由设置抽屉经 IPC 控制。
         // 启动参数最小化启动:自启时窗口直接进托盘,不弹窗打扰
         .plugin(tauri_plugin_autostart::init(

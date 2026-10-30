@@ -16,6 +16,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-single-instance = "2.5.5"
 tauri-plugin-autostart = "2.7.0"
+# 图床上传:前端 fetch 由 Rust 层代理发出,绕开 WebView CORS 限制,
+# 任意服务商与本地 PicGo 端口均可直连
+tauri-plugin-http = "2"
 
 # 导出 PDF:走 WebView2 的 PrintToPdf COM 接口(ICoreWebView2_7),
 # 版本须与 wry 所用的 webview2-com/windows 对齐,避免接口重复注册

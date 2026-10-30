@@ -97,6 +97,25 @@ export async function fileToAssetImage(
 }
 
 /**
+ * 处理单个图片文件为图床上传(图床模式)。
+ * 压缩后上传;失败抛错由调用方中止插入(不回落,用户自己选重试或换模式)。
+ */
+export async function fileToUploadedImage(
+  file: File,
+  upload: (bytes: Uint8Array, filename: string) => Promise<{ url: string }>,
+): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error(`「${file.name}」不是图片`)
+  }
+  const { blob, ext } = await compressToBlob(file)
+  const base = file.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_') || 'image'
+  const name = `${base}-${crypto.randomUUID().slice(0, 8)}.${ext}`
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  const { url } = await upload(bytes, name)
+  return url
+}
+
+/**
  * 在 CodeMirror 光标/落点处插入独立一行的图片标记。
  * 前后补空行保证 markdown 解析,插入后光标落在行尾方便继续输入。
  */

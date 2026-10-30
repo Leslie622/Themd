@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, type ChangeEvent } from 'react'
 import { toast } from 'sonner'
 
 import { imagePlaceholder } from '@/lib/image-decorator'
-import { fileToAssetImage, fileToEmbeddedImage, insertImageMarkdown } from '@/lib/image'
+import { fileToAssetImage, fileToEmbeddedImage, fileToUploadedImage, insertImageMarkdown } from '@/lib/image'
 import { assetsPathToAbsolute } from '@/lib/image-src'
 import { platformServices } from '@/app/platform'
 import { useAppearance } from '@/store-appearance'
@@ -31,10 +31,16 @@ async function insertImageFiles(
   const alt = (name: string) => name.replace(/\.[^.]+$/, '') || '图片'
   toast.info(files.length > 1 ? `正在插入 ${files.length} 张图片…` : '正在插入图片…')
   // 本地 assets 模式:图片落盘 `${root}/assets/`,正文引用相对路径;
-  // assetsRoot 未自定义时用平台默认(桌面端应用数据目录)。Web 端 gateway 无能力,
-  // UI 已强制 embedded,这里兜底回落内嵌,不因模式残留导致插入失败
-  const { imageMode, assetsRoot } = useEditorPrefs.getState()
+  // assetsRoot 未自定义时用平台默认(桌面端应用数据目录)。remote 模式:
+  // 上传图床拿外链(失败抛错即中止该张,不回落)。Web 端 gateway 无本地
+  // 文件能力,UI 已强制 embedded,这里兜底回落内嵌,不因模式残留导致插入失败
+  const {
+    imageMode, assetsRoot,
+    uploaderProvider, smmsToken, githubRepo, githubToken, picgoUrl,
+  } = useEditorPrefs.getState()
   const useAssets = imageMode === 'assets' && platformServices.isDesktop
+  const useRemote = imageMode === 'remote'
+  const uploaderConfig = { provider: uploaderProvider, smmsToken, githubRepo, githubToken, picgoUrl }
   const root = useAssets && assetsRoot.trim()
     ? assetsRoot.trim()
     : await platformServices.files.defaultAssetsRoot()
@@ -44,7 +50,9 @@ async function insertImageFiles(
     try {
       const insertValue = useAssets
         ? (await fileToAssetImage(file, root, platformServices.files.writeBinaryFile)).relativePath
-        : await fileToEmbeddedImage(file)
+        : useRemote
+          ? await fileToUploadedImage(file, (bytes, name) => platformServices.uploader.upload(uploaderConfig, bytes, name))
+          : await fileToEmbeddedImage(file)
       insertImageMarkdown(view, at, insertValue, alt(file.name))
       // 上一张插入后光标停在其行尾(空行上),从这里续插下一张
       at = view.state.selection.main.head

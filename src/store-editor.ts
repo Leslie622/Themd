@@ -50,23 +50,36 @@ interface EditorPrefsState {
   lineWrapEnabled: boolean
   /**
    * 图片存储模式。assets = 本地文件夹(默认,markdown 写 assets/xxx 相对路径,
-   * 导出的 .md 干净可读);embedded = base64 内嵌正文(单文件自包含)。
-   * 浏览器端无本地文件能力,UI 强制 embedded。
+   * 导出的 .md 干净可读);embedded = base64 内嵌正文(单文件自包含);
+   * remote = 上传图床(正文写外链 URL,Typora/PicGo 式)。
+   * 浏览器端无本地文件能力,本地文件夹模式在 Web 被禁用。
    */
-  imageMode: 'assets' | 'embedded'
+  imageMode: 'assets' | 'embedded' | 'remote'
   /**
    * 本地图片根目录(绝对路径)。空 = 用平台默认(桌面端为应用数据目录)。
    * 图片实际落在 `${assetsRoot}/assets/`,正文引用 `assets/<文件名>` 相对路径。
    */
   assetsRoot: string
+  /** 图床服务商:SM.MS 直连 / GitHub 仓库 / PicGo 本地桥(用户自配,可换任意对象存储) */
+  uploaderProvider: 'smms' | 'github' | 'picgo'
+  /** SM.MS API token(明文本机保存,与 Typora 配置同级安全度) */
+  smmsToken: string
+  /** GitHub 仓库(owner/repo),图片以 assets/ 路径提交 */
+  githubRepo: string
+  /** GitHub token(需 repo Contents 读写权限) */
+  githubToken: string
+  /** PicGo Server 上传接口地址(端口可在 PicGo 里改) */
+  picgoUrl: string
   setFontSize: (px: number) => void
   setUiFont: (western: string, cjk: string) => void
   setEditorFont: (western: string, cjk: string) => void
   setFoldEnabled: (v: boolean) => void
   setSyncScrollEnabled: (v: boolean) => void
   setLineWrapEnabled: (v: boolean) => void
-  setImageMode: (mode: 'assets' | 'embedded') => void
+  setImageMode: (mode: 'assets' | 'embedded' | 'remote') => void
   setAssetsRoot: (root: string) => void
+  /** 图床配置批量更新(设置抽屉各字段共用) */
+  setUploader: (patch: Partial<Pick<EditorPrefsState, 'uploaderProvider' | 'smmsToken' | 'githubRepo' | 'githubToken' | 'picgoUrl'>>) => void
 }
 
 const MIN = 11
@@ -107,9 +120,14 @@ const DEFAULTS = {
   syncScrollEnabled: true,
   lineWrapEnabled: true,
   /** 默认本地文件夹:导出的 .md 干净,base64 内嵌退为可选项 */
-  imageMode: 'assets' as 'assets' | 'embedded',
+  imageMode: 'assets' as 'assets' | 'embedded' | 'remote',
   /** 空 = 平台默认(桌面端应用数据目录);浏览器端被 UI 强制 embedded,不走此值 */
   assetsRoot: '',
+  uploaderProvider: 'smms' as 'smms' | 'github' | 'picgo',
+  smmsToken: '',
+  githubRepo: '',
+  githubToken: '',
+  picgoUrl: 'http://127.0.0.1:36677/upload',
 }
 
 export const useEditorPrefs = create<EditorPrefsState>()(
@@ -134,10 +152,11 @@ export const useEditorPrefs = create<EditorPrefsState>()(
       setLineWrapEnabled: (v) => set({ lineWrapEnabled: v }),
       setImageMode: (mode) => set({ imageMode: mode }),
       setAssetsRoot: (root) => set({ assetsRoot: root }),
+      setUploader: (patch) => set(patch),
     }),
     {
       name: 'themd/ui-preferences/v1',
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<EditorPrefsState>
         const next = { ...DEFAULTS, ...state }
@@ -145,6 +164,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         // v3 界面中文字体落具体值(设置槽位可回显);西文保持空 = 不单独指定。
         // v4 图片存储模式登场,存量用户一律落新默认 assets(旧数据是内嵌态,
         // 正文不受影响,只是新插入的图片开始走本地文件夹)
+        // v5 图床模式登场:imageMode 补 'remote' 合法值,上传配置落默认
         if (version < 2) {
           if (!next.editorFontWestern?.trim()) next.editorFontWestern = 'JetBrains Mono'
           if (!next.editorFontCjk?.trim()) next.editorFontCjk = 'HarmonyOS Sans SC'
@@ -154,6 +174,15 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         }
         if (version < 4) {
           if (next.imageMode !== 'assets' && next.imageMode !== 'embedded') next.imageMode = 'assets'
+        }
+        if (version < 5) {
+          if (next.imageMode !== 'assets' && next.imageMode !== 'embedded' && next.imageMode !== 'remote') {
+            next.imageMode = 'assets'
+          }
+          if (next.uploaderProvider !== 'smms' && next.uploaderProvider !== 'github' && next.uploaderProvider !== 'picgo') {
+            next.uploaderProvider = 'smms'
+          }
+          if (!next.picgoUrl?.trim()) next.picgoUrl = 'http://127.0.0.1:36677/upload'
         }
         return next
       },

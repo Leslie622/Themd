@@ -13,6 +13,16 @@
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",
-    "core:window:allow-is-maximized"
+    "core:window:allow-is-maximized",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://s.ee/*" },
+        { "url": "https://sm.ms/*" },
+        { "url": "https://api.github.com/*" },
+        { "url": "http://127.0.0.1:*" },
+        { "url": "http://localhost:*" }
+      ]
+    }
   ]
 }

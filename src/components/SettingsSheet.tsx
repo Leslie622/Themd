@@ -20,6 +20,7 @@ import { platformServices } from '@/app/platform'
 import { Minus, Plus, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { FontField } from './settings/FontField'
 import { useLocalFontList } from './settings/use-local-font-list'
@@ -84,6 +85,120 @@ function FontPair({
         placeholder="系统默认"
         mono={mono}
       />
+    </div>
+  )
+}
+
+/** 图床配置行:短标签 + 右侧输入框,与抽屉其它行对齐 */
+function UploaderInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  secret,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  secret?: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="shrink-0 text-[13px] text-muted-foreground">{label}</span>
+      <Input
+        className="h-7 w-[10.5rem] text-xs"
+        type={secret ? 'password' : 'text'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoComplete="off"
+        spellCheck={false}
+      />
+    </div>
+  )
+}
+
+/** 图床配置面板:服务商选择 + 凭据字段 + 测试上传(传 1px PNG 探活) */
+function UploaderFields() {
+  const provider = useEditorPrefs((s) => s.uploaderProvider)
+  const smmsToken = useEditorPrefs((s) => s.smmsToken)
+  const githubRepo = useEditorPrefs((s) => s.githubRepo)
+  const githubToken = useEditorPrefs((s) => s.githubToken)
+  const picgoUrl = useEditorPrefs((s) => s.picgoUrl)
+  const setUploader = useEditorPrefs((s) => s.setUploader)
+  const [testing, setTesting] = useState(false)
+
+  const runTest = () => {
+    setTesting(true)
+    platformServices.uploader
+      .test({ provider, smmsToken, githubRepo, githubToken, picgoUrl })
+      .then((url) => toast.success(`测试上传成功:${url}`))
+      .catch((e) => toast.error(e instanceof Error ? e.message : '测试上传失败'))
+      .finally(() => setTesting(false))
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-lg border bg-muted/30 p-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] text-muted-foreground">服务商</span>
+        <Select
+          value={provider}
+          onValueChange={(v) => setUploader({ uploaderProvider: v as typeof provider })}
+        >
+          <SelectTrigger size="sm" className="w-[10.5rem]" aria-label="图床服务商">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="smms">SM.MS / s.ee</SelectItem>
+            <SelectItem value="github">GitHub 仓库</SelectItem>
+            <SelectItem value="picgo">PicGo 本地桥</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {provider === 'smms' && (
+        <UploaderInput
+          label="Token"
+          value={smmsToken}
+          onChange={(v) => setUploader({ smmsToken: v })}
+          placeholder="sm.ms 的 API Token"
+          secret
+        />
+      )}
+      {provider === 'github' && (
+        <>
+          <UploaderInput
+            label="仓库"
+            value={githubRepo}
+            onChange={(v) => setUploader({ githubRepo: v })}
+            placeholder="owner/repo"
+          />
+          <UploaderInput
+            label="Token"
+            value={githubToken}
+            onChange={(v) => setUploader({ githubToken: v })}
+            placeholder="需 Contents 读写权限"
+            secret
+          />
+        </>
+      )}
+      {provider === 'picgo' && (
+        <UploaderInput
+          label="接口"
+          value={picgoUrl}
+          onChange={(v) => setUploader({ picgoUrl: v })}
+          placeholder="http://127.0.0.1:36677/upload"
+        />
+      )}
+      <Button
+        variant="outline"
+        size="xs"
+        className="self-end"
+        disabled={testing}
+        onClick={runTest}
+      >
+        {testing ? '上传中…' : '测试上传'}
+      </Button>
     </div>
   )
 }
@@ -205,23 +320,24 @@ export function SettingsSheet({
               onWestern={(v) => setUiFont(v, uiFontCjk)}
               onCjk={(v) => setUiFont(uiFontWestern, v)}
             />
-            {/* 图片存储:桌面端可选本地文件夹(Web 无文件能力,锁定内嵌) */}
+            {/* 图片存储:本地文件夹仅桌面端;图床 Web 也可用(浏览器 fetch 直连) */}
             <div className="mt-3 flex items-center justify-between">
               <span className="text-[13px] text-muted-foreground">图片存储</span>
               <Select
-                value={isDesktop ? imageMode : 'embedded'}
-                onValueChange={(v) => setImageMode(v as 'assets' | 'embedded')}
-                disabled={!isDesktop}
+                value={isDesktop ? imageMode : (imageMode === 'remote' ? 'remote' : 'embedded')}
+                onValueChange={(v) => setImageMode(v as 'assets' | 'embedded' | 'remote')}
               >
                 <SelectTrigger size="sm" className="w-[10.5rem]" aria-label="图片存储模式">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="assets">本地文件夹</SelectItem>
+                  {isDesktop && <SelectItem value="assets">本地文件夹</SelectItem>}
+                  <SelectItem value="remote">上传图床</SelectItem>
                   <SelectItem value="embedded">内嵌笔记</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {imageMode === 'remote' && <UploaderFields />}
             {isDesktop && imageMode === 'assets' && (
               <div className="mt-3 flex items-center justify-between gap-2">
                 <span className="min-w-0 shrink-0 text-[13px] text-muted-foreground">图片目录</span>
