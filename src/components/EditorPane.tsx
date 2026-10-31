@@ -2,6 +2,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { foldGutter } from '@codemirror/language'
+import { search } from '@codemirror/search'
 import { Compartment } from '@codemirror/state'
 import { EditorView, lineNumbers as cmLineNumbers } from '@codemirror/view'
 import {
@@ -498,6 +499,9 @@ export function EditorPane({
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           themeExt,
           chromeExt,
+          // 查找替换面板(Mod-f,basicSetup 的 searchKeymap 提供快捷键):
+          // top = 面板置顶不遮正文;样式在 index.css 用 shadcn 令牌接管
+          search({ top: true }),
           foldComp.of(foldEnabled ? foldExt : []),
           wrapComp.of(lineWrapEnabled ? EditorView.lineWrapping : []),
           cmLineNumbers(),
