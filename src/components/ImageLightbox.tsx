@@ -1,4 +1,9 @@
-import Lightbox, { useController, useNavigationState, type ZoomRef } from 'yet-another-react-lightbox'
+import Lightbox, {
+  useController,
+  useLightboxState,
+  useNavigationState,
+  type ZoomRef,
+} from 'yet-another-react-lightbox'
 import Captions from 'yet-another-react-lightbox/plugins/captions'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import 'yet-another-react-lightbox/styles.css'
@@ -9,11 +14,14 @@ import { Button } from '@/components/ui/button'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  DownloadIcon,
+  RotateCwIcon,
   XIcon,
   ZoomInIcon,
   ZoomOutIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useCallback, useEffect, useState } from 'react'
 
 export interface LightboxSlide {
   /** 已解析好的可加载地址(asset:///data/https) */
@@ -43,7 +51,8 @@ export function collectLightboxState(
  * 基于 yet-another-react-lightbox：一次传入所在预览的全部图片，
  * 可在多张之间左右切换（箭头/方向键）；Zoom 插件提供滚轮缩放/双击/pinch，
  * Captions 插件展示 alt 说明，Esc / 点击空白由库内置。
- * 所有按钮（关闭/缩放/前后切换）经 render 定制口换成 shadcn Button；
+ * 旋转(按图记忆,90° 递增)与下载(fetch→blob)为自定义工具栏按钮。
+ * 所有按钮（关闭/缩放/旋转/下载/前后切换）经 render 定制口换成 shadcn Button；
  * 按钮带常显深色磨砂圆底，白色图标压在白色图片上也看得见。
  */
 
@@ -98,6 +107,82 @@ function ZoomButtons({ zoomRef }: { zoomRef: ZoomRef }) {
   )
 }
 
+function RotateButton({ onRotate }: { onRotate: (index: number) => void }) {
+  const { currentIndex } = useLightboxState()
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="旋转"
+      title="旋转 90°"
+      className={cn(buttonScrim)}
+      onClick={() => currentIndex !== undefined && onRotate(currentIndex)}
+    >
+      <RotateCwIcon />
+    </Button>
+  )
+}
+
+function DownloadButton() {
+  const { slides, currentIndex } = useLightboxState()
+  const slide = currentIndex !== undefined ? slides[currentIndex] : undefined
+
+  const onDownload = async () => {
+    if (!slide) return
+    const name = fileNameFor(slide.src, slide.alt)
+    try {
+      // 先取字节再以 blob 触发下载:同源限制下 <a download> 对跨域地址不生效
+      const res = await fetch(slide.src)
+      if (!res.ok) throw new Error(String(res.status))
+      const url = URL.createObjectURL(await res.blob())
+      triggerDownload(url, name)
+      URL.revokeObjectURL(url)
+    } catch {
+      // 图床 CORS 等拿不到字节的场景,回落浏览器默认行为(打开/原生下载)
+      triggerDownload(slide.src, name)
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="下载"
+      title="下载"
+      className={cn(buttonScrim)}
+      onClick={onDownload}
+    >
+      <DownloadIcon />
+    </Button>
+  )
+}
+
+function triggerDownload(href: string, name: string) {
+  const a = document.createElement('a')
+  a.href = href
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+/** 从 src/alt 推导下载文件名(清洗非法字符) */
+function fileNameFor(src: string, alt?: string): string {
+  const clean = (s: string) => s.trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || 'image'
+  if (src.startsWith('data:')) {
+    const mime = /^data:([^;,]+)/.exec(src)?.[1] ?? 'image/png'
+    const ext = mime.split('/')[1]?.replace('jpeg', 'jpg').split('+')[0] || 'png'
+    return `${clean(alt ?? 'image')}.${ext}`
+  }
+  try {
+    const name = decodeURIComponent(new URL(src).pathname.split('/').pop() ?? '')
+    if (name) return name
+  } catch {
+    // 非 URL 形态,走 alt 兜底
+  }
+  return clean(alt ?? 'image')
+}
+
 function NavButton({ side }: { side: 'prev' | 'next' }) {
   const { prev, next } = useController()
   const { prevDisabled, nextDisabled } = useNavigationState()
@@ -132,6 +217,25 @@ export function ImageLightbox({
   initialIndex?: number
   onClose: () => void
 }) {
+  // 每张图的旋转角(度),按 slide 序号记忆;换一组 slides(重开/换笔记)时复位
+  const [rotations, setRotations] = useState<Record<number, number>>({})
+  useEffect(() => {
+    setRotations({})
+  }, [slides])
+
+  // 把旋转角写到对应序号的 slide 图像上。
+  // YARL 的缩放/平移 transform 在 slide wrapper 上,与图像自身的 rotate 不冲突;
+  // carousel 按 slides 顺序渲染 .yarl__slide_image,DOM 序号即 slide 序号
+  useEffect(() => {
+    document.querySelectorAll<HTMLImageElement>('.yarl__slide_image').forEach((im, i) => {
+      im.style.transform = rotations[i] ? `rotate(${rotations[i]}deg)` : ''
+    })
+  }, [rotations, slides])
+
+  const handleRotate = useCallback((index: number) => {
+    setRotations((prev) => ({ ...prev, [index]: ((prev[index] ?? 0) + 90) % 360 }))
+  }, [])
+
   return (
     <Lightbox
       open={slides.length > 0}
@@ -151,12 +255,20 @@ export function ImageLightbox({
       zoom={{ minZoom: 0.5, maxZoomPixelRatio: 4, zoomInMultiplier: 1.4, scrollToZoom: true, wheelZoomDistanceFactor: 800 }}
       animation={{ fade: 130, swipe: 220 }}
       render={{
-        // 三个按钮组全部换成 shadcn Button
+        // 按钮全部换成 shadcn Button;'zoom' 占位键见 toolbar.buttons
         buttonZoom: (zoomRef) => <ZoomButtons zoomRef={zoomRef} />,
         buttonPrev: () => <NavButton side="prev" />,
         buttonNext: () => <NavButton side="next" />,
       }}
-      toolbar={{ buttons: [<CloseButton key="close" onClose={onClose} />] }}
+      // 'zoom' 是 YARL 的占位键,Zoom 插件会把缩放按钮替换到这个位置
+      toolbar={{
+        buttons: [
+          'zoom',
+          <RotateButton key="rotate" onRotate={handleRotate} />,
+          <DownloadButton key="download" />,
+          <CloseButton key="close" onClose={onClose} />,
+        ],
+      }}
     />
   )
 }

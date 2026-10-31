@@ -24,10 +24,12 @@
   transition: transform 150ms ease-out;
 }
 
-/* 大图：主题圆角 + 轻投影，悬浮在幕布上 */
+/* 大图：主题圆角 + 轻投影，悬浮在幕布上；
+   transform 过渡同时服务灯箱的 90° 旋转(YARL 缩放/平移在 wrapper 上) */
 .yarl__slide_image {
   border-radius: var(--radius-md, 8px);
   box-shadow: 0 24px 60px oklch(0 0 0 / 45%);
+  transition: transform 200ms ease-out;
 }
 
 /* 工具栏：库默认无 gap——缩放按钮组(内部 gap-1)与关闭钮之间会贴死，
