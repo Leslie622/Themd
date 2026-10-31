@@ -3,6 +3,7 @@ import { NotebookController } from './notebook-controller'
 import type { NotebookSnapshot } from '../domain/note'
 import type { FileLinkGateway, FsChangeEvent } from '@/platform/contracts'
 import { isPathUnder } from '@/shared/paths'
+import { appEvents } from '@/shared/events/app-events'
 
 class MemoryRepository {
   snapshot: NotebookSnapshot | null = null
@@ -14,6 +15,8 @@ class FakeFileLink implements FileLinkGateway {
   files = new Map<string, string>()
   dirs = new Set<string>()
   writeCalls: Array<[path: string, contents: string]> = []
+  /** 模拟写回失败(占用/权限):集合内的路径写入抛错 */
+  failWrites = new Set<string>()
   watched: string[][] = []
   private listener: ((events: FsChangeEvent[]) => void) | null = null
 
@@ -23,6 +26,7 @@ class FakeFileLink implements FileLinkGateway {
   }
 
   async writeTextFile(path: string, contents: string) {
+    if (this.failWrites.has(path)) throw new Error(`被占用: ${path}`)
     this.writeCalls.push([path, contents])
     this.files.set(path, contents)
   }
@@ -175,6 +179,35 @@ describe('NotebookController', () => {
       controller.setActive(null)
       await flushAsync()
       expect(fileLink.files.get('C:\\notes\\hello.md')).toContain('via-switch')
+    })
+
+    it('write-back failure emits write-failed once and recovers on success', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      const failures: string[] = []
+      const off = appEvents.on('write-failed', ({ path }) => failures.push(path))
+      const id = controller.createNote(undefined, '# hello')
+      await controller.bindNoteToFile(id, 'C:\\notes\\a.md')
+      controller.updateNote(id, '# hello\n\nwill fail')
+      fileLink.failWrites.add('C:\\notes\\a.md')
+      controller.flushNote(id)
+      await flushAsync()
+      // 首次失败发事件;dirty 保留,内容仍在内存里(可重试)
+      expect(failures).toEqual(['C:\\notes\\a.md'])
+      expect(controller.getSnapshot().notes[0].content).toContain('will fail')
+      // 重试成功:落盘,且失败标记解除
+      fileLink.failWrites.delete('C:\\notes\\a.md')
+      controller.flushNote(id)
+      await flushAsync()
+      expect(fileLink.files.get('C:\\notes\\a.md')).toContain('will fail')
+      // 再次失败重新报(成功已解除首次标记)
+      fileLink.failWrites.add('C:\\notes\\a.md')
+      controller.updateNote(id, '# hello\n\nfail again')
+      controller.flushNote(id)
+      await flushAsync()
+      expect(failures).toEqual(['C:\\notes\\a.md', 'C:\\notes\\a.md'])
+      off()
     })
 
     it('external modification reloads content into the clean note', async () => {

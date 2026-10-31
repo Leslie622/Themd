@@ -8,6 +8,8 @@ export type AppEventMap = {
   insertImage: void
   /** 绑定文件在磁盘上被外部修改,而本地还有未写回的编辑,等 UI 弹冲突窗 */
   'fs-conflict': { noteId: string; path: string }
+  /** 写回绑定文件失败(占用/权限/磁盘满等);同一文件只发首次,写成功后解除 */
+  'write-failed': { noteId: string; path: string; error: string }
 }
 export type AppEventName = keyof AppEventMap
 

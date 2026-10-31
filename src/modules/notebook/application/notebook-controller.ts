@@ -70,6 +70,8 @@ export class NotebookController {
   private dirtyPaths = new Set<string>()
   /** 本应用最近一次写回的内容,用于抑制自家写回触发的 watcher 回声 */
   private lastWritten = new Map<string, string>()
+  /** 写回失败的路径(同一文件只发一次 write-failed,成功写回后解除) */
+  private failedPaths = new Set<string>()
   private watchTimer: ReturnType<typeof setTimeout> | undefined
 
   private readonly repository: NoteRepository
@@ -443,6 +445,8 @@ export class NotebookController {
       await this.fileLink.writeTextFile(path, note.content)
       this.lastWritten.set(path, note.content)
       this.dirtyPaths.delete(path)
+      // 写回成功:解除该文件的失败标记(下次再失败才重新报)
+      this.failedPaths.delete(path)
       // 文件此前失联(外部删除),这次写回等于重建,解除失联标记
       if (this.state.fileMissingIds.has(id)) {
         const fileMissingIds = new Set(this.state.fileMissingIds)
@@ -451,6 +455,16 @@ export class NotebookController {
       }
     } catch (error) {
       console.error('写回绑定文件失败:', error)
+      // 失败不能无声:本地脏编辑只活在内存里,用户必须知道保存没发生。
+      // 同一文件只报首次(500ms 防抖下反复 toast 会刷屏),写成功后解除
+      if (!this.failedPaths.has(path)) {
+        this.failedPaths.add(path)
+        appEvents.emit('write-failed', {
+          noteId: id,
+          path,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
 
@@ -461,7 +475,10 @@ export class NotebookController {
       this.writeTimers.delete(id)
     }
     const note = this.state.notes.find((n) => n.id === id)
-    if (note?.sourcePath) this.dirtyPaths.delete(note.sourcePath)
+    if (note?.sourcePath) {
+      this.dirtyPaths.delete(note.sourcePath)
+      this.failedPaths.delete(note.sourcePath)
+    }
   }
 
   private applyExternalContent(id: string, content: string): void {

@@ -73,10 +73,22 @@ export default function App() {
     const offCollapse = appEvents.on('collapseSidebar', () => setSidebarCollapsed(true))
     const offSettings = appEvents.on('openSettings', () => setSettingsOpen(true))
     const offConflict = appEvents.on('fs-conflict', ({ noteId }) => setConflict({ noteId }))
+    // 写回失败必须可见:本地未写回编辑只活在内存里,静默失败 = 用户以为已保存
+    const offWriteFailed = appEvents.on('write-failed', ({ noteId, path, error }) => {
+      toast.error(`写回失败(文件可能被占用或权限不足): ${error}`, {
+        description: path,
+        duration: 8000,
+        action: {
+          label: '重试',
+          onClick: () => notebookController.flushNote(noteId),
+        },
+      })
+    })
     return () => {
       offCollapse()
       offSettings()
       offConflict()
+      offWriteFailed()
     }
   }, [])
 
