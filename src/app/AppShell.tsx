@@ -129,8 +129,8 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                 >
                   <IconTip label={noteThemeLabel}>
                     <SelectTrigger
-                      size="default"
-                      className="relative w-8 justify-center border-none px-0 hover:bg-accent [&>svg:last-child]:hidden dark:bg-transparent"
+                      size="sm"
+                      className="relative h-8 w-8 justify-center border-none bg-transparent px-0 shadow-none hover:bg-accent [&>svg:last-child]:hidden dark:bg-transparent"
                       aria-label={noteThemeLabel}
                     >
                       <Palette className="size-4 shrink-0" />
@@ -142,7 +142,12 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                       )}
                     </SelectTrigger>
                   </IconTip>
+                  {/* 图标触发器没有 SelectValue:Radix item-aligned 定位依赖
+                      valueNode,缺失时下拉会渲染到视口外(body 末尾)——因此
+                      这里必须显式 popper(锚定触发器),并撑到触发器宽度 */}
                   <SelectContent
+                    position="popper"
+                    className="min-w-(--radix-select-trigger-width)"
                     onPointerDown={() => {
                       themeSelectPointerDown.current = true
                     }}

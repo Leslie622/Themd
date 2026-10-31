@@ -372,6 +372,9 @@ pre::-webkit-scrollbar,
  * 加深保留。精确枚举 3px 晕圈的 data-slot，resizable-handle 的 1px 焦点
  * 环是唯一键盘焦点指示，不在列。新增 shadcn 组件若也带 ring-3，记得补进来。 */
 [data-slot="button"]:focus-visible,
+/* vega 的 TooltipTrigger(asChild)会把子按钮的 data-slot 覆盖成
+   tooltip-trigger(IconTip 包裹的按钮因此命中不了上面的 button 规则) */
+[data-slot="tooltip-trigger"]:focus-visible,
 [data-slot="input"]:focus-visible,
 [data-slot="textarea"]:focus-visible,
 [data-slot="select-trigger"]:focus-visible,
