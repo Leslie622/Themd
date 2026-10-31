@@ -33,12 +33,13 @@ export function downloadNote(note: Note): void {
   URL.revokeObjectURL(url)
 }
 
-/** 读取文件选择器里的所有 .md 文件 */
+/** 读取文件选择器里的所有 .md 文件(浏览器端拿不到绝对路径,不绑定) */
 export async function readFiles(
   fileList: FileList,
-): Promise<{ title: string; content: string }[]> {
+): Promise<ImportedFile[]> {
   return Promise.all(
     Array.from(fileList).map(async (file) => ({
+      folderPath: '',
       title: file.name.replace(/\.(md|markdown|txt)$/i, ''),
       content: await file.text(),
     })),
@@ -50,6 +51,8 @@ export interface ImportedFile {
   folderPath: string
   title: string
   content: string
+  /** 来源文件绝对路径(仅桌面端原生导入有值);笔记据此绑定源文件双向同步 */
+  filePath?: string
 }
 
 /**

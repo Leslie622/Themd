@@ -60,10 +60,8 @@ interface EditorPrefsState {
    * 图片实际落在 `${assetsRoot}/assets/`,正文引用 `assets/<文件名>` 相对路径。
    */
   assetsRoot: string
-  /** 图床服务商:SM.MS 直连 / GitHub 仓库 / PicGo 本地桥(用户自配,可换任意对象存储) */
-  uploaderProvider: 'smms' | 'github' | 'picgo'
-  /** SM.MS API token(明文本机保存,与 Typora 配置同级安全度) */
-  smmsToken: string
+  /** 图床服务商:GitHub 仓库 / PicGo 本地桥(用户自配,可换任意对象存储) */
+  uploaderProvider: 'github' | 'picgo'
   /** GitHub 仓库(owner/repo),图片以 assets/ 路径提交 */
   githubRepo: string
   /** GitHub token(需 repo Contents 读写权限) */
@@ -79,7 +77,7 @@ interface EditorPrefsState {
   setImageMode: (mode: 'assets' | 'embedded' | 'remote') => void
   setAssetsRoot: (root: string) => void
   /** 图床配置批量更新(设置抽屉各字段共用) */
-  setUploader: (patch: Partial<Pick<EditorPrefsState, 'uploaderProvider' | 'smmsToken' | 'githubRepo' | 'githubToken' | 'picgoUrl'>>) => void
+  setUploader: (patch: Partial<Pick<EditorPrefsState, 'uploaderProvider' | 'githubRepo' | 'githubToken' | 'picgoUrl'>>) => void
 }
 
 const MIN = 11
@@ -123,8 +121,7 @@ const DEFAULTS = {
   imageMode: 'assets' as 'assets' | 'embedded' | 'remote',
   /** 空 = 平台默认(桌面端应用数据目录);浏览器端被 UI 强制 embedded,不走此值 */
   assetsRoot: '',
-  uploaderProvider: 'smms' as 'smms' | 'github' | 'picgo',
-  smmsToken: '',
+  uploaderProvider: 'github' as 'github' | 'picgo',
   githubRepo: '',
   githubToken: '',
   picgoUrl: 'http://127.0.0.1:36677/upload',
@@ -156,7 +153,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
     }),
     {
       name: 'themd/ui-preferences/v1',
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<EditorPrefsState>
         const next = { ...DEFAULTS, ...state }
@@ -165,6 +162,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         // v4 图片存储模式登场,存量用户一律落新默认 assets(旧数据是内嵌态,
         // 正文不受影响,只是新插入的图片开始走本地文件夹)
         // v5 图床模式登场:imageMode 补 'remote' 合法值,上传配置落默认
+        // v6 移除 SM.MS/s.ee 路线:存量 provider(含 smms)回落 github
         if (version < 2) {
           if (!next.editorFontWestern?.trim()) next.editorFontWestern = 'JetBrains Mono'
           if (!next.editorFontCjk?.trim()) next.editorFontCjk = 'HarmonyOS Sans SC'
@@ -179,10 +177,12 @@ export const useEditorPrefs = create<EditorPrefsState>()(
           if (next.imageMode !== 'assets' && next.imageMode !== 'embedded' && next.imageMode !== 'remote') {
             next.imageMode = 'assets'
           }
-          if (next.uploaderProvider !== 'smms' && next.uploaderProvider !== 'github' && next.uploaderProvider !== 'picgo') {
-            next.uploaderProvider = 'smms'
-          }
           if (!next.picgoUrl?.trim()) next.picgoUrl = 'http://127.0.0.1:36677/upload'
+        }
+        if (version < 6) {
+          if (next.uploaderProvider !== 'github' && next.uploaderProvider !== 'picgo') {
+            next.uploaderProvider = 'github'
+          }
         }
         return next
       },

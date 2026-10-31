@@ -10,7 +10,7 @@ pub(crate) fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .tooltip("Themd")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() { "show" => show_main(app), "quit" => app.exit(0), _ => {} })
+        .on_menu_event(|app, event| match event.id.as_ref() { "show" => show_main(app), "quit" => quit_gracefully(app), _ => {} })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event { summon_main_if_hidden(tray.app_handle()); }
         })
@@ -20,6 +20,14 @@ pub(crate) fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 fn show_main(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") { let _ = win.show(); let _ = win.unminimize(); let _ = win.set_focus(); }
+}
+
+/// 退出前通知前端冲刷未写回的绑定编辑,再留出写回窗口(写回防抖 500ms + IPC 余量)。
+/// app.exit 会直接结束进程,不给这 600ms 的话最后一次编辑可能丢在防抖里。
+fn quit_gracefully(app: &tauri::AppHandle) {
+    let _ = tauri::Emitter::emit(app, "app-before-quit", ());
+    std::thread::sleep(std::time::Duration::from_millis(600));
+    app.exit(0);
 }
 
 fn summon_main_if_hidden(app: &tauri::AppHandle) {

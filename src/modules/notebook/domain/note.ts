@@ -6,6 +6,8 @@ export interface Note {
   titleCustom?: boolean
   themeId?: string
   folderId?: string
+  /** 绑定的磁盘文件绝对路径;无此字段 = 纯库内笔记(Web 端全部如此) */
+  sourcePath?: string
 }
 
 export interface Folder {
@@ -15,7 +17,7 @@ export interface Folder {
 }
 
 export interface NotebookSnapshot {
-  schemaVersion: 1
+  schemaVersion: 2
   notes: Note[]
   folders: Folder[]
 }
@@ -41,4 +43,18 @@ export function countWords(content: string): number {
   return [...withoutDataUrls].length
 }
 
-export const NOTEBOOK_SCHEMA_VERSION = 1 as const
+/** 正文图片数:按 markdown 图片语法 `![alt](url)` 计,内嵌 base64 与外链一视同仁。 */
+export function countImages(content: string): number {
+  return content.match(/!\[[^\]]*\]\([^)]*\)/g)?.length ?? 0
+}
+
+export const NOTEBOOK_SCHEMA_VERSION = 2 as const
+
+/**
+ * 从绝对/相对路径取文件名主干(去扩展名),外部重命名文件时用作新标题。
+ * 兼容两种分隔符,Windows 路径不受 `/` 误伤(盘符 `C:` 不含 `/`)。
+ */
+export function fileNameStem(path: string): string {
+  const name = path.split(/[\\/]/).pop() ?? ''
+  return name.replace(/\.(md|markdown|txt)$/i, '')
+}

@@ -10,9 +10,12 @@ import {
   githubDarkInit,
   githubLightInit,
 } from '@uiw/codemirror-theme-github'
-import { useEffect, useMemo, useRef, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { createPortal } from 'react-dom'
+import { FolderOpen } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { Button } from '@/components/ui/button'
 import { imagePlaceholder } from '@/lib/image-decorator'
 import { fileToAssetImage, fileToEmbeddedImage, fileToUploadedImage, insertImageMarkdown } from '@/lib/image'
 import { assetsPathToAbsolute } from '@/lib/image-src'
@@ -26,24 +29,28 @@ async function insertImageFiles(
   view: EditorView,
   files: File[],
   pos: number,
+  noteDir: string | null,
 ): Promise<boolean> {
   if (!files.length || !files.every((f) => f.type.startsWith('image/'))) return false
   const alt = (name: string) => name.replace(/\.[^.]+$/, '') || '图片'
   toast.info(files.length > 1 ? `正在插入 ${files.length} 张图片…` : '正在插入图片…')
   // 本地 assets 模式:图片落盘 `${root}/assets/`,正文引用相对路径;
-  // assetsRoot 未自定义时用平台默认(桌面端应用数据目录)。remote 模式:
+  // 绑定磁盘文件的笔记落笔记自身目录(与相对路径解析基准一致,随文件走),
+  // 库内笔记 assetsRoot 未自定义时用平台默认(桌面端应用数据目录)。remote 模式:
   // 上传图床拿外链(失败抛错即中止该张,不回落)。Web 端 gateway 无本地
   // 文件能力,UI 已强制 embedded,这里兜底回落内嵌,不因模式残留导致插入失败
   const {
     imageMode, assetsRoot,
-    uploaderProvider, smmsToken, githubRepo, githubToken, picgoUrl,
+    uploaderProvider, githubRepo, githubToken, picgoUrl,
   } = useEditorPrefs.getState()
   const useAssets = imageMode === 'assets' && platformServices.isDesktop
   const useRemote = imageMode === 'remote'
-  const uploaderConfig = { provider: uploaderProvider, smmsToken, githubRepo, githubToken, picgoUrl }
-  const root = useAssets && assetsRoot.trim()
-    ? assetsRoot.trim()
-    : await platformServices.files.defaultAssetsRoot()
+  const uploaderConfig = { provider: uploaderProvider, githubRepo, githubToken, picgoUrl }
+  const root = useAssets && noteDir
+    ? `${noteDir.replace(/[\\/]+$/, '')}\\assets`
+    : useAssets && assetsRoot.trim()
+      ? assetsRoot.trim()
+      : await platformServices.files.defaultAssetsRoot()
   let at = pos
   let ok = 0
   for (const file of files) {
@@ -83,47 +90,38 @@ function openAsset(absolute: string): void {
 }
 
 /**
- * hover assets/ 图片行 → 行尾出现「打开图片位置」按钮。
- * 按钮固定锚在路径所在行的行尾(不跟鼠标),从路径移到按钮全程
- * 都在该行包围盒内,浮层不消失、必然点得中。
+ * hover assets/ 图片行 → 延时后浮出「打开图片位置」按钮(shadcn Button,
+ * portal 渲染,紧贴编辑器顶部时自动翻到行下方);移出图片行立即隐藏。
+ * 按钮必然压住相邻行的下半段,鼠标路过相邻行会不断触发重锚,按钮被
+ * “追着跑”点不到;移到按钮上时编辑器也会收到 mouseleave(按钮不是编辑器
+ * 子元素)而误判离开。因此显示按钮时记录一块「等待区」(按钮本体±余量),
+ * 鼠标在区内时 move/leave 一律保持现状,按钮原地等鼠标进来,必然点得中。
  */
-let assetHoverEl: HTMLButtonElement | null = null
-let assetHoverTimer: ReturnType<typeof setTimeout> | undefined
 
-function hideAssetHoverButton(): void {
-  if (!assetHoverEl || assetHoverEl.style.display === 'none') return
-  // 延迟 120ms 隐藏:给鼠标移到按钮的间隙;期间再次 hover 会取消定时器
-  assetHoverTimer = setTimeout(() => {
-    if (assetHoverEl) assetHoverEl.style.display = 'none'
-    assetHoverTimer = undefined
-  }, 120)
-}
+/** 浮层按钮与行的间距、按钮高度(h-7 = 28px),用于上/下摆放的命中计算 */
+const HOVER_BTN_GAP = 6
+const HOVER_BTN_HEIGHT = 28
+/** 悬停图片行多久才浮出按钮;移出是立即隐藏,不给延时 */
+const HOVER_SHOW_DELAY = 300
 
-function showAssetHoverButton(lineRect: DOMRect, relativePath: string): void {
-  if (assetHoverTimer) {
-    clearTimeout(assetHoverTimer)
-    assetHoverTimer = undefined
-  }
-  if (!assetHoverEl) {
-    assetHoverEl = document.createElement('button')
-    assetHoverEl.type = 'button'
-    assetHoverEl.textContent = '打开图片位置'
-    assetHoverEl.style.cssText =
-      'position:fixed;z-index:60;display:none;padding:1px 8px;border-radius:6px;border:1px solid var(--border);background:var(--popover);color:var(--popover-foreground);font-size:12px;line-height:1.7;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap'
-    assetHoverEl.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const target = assetHoverEl?.dataset.path
-      hideAssetHoverButton()
-      if (target) openAsset(target)
-    })
-    document.body.appendChild(assetHoverEl)
-  }
-  assetHoverEl.dataset.path = assetsPathToAbsolute(relativePath) ?? ''
-  // 垂直居中对齐所在行,水平锚在行右侧再往右 12px(行尾空白区)
-  assetHoverEl.style.left = `${lineRect.right + 12}px`
-  assetHoverEl.style.top = `${lineRect.top + lineRect.height / 2 - 14}px`
-  assetHoverEl.style.display = 'block'
+/** 等待区:半宽按按钮实际宽(约 115px)外留足余量,向行内/外侧各延伸 4px */
+const HOVER_KEEP_HALF_W = 90
+const HOVER_KEEP_PAD = 4
+
+/** 浮层显示目标:x/top 为按钮 fixed 定位(视口坐标,水平居中锚点);
+ * below = 是否翻到行下方;lineEdgeY = 所贴行的边缘(上放=行顶,下放=行底) */
+type AssetHoverTarget = { x: number; top: number; path: string; below: boolean; lineEdgeY: number }
+
+/** 定时器与待显示位置放模块级:闭包进 CodeMirror 扩展的 useMemo 不碰 React ref */
+let assetHoverShowTimer: ReturnType<typeof setTimeout> | undefined
+/** 倒计时期间的最新悬停位置,到点显示在这里(而不是 300ms 前的位置) */
+let assetHoverPending: AssetHoverTarget | null = null
+/** 当前浮层按钮的等待区(视口坐标);按钮隐藏时置 null */
+let assetHoverKeep: { left: number; top: number; right: number; bottom: number } | null = null
+
+function inAssetHoverKeep(x: number, y: number): boolean {
+  const keep = assetHoverKeep
+  return !!keep && x >= keep.left && x <= keep.right && y >= keep.top && y <= keep.bottom
 }
 
 /**
@@ -136,16 +134,68 @@ export function EditorPane({
   value,
   onChange,
   bindScroller,
+  noteDir,
 }: {
   value: string
   onChange: (value: string) => void
   /** 绑定内部滚动容器(.cm-scroller),用于编辑/预览同步滚动 */
   bindScroller?: (el: HTMLElement | null) => void
+  /** 活动笔记(绑定磁盘文件时)的所在目录;插图落盘基准 */
+  noteDir?: string | null
 }) {
   const isDark = useAppearance((s) => s.isDark)
   // CodeMirror view 引用:粘贴/拖拽/菜单插图都要在精确光标处 dispatch
   const viewRef = useRef<EditorView | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  // hover 浮层按钮,完整显示目标见 AssetHoverTarget
+  const [assetHover, setAssetHover] = useState<AssetHoverTarget | null>(null)
+  // 显示/重锚浮层,同时刷新等待区供 move/leave 判定“保持现状”。等待区从
+  // 按钮边缘向所贴行内延伸 4px:否则行顶与按钮之间留缝,移向按钮途中
+  // 落缝的那一刻既不在行内也不在区内,会按“移出”立即隐藏
+  const showAssetHover = useCallback((target: AssetHoverTarget) => {
+    if (assetHoverShowTimer) {
+      clearTimeout(assetHoverShowTimer)
+      assetHoverShowTimer = undefined
+    }
+    assetHoverPending = null
+    assetHoverKeep = target.below
+      ? {
+          left: target.x - HOVER_KEEP_HALF_W,
+          right: target.x + HOVER_KEEP_HALF_W,
+          top: target.lineEdgeY - HOVER_KEEP_PAD,
+          bottom: target.top + HOVER_BTN_HEIGHT + HOVER_KEEP_PAD,
+        }
+      : {
+          left: target.x - HOVER_KEEP_HALF_W,
+          right: target.x + HOVER_KEEP_HALF_W,
+          top: target.top - HOVER_KEEP_PAD,
+          bottom: target.lineEdgeY + HOVER_KEEP_PAD,
+        }
+    setAssetHover(target)
+  }, [])
+  // 记录待显示位置(实时跟随鼠标);倒计时到点显示在最新位置
+  const stageAssetHover = useCallback((target: AssetHoverTarget) => {
+    assetHoverPending = target
+  }, [])
+  // 首次悬停进入倒计时;已在倒计时不重复起表
+  const scheduleAssetHoverShow = useCallback(() => {
+    if (assetHoverShowTimer) return
+    assetHoverShowTimer = setTimeout(() => {
+      assetHoverShowTimer = undefined
+      const pending = assetHoverPending
+      if (pending) showAssetHover(pending)
+    }, HOVER_SHOW_DELAY)
+  }, [showAssetHover])
+  // 立即隐藏:同时取消待显示倒计时与等待区,不留延时
+  const hideAssetHoverNow = useCallback(() => {
+    if (assetHoverShowTimer) {
+      clearTimeout(assetHoverShowTimer)
+      assetHoverShowTimer = undefined
+    }
+    assetHoverPending = null
+    assetHoverKeep = null
+    setAssetHover(null)
+  }, [])
   // 编辑器默认使用打包字体;设置里自定义后 store 注入 --font-editor。无论哪种,都要用样式模块覆盖
   // .cm-scroller——CodeMirror 基础主题在那里硬编码了 monospace
   const editorFont = useEditorPrefs((s) =>
@@ -240,7 +290,7 @@ export function EditorPane({
           const files = [...(event.clipboardData?.files ?? [])]
           if (!files.length || !files.every((f) => f.type.startsWith('image/'))) return false
           event.preventDefault()
-          void insertImageFiles(view, files, view.state.selection.main.head)
+          void insertImageFiles(view, files, view.state.selection.main.head, noteDir ?? null)
           return true
         },
         drop: (event, view) => {
@@ -250,7 +300,7 @@ export function EditorPane({
           const pos =
             view.posAtCoords({ x: event.clientX, y: event.clientY }) ??
             view.state.selection.main.head
-          void insertImageFiles(view, files, pos)
+          void insertImageFiles(view, files, pos, noteDir ?? null)
           return true
         },
         dragover: (event) => {
@@ -259,32 +309,60 @@ export function EditorPane({
           return false
         },
         mousemove: (event, view) => {
-          // hover assets/ 图片行 → 行尾浮出「打开图片位置」按钮。
-          // 命中判定用行包围盒(横向扩到编辑器右缘,含行尾空白):
-          // 鼠标从路径移向行尾按钮全程都在盒内,浮层不消失。
-          // lineBlockAtHeight 收文档坐标:clientY 换算 = 视口y - 编辑器top + 滚动量
-          const editorTop = view.dom.getBoundingClientRect().top
-          const editorRight = view.scrollDOM.getBoundingClientRect().right
-          const docY = event.clientY - editorTop + view.scrollDOM.scrollTop
-          const block = view.lineBlockAtHeight(docY)
-          const lineTop = block.top - view.scrollDOM.scrollTop + editorTop
+          // 鼠标在浮层等待区内:保持现状。既不重锚(否则相邻图片行会让按钮
+          // 越推越远,追不到)也不调度隐藏(否则移向按钮途中就被收掉)
+          if (inAssetHoverKeep(event.clientX, event.clientY)) return false
+          // hover assets/ 图片行 → 鼠标上方浮出「打开图片位置」按钮。
+          // lineBlockAtHeight 收文档坐标,block.top 也是文档坐标:
+          // 一律以 view.documentTop(首行顶部在屏幕上的 y)换算,
+          // 不能拿 view.dom.top ± scrollTop 凑——差了内容 padding,
+          // 且误差随滚动量放大,按钮会飘离所在行跟着鼠标乱跳。
+          const docTop = view.documentTop
+          const block = view.lineBlockAtHeight(event.clientY - docTop)
+          const lineTop = docTop + block.top
+          const bounds = view.scrollDOM.getBoundingClientRect()
           const inside =
             event.clientY >= lineTop &&
             event.clientY <= lineTop + block.height &&
-            event.clientX >= view.scrollDOM.getBoundingClientRect().left &&
-            event.clientX <= editorRight
+            event.clientX >= bounds.left &&
+            event.clientX <= bounds.right
           if (inside) {
             const line = view.state.doc.lineAt(block.from)
             const match = /\]\((assets\/[^\s)]+\.[\w]+)\)/.exec(line.text)
             if (match) {
-              showAssetHoverButton(
-                new DOMRect(view.scrollDOM.getBoundingClientRect().left, lineTop, editorRight - view.scrollDOM.getBoundingClientRect().left, block.height),
-                match[1],
-              )
+              // 默认悬在鼠标上方;所在行贴近编辑器可视顶部时翻到行下,
+              // 避免浮层顶出可视区。水平以鼠标为中心,收进视口防截断
+              const aboveTop = lineTop - HOVER_BTN_HEIGHT - HOVER_BTN_GAP
+              const below = aboveTop < bounds.top + 2
+              const x = Math.min(Math.max(event.clientX, 80), window.innerWidth - 80)
+              const target: AssetHoverTarget = {
+                x,
+                top: below ? lineTop + block.height + HOVER_BTN_GAP : aboveTop,
+                path: match[1],
+                below,
+                lineEdgeY: below ? lineTop + block.height : lineTop,
+              }
+              stageAssetHover(target)
+              if (assetHoverShowTimer) return false
+              if (assetHoverKeep) {
+                // 已显示:即时跟随鼠标,不再延时
+                showAssetHover(target)
+              } else {
+                // 首次悬停:延时浮出
+                scheduleAssetHoverShow()
+              }
               return false
             }
           }
-          hideAssetHoverButton()
+          hideAssetHoverNow()
+          return false
+        },
+        mouseleave: (event) => {
+          // 移到浮层按钮上也会让编辑器收到 mouseleave(按钮不是编辑器子元素),
+          // 等待区内不做隐藏,否则按钮悬停即消失
+          if (inAssetHoverKeep(event.clientX, event.clientY)) return false
+          // 移出图片行立即隐藏
+          hideAssetHoverNow()
           return false
         },
         mousedown: (event, view) => {
@@ -301,7 +379,7 @@ export function EditorPane({
           return true
         },
       }),
-    [],
+    [hideAssetHoverNow, noteDir, scheduleAssetHoverShow, showAssetHover, stageAssetHover],
   )
 
   // 内嵌图片徽章:编辑器里把超长 base64 换成短占位(纯显示层,原文不动)
@@ -319,7 +397,7 @@ export function EditorPane({
     e.target.value = '' // 允许再次选择同一文件
     const view = viewRef.current
     if (view && files.length) {
-      void insertImageFiles(view, files, view.state.selection.main.head)
+      void insertImageFiles(view, files, view.state.selection.main.head, noteDir ?? null)
     }
   }
 
@@ -426,6 +504,26 @@ export function EditorPane({
         className="hidden"
         onChange={handlePick}
       />
+      {assetHover &&
+        createPortal(
+          <Button
+            variant="outline"
+            size="sm"
+            className="fixed z-[60] shadow-md"
+            style={{ left: assetHover.x, top: assetHover.top, transform: 'translateX(-50%)' }}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              const target = assetsPathToAbsolute(assetHover.path)
+              hideAssetHoverNow()
+              if (target) openAsset(target)
+            }}
+            onMouseLeave={hideAssetHoverNow}
+          >
+            <FolderOpen />
+            打开图片位置
+          </Button>,
+          document.body,
+        )}
     </div>
   )
 }

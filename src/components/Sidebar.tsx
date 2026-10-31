@@ -7,6 +7,7 @@ import {
   Folder,
   FolderInput,
   FolderPlus,
+  Link2,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -108,8 +109,19 @@ export function Sidebar() {
     const files = e.target.files
     if (!files?.length) return
     const imported = await readFiles(files)
-    for (const f of imported) createNote(f.title, f.content)
+    importFiles(imported)
     e.target.value = '' // 允许再次导入同名文件
+  }
+
+  /** 桌面端原生文件导入:Rust 返回绝对路径,笔记直接绑定源文件(双向同步) */
+  async function handleImportDesktop() {
+    const imported = await platformServices.files.pickFiles()
+    importFiles(imported)
+  }
+
+  /** 把导入的文件落库;带 filePath(仅桌面端)的笔记绑定源文件 */
+  function importFiles(imported: ImportedFile[]) {
+    for (const f of imported) createNote(f.title, f.content, f.filePath)
   }
 
   /** 导入文件夹:目录路径 → 自动建分组 */
@@ -140,7 +152,7 @@ export function Sidebar() {
           pathToId.set(f.folderPath, folderId)
         }
       }
-      const id = createNote(f.title, f.content)
+      const id = createNote(f.title, f.content, f.filePath)
       if (folderId) setNoteFolder(id, folderId)
     }
   }
@@ -149,6 +161,12 @@ export function Sidebar() {
   const handleImportFolderClick = () => {
     if (platformServices.isDesktop) void handleFolderImportDesktop()
     else folderInputRef.current?.click()
+  }
+
+  /** 导入文件入口:桌面端走原生对话框(笔记绑定源文件),浏览器端隐藏 input 兜底 */
+  const handleImportFileClick = () => {
+    if (platformServices.isDesktop) void handleImportDesktop()
+    else fileInputRef.current?.click()
   }
 
   /** 新建分组:建完立即进入内联重命名 */
@@ -259,7 +277,7 @@ export function Sidebar() {
                 variant="ghost"
                 size="icon"
                 className="text-muted-foreground"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={handleImportFileClick}
                 aria-label="导入文件"
               >
                 <FileInput />
@@ -518,7 +536,8 @@ function NoteItem({
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm"
       >
         <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400">
-          <FileText className="size-4" />
+          {/* 绑定磁盘文件的笔记用链接图标区分:内容与源文件双向同步 */}
+          {note.sourcePath ? <Link2 className="size-4" aria-label="已绑定文件" /> : <FileText className="size-4" />}
         </span>
         <span className="min-w-0 flex-1">
           <span className={cn('block truncate', active && 'font-medium')}>

@@ -87,7 +87,8 @@ export async function fileToAssetImage(
   }
   if (file.size > MAX_INPUT_BYTES) throw new Error('图片超过 20MB')
   const ext = fallbackExt(file)
-  const base = file.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_') || 'image'
+  // 空白必须替换:文件名进 markdown 目的地后,空格会截断 `](...)` 解析
+  const base = file.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|\s]/g, '_') || 'image'
   const name = `${base}-${crypto.randomUUID().slice(0, 8)}.${ext}`
   const normalizedRoot = root.replace(/[\\/]+$/, '')
   const absolutePath = `${normalizedRoot}/${name}`
@@ -108,11 +109,14 @@ export async function fileToUploadedImage(
     throw new Error(`「${file.name}」不是图片`)
   }
   const { blob, ext } = await compressToBlob(file)
-  const base = file.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '_') || 'image'
+  // 空白必须替换:文件名进 markdown 目的地后,空格会截断 `](...)` 解析
+  const base = file.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|\s]/g, '_') || 'image'
   const name = `${base}-${crypto.randomUUID().slice(0, 8)}.${ext}`
   const bytes = new Uint8Array(await blob.arrayBuffer())
   const { url } = await upload(bytes, name)
-  return url
+  // 服务商返回的直链可能含未转义的中文/空格,统一百分号编码,
+  // 保证 `![](...)` 的目的地永远合法;encodeURI 对已编码 URL 幂等
+  return encodeURI(url)
 }
 
 /**

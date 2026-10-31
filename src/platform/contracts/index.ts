@@ -1,4 +1,5 @@
 export type { FileGateway, ImportedFile, SavePathInput, SaveResult, SaveTextInput } from './file-gateway'
+export type { FileLinkGateway, FsChangeEvent } from './file-link-gateway'
 export type { PdfGateway } from './pdf-gateway'
 export type { FontGateway } from './font-gateway'
 export type { WindowGateway } from './window-gateway'

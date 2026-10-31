@@ -1,5 +1,5 @@
-import { type ReactElement, useRef } from 'react'
-import { Columns2, Eye, FileCode2, FileSymlink, FileText, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Settings } from 'lucide-react'
+import { type ReactElement, type ReactNode, useRef } from 'react'
+import { Columns2, Eye, FileCode2, FileSymlink, FileText, FileWarning, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Toaster } from '@/components/ui/sonner'
@@ -15,15 +15,16 @@ import { SettingsSheet } from '@/components/SettingsSheet'
 import { EditorPane } from '@/components/EditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
 import { fromNow } from '@/lib/time'
-import { countWords } from '@/modules/notebook/domain/note'
+import { countImages, countWords } from '@/modules/notebook/domain/note'
 import { appEvents } from '@/shared/events/app-events'
 import type { Note } from '@/modules/notebook/domain/note'
 import type { ThemeFile } from '@/lib/theme/schema'
 export type ViewMode = 'edit' | 'split' | 'preview'
 const FOLLOW_GLOBAL = '__follow__'
 function IconTip({ label, children }: { label: string; children: ReactElement }) { return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent side="bottom">{label}</TooltipContent></Tooltip> }
-export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void }
-export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, bindEditorScroller, bindPreviewScroller }: AppShellProps) {
+export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; fileMissing: boolean; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void; children?: ReactNode }
+export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, fileMissing, bindEditorScroller, bindPreviewScroller, children }: AppShellProps) {
+  const imageCount = active ? countImages(active.content) : 0
   /* 侧栏容器:拖拽期间 SidebarResizeHandle 直改它的 style.width,绕开 React */
   const sidebarRef = useRef<HTMLDivElement | null>(null)
   return (
@@ -75,7 +76,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   {active.title}
                 </h1>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {countWords(active.content)} 字 · {fromNow(active.updatedAt)}
+                  {countWords(active.content)} 字{imageCount > 0 ? ` · ${imageCount} 图` : ''} · {fromNow(active.updatedAt)}
                 </span>
               </>
             )}
@@ -228,6 +229,13 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
 
         {active ? (
           <>
+            {/* 绑定文件在磁盘上消失(外部删除/移动):提示但不阻塞编辑,写回会重建 */}
+            {fileMissing && (
+              <div className="flex shrink-0 items-center gap-2 border-b bg-amber-500/10 px-4 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+                <FileWarning className="size-3.5 shrink-0" />
+                绑定文件已在磁盘上消失(被外部删除或移动);继续编辑将重建文件。
+              </div>
+            )}
             {view === 'split' ? (
               <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="50%" minSize="20%">
@@ -236,6 +244,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     value={active.content}
                     onChange={(v) => updateNote(active.id, v)}
                     bindScroller={bindEditorScroller}
+                    noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
                   />
                 </ResizablePanel>
                 <ResizableHandle withHandle />
@@ -253,6 +262,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   key={active.id}
                   value={active.content}
                   onChange={(v) => updateNote(active.id, v)}
+                  noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
                 />
               </div>
             ) : (
@@ -272,6 +282,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
         )}
           </main>
       <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
+      {children}
       <Toaster />
     </div>
     </TooltipProvider>

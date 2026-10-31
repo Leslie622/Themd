@@ -1,7 +1,6 @@
-/** 图床配置:三服务商各自的凭据字段,与 store-editor 的偏好字段一一对应 */
+/** 图床配置:各服务商的凭据字段,与 store-editor 的偏好字段一一对应 */
 export interface UploaderConfig {
-  provider: 'smms' | 'github' | 'picgo'
-  smmsToken: string
+  provider: 'github' | 'picgo'
   githubRepo: string
   githubToken: string
   picgoUrl: string
@@ -11,14 +10,11 @@ export interface UploaderConfig {
 export interface UploadedImage {
   /** 外链 URL(正文里 ![alt](url) 直接引用) */
   url: string
-  /** 服务商侧的删除/管理地址,可空(SM.MS 有,GitHub 无) */
-  deleteUrl?: string
 }
 
 export interface UploaderGateway {
   /**
    * 上传一张图片。实现方负责:
-   * - SM.MS: POST https://sm.ms/api/v2/upload (Authorization 头) → image/url
    * - GitHub: PUT repos/{repo}/contents/assets/{name} → content.download_url
    * - PicGo: POST {picgoUrl} {list:[{base64,fileName}]} → result[0]
    * @param filename 建议的服务商侧文件名(含扩展名),实现可改写

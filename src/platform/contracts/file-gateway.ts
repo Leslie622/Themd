@@ -1,4 +1,4 @@
-export interface ImportedFile { folderPath: string; title: string; content: string }
+export interface ImportedFile { folderPath: string; title: string; content: string; /** 来源文件绝对路径(仅桌面端);Web 端拿不到,undefined = 不绑定 */ filePath?: string }
 export interface SaveTextInput { defaultName: string; contents: string; filterName: string; extensions: string[] }
 export interface SavePathInput { defaultName: string; filterName: string; extensions: string[] }
 export type SaveResult = { kind: 'canceled' } | { kind: 'web' } | { kind: 'saved'; path: string }

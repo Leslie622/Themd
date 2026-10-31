@@ -14,7 +14,8 @@ export interface NotebookFacade {
   folders: Folder[]
   activeId: string | null
   hydrated: boolean
-  createNote: (title?: string, content?: string) => string
+  fileMissingIds: ReadonlySet<string>
+  createNote: (title?: string, content?: string, sourcePath?: string) => string
   updateNote: (id: string, content: string) => void
   renameNote: (id: string, title: string) => void
   removeNote: (id: string) => void
@@ -25,6 +26,11 @@ export interface NotebookFacade {
   removeFolder: (id: string) => void
   removeFolderWithNotes: (id: string) => void
   setNoteFolder: (id: string, folderId: string | null) => void
+  bindNoteToFile: (id: string, path: string) => Promise<void>
+  flushNote: (id: string) => void
+  flushAll: () => void
+  reloadNoteFromDisk: (id: string) => Promise<void>
+  keepLocalNote: (id: string) => void
 }
 
 const facade: NotebookFacade = {
@@ -32,6 +38,7 @@ const facade: NotebookFacade = {
   get folders() { return controller.getSnapshot().folders },
   get activeId() { return controller.getSnapshot().activeId },
   get hydrated() { return controller.getSnapshot().hydrated },
+  get fileMissingIds() { return controller.getSnapshot().fileMissingIds },
   createNote: controller.createNote.bind(controller),
   updateNote: controller.updateNote.bind(controller),
   renameNote: controller.renameNote.bind(controller),
@@ -43,6 +50,11 @@ const facade: NotebookFacade = {
   removeFolder: controller.removeFolder.bind(controller),
   removeFolderWithNotes: controller.removeFolderWithNotes.bind(controller),
   setNoteFolder: controller.setNoteFolder.bind(controller),
+  bindNoteToFile: controller.bindNoteToFile.bind(controller),
+  flushNote: controller.flushNote.bind(controller),
+  flushAll: controller.flushAll.bind(controller),
+  reloadNoteFromDisk: controller.reloadNoteFromDisk.bind(controller),
+  keepLocalNote: controller.keepLocalNote.bind(controller),
 }
 
 export function useNotebook<T>(selector: (state: NotebookFacade) => T): T {

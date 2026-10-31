@@ -5,10 +5,11 @@ import { IndexedDbThemeRepository } from '@/modules/themes/infrastructure/indexe
 import { createPlatformServices } from '@/platform/create-platform-services'
 
 export function createApplicationServices() {
+  const platform = createPlatformServices()
   return {
-    notebook: new NotebookController(new IndexedDbNoteRepository()),
+    notebook: new NotebookController(new IndexedDbNoteRepository(), platform.fileLink),
     themes: new ThemeController(new IndexedDbThemeRepository()),
-    platform: createPlatformServices(),
+    platform,
   }
 }
 

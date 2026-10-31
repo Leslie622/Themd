@@ -37,8 +37,10 @@ fn main() {
             commands::fonts::list_system_fonts,
             commands::files::read_folder_notes,
             commands::files::read_text_files,
+            commands::files::read_text_file,
             commands::files::write_text_file,
             commands::files::write_image_file,
+            commands::watch::watch_paths,
             commands::pdf::export_pdf
         ])
         .setup(|app| {
