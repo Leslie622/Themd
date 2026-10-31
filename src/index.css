@@ -388,3 +388,22 @@ pre::-webkit-scrollbar,
 [data-slot="toggle-group-item"][aria-invalid="true"] {
   --tw-ring-shadow: 0 0 #0000;
 }
+
+/* ── 输入框填充式观感：灰底无边框(shadcn 官网首页展示的样式) ────────────
+ * CLI 默认 Input/Textarea 是「透明底 + 描边」,官网首页 demo 是「灰底填充」。
+ * 按规范不改 components/ui 生成物,这里用 data-slot 全局接管底色/边框/阴影;
+ * 聚焦(border-ring)与校验失败(destructive)的边框反馈保留。 */
+[data-slot="input"],
+[data-slot="textarea"] {
+  border-color: transparent;
+  background-color: var(--muted);
+  box-shadow: none;
+}
+[data-slot="input"]:focus-visible,
+[data-slot="textarea"]:focus-visible {
+  border-color: var(--ring);
+}
+[data-slot="input"][aria-invalid="true"],
+[data-slot="textarea"][aria-invalid="true"] {
+  border-color: var(--destructive);
+}
