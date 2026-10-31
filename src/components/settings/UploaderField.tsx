@@ -67,7 +67,7 @@ function UploaderConfigDialog({
               <SelectTrigger size="sm" className="w-full" aria-label="图床服务商">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper">
                 <SelectItem value="github">GitHub 仓库</SelectItem>
                 <SelectItem value="picgo">PicGo 本地桥</SelectItem>
               </SelectContent>
