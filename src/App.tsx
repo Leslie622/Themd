@@ -22,7 +22,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { notebookController, useNotebook } from '@/store'
 import { platformServices } from '@/app/platform'
-import { migrateNoteAssets } from '@/lib/note-assets'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useSyncScroll } from '@/lib/scroll-sync'
 import { setActiveNoteDir } from '@/lib/image-src'
@@ -30,14 +29,6 @@ import { appEvents } from '@/shared/events/app-events'
 import { AppShell, type ViewMode } from '@/app/AppShell'
 import { clampSidebarWidth, useWorkspacePrefs } from '@/app/workspace-preferences'
 import { useExportActions } from '@/modules/export/application/use-export-actions'
-
-/** 绑定路径 → 笔记所在目录(图片迁移与相对路径解析共用语义) */
-function noteDirOf(path: string | undefined): string | null {
-  if (!path) return null
-  const parts = path.split(/[\\/]/)
-  parts.pop()
-  return parts.join('\\') || null
-}
 
 export default function App() {
   const hydrated = useNotebook((state) => state.hydrated)
@@ -113,14 +104,7 @@ export default function App() {
         extensions: ['md', 'markdown', 'txt'],
       })
       if (path) {
-        // 绑定前把正文引用的本地 assets 图片迁入新笔记目录:
-        // 库内笔记的插图在全局根,绑定后相对路径按笔记目录解析,不搬就裂图
-        const toDir = noteDirOf(path)
-        if (toDir) {
-          await migrateNoteAssets(note.content, noteDirOf(note.sourcePath), toDir).catch((error: unknown) => {
-            console.error('迁移笔记图片失败:', error)
-          })
-        }
+        // 图片随迁统一在 bindNoteToFile 内(首绑从全局图片根迁入笔记目录)
         await notebookController.bindNoteToFile(id, path)
       } else {
         bindPromptSuppressed.current = true
@@ -154,13 +138,7 @@ export default function App() {
     const previousPath = note.sourcePath
     const wasMissing = fileMissingIds.has(activeId)
     try {
-      // 另存为换目录:引用到的 assets 图片随迁(老目录 → 新目录),否则新位置裂图
-      const toDir = noteDirOf(path)
-      if (toDir) {
-        await migrateNoteAssets(note.content, noteDirOf(note.sourcePath), toDir).catch((error: unknown) => {
-          console.error('迁移笔记图片失败:', error)
-        })
-      }
+      // 图片随迁统一在 bindNoteToFile 内(老目录 → 新目录)
       await notebookController.bindNoteToFile(activeId, path)
       toast.success(`已另存并重新绑定: ${path}`)
       if (previousPath && previousPath !== path && !wasMissing) setStaleOriginal({ path: previousPath })

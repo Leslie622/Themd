@@ -240,6 +240,26 @@ export function Sidebar() {
     setRenaming(null)
   }
 
+  /** 文件夹操作回调:「⋯」下拉与右键菜单共用一份(见 FolderMenuItems 的两处使用) */
+  const folderActions = (f: FolderEntity, noteCount: number) => ({
+    onRename: () => setRenaming({ kind: 'folder', id: f.id, value: f.name }),
+    onCreateNote: () => {
+      void createNoteInFolder(f.id)
+        .then((id) => setActive(id))
+        .catch((error: unknown) => {
+          toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`)
+        })
+    },
+    onReveal:
+      platformServices.isDesktop
+        ? () =>
+            platformServices.files.revealItemInDir(f.path).catch((error: unknown) => {
+              toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
+            })
+        : undefined,
+    onDelete: () => setDeletingFolder({ id: f.id, name: f.name, noteCount }),
+  })
+
   const renderNoteItem = (n: Note) => (
     <NoteItem
       key={n.id}
@@ -393,6 +413,7 @@ export function Sidebar() {
           if (kw && items.length === 0) return null
           // 搜索时强制展开(忽略手动收起),无搜索时按用户手动状态
           const open = kw ? true : !closedFolders.has(f.id)
+          const noteCount = notes.filter((n) => isPathUnder(n.sourcePath, f.path)).length
           return (
             <Collapsible
               key={f.id}
@@ -431,27 +452,7 @@ export function Sidebar() {
                       <DropdownMenuContent align="end" className="min-w-40">
                         <FolderMenuItems
                           parts={{ Item: DropdownMenuItem, Separator: DropdownMenuSeparator }}
-                          onRename={() => setRenaming({ kind: 'folder', id: f.id, value: f.name })}
-                          onCreateNote={() => {
-                            void createNoteInFolder(f.id)
-                              .then((id) => setActive(id))
-                              .catch((error: unknown) => {
-                                toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`)
-                              })
-                          }}
-                          onReveal={
-                            platformServices.isDesktop
-                              ? () =>
-                                  platformServices.files.revealItemInDir(f.path).catch((error: unknown) => {
-                                    toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
-                                  })
-                              : undefined
-                          }
-                          onDelete={() => setDeletingFolder({
-                            id: f.id,
-                            name: f.name,
-                            noteCount: notes.filter((n) => isPathUnder(n.sourcePath, f.path)).length,
-                          })}
+                          {...folderActions(f, noteCount)}
                         />
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -461,27 +462,7 @@ export function Sidebar() {
                 <ContextMenuContent className="min-w-40">
                   <FolderMenuItems
                     parts={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }}
-                    onRename={() => setRenaming({ kind: 'folder', id: f.id, value: f.name })}
-                    onCreateNote={() => {
-                      void createNoteInFolder(f.id)
-                        .then((id) => setActive(id))
-                        .catch((error: unknown) => {
-                          toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`)
-                        })
-                    }}
-                    onReveal={
-                      platformServices.isDesktop
-                        ? () =>
-                            platformServices.files.revealItemInDir(f.path).catch((error: unknown) => {
-                              toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
-                            })
-                        : undefined
-                    }
-                    onDelete={() => setDeletingFolder({
-                      id: f.id,
-                      name: f.name,
-                      noteCount: notes.filter((n) => isPathUnder(n.sourcePath, f.path)).length,
-                    })}
+                    {...folderActions(f, noteCount)}
                   />
                 </ContextMenuContent>
               </ContextMenu>

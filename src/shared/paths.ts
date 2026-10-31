@@ -27,7 +27,7 @@ export function normalizePath(path: string): string {
   return path.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase()
 }
 
-export function isSamePath(a: string, b: string): boolean {
+export function isSamePath(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false
   return normalizePath(a) === normalizePath(b)
 }

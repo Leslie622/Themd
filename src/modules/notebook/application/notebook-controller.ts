@@ -74,13 +74,13 @@ export class NotebookController {
 
   private readonly repository: NoteRepository
   private readonly fileLink: FileLinkGateway | null
-  /** 移动笔记到其他目录组时的图片资产随迁(组合根注入,见 lib/note-assets) */
-  private readonly migrateAssets: ((content: string, fromDir: string, toDir: string) => Promise<void>) | null
+  /** 绑定换目录时的图片资产随迁(组合根注入,见 lib/note-assets);fromDir=null = 库内首绑 */
+  private readonly migrateAssets: ((content: string, fromDir: string | null, toDir: string) => Promise<void>) | null
 
   constructor(
     repository: NoteRepository,
     fileLink?: FileLinkGateway | null,
-    migrateAssets?: (content: string, fromDir: string, toDir: string) => Promise<void>,
+    migrateAssets?: (content: string, fromDir: string | null, toDir: string) => Promise<void>,
   ) {
     this.repository = repository
     this.fileLink = fileLink ?? null
@@ -279,7 +279,8 @@ export class NotebookController {
 
   /**
    * 移动笔记到目录组:绑定笔记物理移动文件(引用的 assets 图片随迁)后改绑;
-   * 未绑定笔记直接求无冲突路径写盘绑定(移动即绑定)。
+   * 未绑定笔记直接求无冲突路径写盘绑定(移动即绑定,图片随迁走 bindNoteToFile)。
+   * 有未写回编辑的笔记移动后立即补写新路径(编辑随笔记走,不被磁盘旧版覆盖)。
    * folderId=null 仅对未绑定笔记有意义(绑定笔记永远属于某个目录),no-op。
    */
   async moveNoteToFolder(id: string, folderId: string | null): Promise<void> {
@@ -289,6 +290,7 @@ export class NotebookController {
     if (!folder || !note) return
     if (!this.fileLink) throw new Error('当前环境不支持文件操作')
     if (note.sourcePath && isSamePath(noteDirOf(note.sourcePath) ?? '', folder.path)) return
+    const wasDirty = note.sourcePath ? this.dirtyPaths.has(note.sourcePath) : false
     this.cancelPendingWriteBack(id)
     if (!note.sourcePath) {
       const dest = await this.fileLink.uniqueDestination(folder.path, sanitizeFileName(`${note.title || '新笔记'}.md`))
@@ -308,6 +310,12 @@ export class NotebookController {
       ...this.state,
       notes: this.state.notes.map((n) => n.id === id ? { ...n, sourcePath: newPath } : n),
     })
+    if (wasDirty) {
+      // 立即写回(不等 500ms 防抖):抢在 watcher 事件前落盘,lastWritten
+      // 让随后的回声被抑制,不弹冲突框。与重命名/目录换绑的补写同款保真。
+      this.dirtyPaths.add(newPath)
+      void this.writeBack(id, newPath)
+    }
   }
 
   /** 在目录组里新建笔记:求无冲突路径 → 建笔记 → 立即写盘绑定 */
@@ -356,6 +364,15 @@ export class NotebookController {
     if (!this.fileLink) throw new Error('当前环境不支持写入本地文件')
     const note = this.state.notes.find((n) => n.id === id)
     if (!note) return
+    // 绑定换目录:正文引用的 assets 图片随迁(统一入口,首绑/另存为/移动即绑定
+    // 都走到这里)。库内笔记 fromDir=null,来源回落全局图片根;同目录改绑跳过
+    const fromDir = noteDirOf(note.sourcePath)
+    const toDir = noteDirOf(path)
+    if (toDir && this.migrateAssets && !isSamePath(fromDir ?? '', toDir)) {
+      await this.migrateAssets(note.content, fromDir, toDir).catch((error: unknown) => {
+        console.error('迁移笔记图片失败:', error)
+      })
+    }
     await this.fileLink.writeTextFile(path, note.content)
     this.lastWritten.set(path, note.content)
     const fileMissingIds = new Set(this.state.fileMissingIds)
@@ -586,7 +603,9 @@ export class NotebookController {
   }
 
   private noteByPath(path: string): Note | undefined {
-    return this.state.notes.find((note) => note.sourcePath === path)
+    // Windows 路径大小写/分隔符不敏感:比较一律走 isSamePath(项目地图 §5 不变式),
+    // 否则 watcher 报来异形路径会被误判成「外部新建」重复入库
+    return this.state.notes.find((note) => isSamePath(note.sourcePath, path))
   }
 
   /** 不变式:绑定笔记所在目录缺文件夹时补建(仅叶子目录,层级由路径前缀派生) */

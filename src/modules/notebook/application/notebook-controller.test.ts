@@ -130,6 +130,20 @@ describe('NotebookController', () => {
       expect(fileLink.files.get('C:\\notes\\hello.md')).toBe('# hello')
     })
 
+    it('bindNoteToFile migrates assets into the target dir (库内 → 首绑,来源回落全局根)', async () => {
+      const fileLink = new FakeFileLink()
+      const migrated: Array<[string | null, string]> = []
+      const controller = new NotebookController(
+        new MemoryRepository(),
+        fileLink,
+        async (_content, fromDir, toDir) => { migrated.push([fromDir, toDir]) },
+      )
+      await controller.hydrate()
+      const id = controller.createNote(undefined, '# hello')
+      await controller.bindNoteToFile(id, 'C:\\notes\\hello.md')
+      expect(migrated).toEqual([[null, 'C:\\notes']])
+    })
+
     it('write-back of edits is debounced onto the bound file', async () => {
       vi.useFakeTimers()
       try {
@@ -417,7 +431,7 @@ describe('NotebookController', () => {
 
     it('moveNoteToFolder physically moves the file and rebinds, migrating assets', async () => {
       const fileLink = new FakeFileLink()
-      const migrated: Array<[string, string, string]> = []
+      const migrated: Array<[string, string | null, string]> = []
       const controller = new NotebookController(
         new MemoryRepository(),
         fileLink,
@@ -446,6 +460,36 @@ describe('NotebookController', () => {
       const note = controller.getSnapshot().notes.find((n) => n.id === id)
       expect(note?.sourcePath).toBe('C:\\to\\我的笔记.md')
       expect(fileLink.files.get('C:\\to\\我的笔记.md')).toBe('# mine')
+    })
+
+    it('moving an unbound note migrates assets on bind (移动即绑定,来源回落全局根)', async () => {
+      const fileLink = new FakeFileLink()
+      const migrated: Array<[string | null, string]> = []
+      const controller = new NotebookController(
+        new MemoryRepository(),
+        fileLink,
+        async (_content, fromDir, toDir) => { migrated.push([fromDir, toDir]) },
+      )
+      await controller.hydrate()
+      const id = controller.createNote('我的笔记', '# mine')
+      await controller.moveNoteToFolder(id, controller.createFolder('C:\\to'))
+      expect(migrated).toEqual([[null, 'C:\\to']])
+    })
+
+    it('moving a dirty note preserves unsaved edits (immediately written to the new path)', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      const id = controller.createNote(undefined, '# hello', 'C:\\from\\a.md')
+      fileLink.files.set('C:\\from\\a.md', '# hello')
+      controller.updateNote(id, '# hello\n\nunsaved')
+      await controller.moveNoteToFolder(id, controller.createFolder('C:\\to'))
+      await flushAsync()
+      const note = controller.getSnapshot().notes.find((n) => n.id === id)
+      expect(note?.sourcePath).toBe('C:\\to\\a.md')
+      // 未写回的编辑随笔记走,不被磁盘旧版覆盖;旧路径文件已移走
+      expect(fileLink.files.get('C:\\to\\a.md')).toBe('# hello\n\nunsaved')
+      expect(fileLink.files.has('C:\\from\\a.md')).toBe(false)
     })
 
     it('renameFolder renames the disk dir and prefix-swaps nested notes', async () => {
