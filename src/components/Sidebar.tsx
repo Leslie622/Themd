@@ -333,16 +333,6 @@ export function Sidebar() {
             <TooltipContent>新建文件夹:选择(或新建)磁盘目录</TooltipContent>
           </Tooltip>
         </div>
-        {/* 工作区胶囊:当前目录名 + 切换菜单(最近/打开其他/清除) */}
-        <WorkspacePill
-          workspaceRoot={workspaceRoot}
-          recents={recents}
-          onOpenDir={openDir}
-          onPickDir={pickAndOpenDir}
-          onClear={() => {
-            void closeWorkspace().then(() => forgetWorkspace())
-          }}
-        />
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -484,6 +474,19 @@ export function Sidebar() {
           </div>
         )}
       </nav>
+
+      {/* 工作区胶囊固定侧栏底部:目录是全局上下文,不是头部操作 */}
+      <div className="border-t p-2">
+        <WorkspacePill
+          workspaceRoot={workspaceRoot}
+          recents={recents}
+          onOpenDir={openDir}
+          onPickDir={pickAndOpenDir}
+          onClear={() => {
+            void closeWorkspace().then(() => forgetWorkspace())
+          }}
+        />
+      </div>
       </aside>
 
       {/* 删除文件夹 = 删除磁盘目录(移入系统回收站,可恢复);其中笔记从应用一并移除 */}
