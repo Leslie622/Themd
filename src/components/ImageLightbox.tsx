@@ -15,7 +15,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DownloadIcon,
-  RotateCwIcon,
+  RotateCwSquareIcon,
   XIcon,
   ZoomInIcon,
   ZoomOutIcon,
@@ -118,7 +118,7 @@ function RotateButton({ onRotate }: { onRotate: (index: number) => void }) {
       className={cn(buttonScrim)}
       onClick={() => currentIndex !== undefined && onRotate(currentIndex)}
     >
-      <RotateCwIcon />
+      <RotateCwSquareIcon />
     </Button>
   )
 }
