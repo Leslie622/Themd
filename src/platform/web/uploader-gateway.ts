@@ -29,19 +29,27 @@ async function uploadGithub(fetchLike: FetchLike, config: UploaderConfig, bytes:
   if (!repo || !repo.includes('/')) throw new Error('请先在设置的「图床配置」中填写 GitHub 仓库(owner/repo)')
   if (!token) throw new Error('请先在设置的「图床配置」中填写 GitHub token')
   const path = `assets/${filename}`
-  const res = await fetchLike(`https://api.github.com/repos/${repo}/contents/${path}`, {
+  const url = `https://api.github.com/repos/${repo}/contents/${path}`
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+    // GitHub API 要求 UA,WebView2 默认不发
+    'User-Agent': 'themd',
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+  // 目标路径已有文件时,GitHub 要求 PUT 带 sha 才允许覆盖,否则 422 "sha wasn't supplied"
+  const existing = await fetchLike(url, { headers })
+  const sha = existing.ok
+    ? ((await existing.json().catch(() => null)) as { sha?: string } | null)?.sha
+    : undefined
+  const res = await fetchLike(url, {
     method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-      // GitHub API 要求 UA,WebView2 默认不发
-      'User-Agent': 'themd',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
+    headers,
     body: JSON.stringify({
       message: `upload image ${filename}`,
       content: await bytesToBase64(bytes),
+      ...(sha ? { sha } : {}),
     }),
   })
   const json = await res.json().catch(() => null) as { message?: string; content?: { download_url?: string } } | null
