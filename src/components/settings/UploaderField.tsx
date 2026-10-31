@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -12,7 +13,7 @@ import {
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { platformServices } from '@/app/platform'
 import { useEditorPrefs } from '@/store-editor'
-import { ChevronDown, Eye, EyeOff } from 'lucide-react'
+import { ChevronDown, Eye, EyeOff, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 /**
@@ -44,9 +45,16 @@ function UploaderConfigDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-w-md flex-col gap-0 p-0 sm:max-w-md">
-        <DialogHeader className="border-b px-4 py-3">
+      {/* 紧凑 header:vega 默认关闭按钮按 p-6 header 定位(top-4),放这里会
+          跨过 border-b 错位,故 showCloseButton=false + 官方 DialogClose 放标题行内 */}
+      <DialogContent showCloseButton={false} className="flex max-w-md flex-col gap-0 p-0 sm:max-w-md">
+        <DialogHeader className="flex-row items-center justify-between border-b py-2.5 pr-2 pl-4">
           <DialogTitle className="text-sm">图床配置</DialogTitle>
+          <DialogClose asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="关闭">
+              <XIcon />
+            </Button>
+          </DialogClose>
           <DialogDescription className="sr-only">
             选择图床服务商并填写凭据,可测试上传
           </DialogDescription>
