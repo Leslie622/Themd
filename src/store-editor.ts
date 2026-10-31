@@ -48,6 +48,8 @@ interface EditorPrefsState {
   syncScrollEnabled: boolean
   /** 编辑器自动换行(关闭时长行横向滚动) */
   lineWrapEnabled: boolean
+  /** 预览大纲窄栏(TOC)开关 */
+  outlineEnabled: boolean
   /**
    * 图片存储模式。assets = 本地文件夹(默认,markdown 写 assets/xxx 相对路径,
    * 导出的 .md 干净可读);embedded = base64 内嵌正文(单文件自包含);
@@ -74,6 +76,7 @@ interface EditorPrefsState {
   setFoldEnabled: (v: boolean) => void
   setSyncScrollEnabled: (v: boolean) => void
   setLineWrapEnabled: (v: boolean) => void
+  setOutlineEnabled: (v: boolean) => void
   setImageMode: (mode: 'assets' | 'embedded' | 'remote') => void
   setAssetsRoot: (root: string) => void
   /** 图床配置批量更新(设置抽屉各字段共用) */
@@ -117,6 +120,7 @@ const DEFAULTS = {
   foldEnabled: true,
   syncScrollEnabled: true,
   lineWrapEnabled: true,
+  outlineEnabled: true,
   /** 默认本地文件夹:导出的 .md 干净,base64 内嵌退为可选项 */
   imageMode: 'assets' as 'assets' | 'embedded' | 'remote',
   /** 空 = 平台默认(桌面端应用数据目录);浏览器端被 UI 强制 embedded,不走此值 */
@@ -147,6 +151,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
       setFoldEnabled: (v) => set({ foldEnabled: v }),
       setSyncScrollEnabled: (v) => set({ syncScrollEnabled: v }),
       setLineWrapEnabled: (v) => set({ lineWrapEnabled: v }),
+      setOutlineEnabled: (v) => set({ outlineEnabled: v }),
       setImageMode: (mode) => set({ imageMode: mode }),
       setAssetsRoot: (root) => set({ assetsRoot: root }),
       setUploader: (patch) => set(patch),

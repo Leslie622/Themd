@@ -87,7 +87,8 @@ export const md = new MarkdownIt({
 // 每种语法元素（标题/代码块/引用/图片…）都有一个 rule 函数可覆盖。
 // ============================================================
 
-const slug = (text: string) =>
+/** 标题锚点 id;大纲(outline.ts)与 heading 渲染共用,保证 TOC 跳转 id 一致 */
+export const slug = (text: string) =>
   text
     .trim()
     .toLowerCase()
