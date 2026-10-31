@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from 'react'
 import 'highlight.js/styles/github.css'
 
-import { ImageLightbox, collectLightboxState, type LightboxSlide } from '@/components/ImageLightbox'
+import { ImageLightbox } from '@/components/ImageLightbox'
+import { collectLightboxState, type LightboxSlide } from '@/lib/image-lightbox-state'
 import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
 import { compileTokens } from '@/lib/theme/compile'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'

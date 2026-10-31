@@ -18,7 +18,8 @@ import {
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { ImageLightbox, collectLightboxState, type LightboxSlide } from '@/components/ImageLightbox'
+import { ImageLightbox } from '@/components/ImageLightbox'
+import { collectLightboxState, type LightboxSlide } from '@/lib/image-lightbox-state'
 import {
   DropdownMenu,
   DropdownMenuContent,

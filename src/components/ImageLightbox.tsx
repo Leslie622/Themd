@@ -21,30 +21,8 @@ import {
   ZoomOutIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { LightboxSlide } from '@/lib/image-lightbox-state'
 import { useCallback, useEffect, useState } from 'react'
-
-export interface LightboxSlide {
-  /** 已解析好的可加载地址(asset:///data/https) */
-  src: string
-  alt?: string
-}
-
-/**
- * 从预览容器收集全部图片作为 slides,并定位被点击的那张。
- * 预览区事件委托专用:点中的不是 <img> 时返回 null(不拦默认行为)。
- */
-export function collectLightboxState(
-  container: Element,
-  target: EventTarget | null,
-): { slides: LightboxSlide[]; index: number } | null {
-  const img = (target as HTMLElement | null)?.closest('img')
-  if (!img) return null
-  const imgs = Array.from(container.querySelectorAll<HTMLImageElement>('.themd-prose img'))
-  return {
-    slides: imgs.map((el) => ({ src: el.currentSrc || el.src, alt: el.alt })),
-    index: Math.max(0, imgs.indexOf(img)),
-  }
-}
 
 /**
  * 图片灯箱：预览区点击图片后的全屏放大查看。
@@ -217,11 +195,15 @@ export function ImageLightbox({
   initialIndex?: number
   onClose: () => void
 }) {
-  // 每张图的旋转角(度),按 slide 序号记忆;换一组 slides(重开/换笔记)时复位
+  // 每张图的旋转角(度),按 slide 序号记忆;换一组 slides(重开/换笔记)时复位。
+  // 复位用 React 官方的「渲染期比对 props 重置」模式,不用 effect 里 setState
+  // (多一次渲染且过不了 react-hooks/set-state-in-effect)
   const [rotations, setRotations] = useState<Record<number, number>>({})
-  useEffect(() => {
+  const [prevSlides, setPrevSlides] = useState(slides)
+  if (prevSlides !== slides) {
+    setPrevSlides(slides)
     setRotations({})
-  }, [slides])
+  }
 
   // 把旋转角写到对应序号的 slide 图像上。
   // YARL 的缩放/平移 transform 在 slide wrapper 上,与图像自身的 rotate 不冲突;
