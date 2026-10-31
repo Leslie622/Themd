@@ -1,0 +1,55 @@
+/*
+ * ImageLightbox 视觉定制：把 yet-another-react-lightbox 的默认观感
+ * 调成应用(shadcn 令牌)风格。变量名对应库自带的
+ * dist/styles.css 与 dist/plugins/captions.css。
+ * 注意：所有图标按钮已换成 shadcn Button（见 ImageLightbox.tsx 的 render），
+ * 这里不再有按钮样式——按钮视觉由组件上的 Tailwind 类负责。
+ */
+
+.yarl__root {
+  /* 幕布：近黑深色底，弱化到内容之后 */
+  --yarl__color_backdrop: oklch(0.09 0 0 / 88%);
+
+  /* 加载/错误图标（库内置 SVG，非按钮） */
+  --yarl__slide_icon_loading_color: oklch(0.985 0 0 / 60%);
+
+  /* 进出场节奏对齐应用 Dialog（duration-100~150） */
+  --yarl__fade_animation_duration: 130ms;
+}
+
+/* 滚轮缩放走 rapid 分支,库不做过渡(设计如此:滚轮是连续逐格更新),
+   transform 直接内联在 slide wrapper 上——用 CSS transition 给每格补平滑;
+   双击/按钮的库动画是 WAAPI,运行时优先于 CSS transition,互不冲突 */
+.yarl__slide_wrapper {
+  transition: transform 150ms ease-out;
+}
+
+/* 大图：主题圆角 + 轻投影，悬浮在幕布上 */
+.yarl__slide_image {
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 24px 60px oklch(0 0 0 / 45%);
+}
+
+/* 工具栏：库默认无 gap——缩放按钮组(内部 gap-1)与关闭钮之间会贴死，
+   统一成 4px */
+.yarl__toolbar {
+  gap: 4px;
+}
+
+/* 说明文字：popover 风格小胶囊，居中悬浮底部 */
+.yarl__slide_captions_container {
+  background: transparent;
+  padding: 16px;
+}
+.yarl__slide_description {
+  width: fit-content;
+  margin-inline: auto;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  padding: 5px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: 0 4px 16px oklch(0 0 0 / 25%);
+}

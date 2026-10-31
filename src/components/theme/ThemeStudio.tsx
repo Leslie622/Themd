@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { ImageLightbox, collectLightboxState, type LightboxSlide } from '@/components/ImageLightbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -643,13 +644,26 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
   )
   useExtraCss(theme.id, theme.extraCss)
 
+  // 图片灯箱:仅完整预览开启;inspect(选择元素)模式下点击仍走元素拾取。
+  // 一次收集预览全部图片,可在灯箱里左右切换
+  const [lightbox, setLightbox] = useState<{ slides: LightboxSlide[]; index: number } | null>(null)
+  const lightboxEnabled = !compact && !inspect
+  const handleImageClick = (e: React.MouseEvent) => {
+    const state = collectLightboxState(e.currentTarget, e.target)
+    if (!state) return
+    e.preventDefault()
+    setLightbox(state)
+  }
+
   const handleClick = inspect
     ? (e: React.MouseEvent) => {
         const target = e.target as HTMLElement
         if (!target.closest('.themd-prose')) return
         onInspect?.(inspectElementId(target))
       }
-    : undefined
+    : lightboxEnabled
+      ? handleImageClick
+      : undefined
 
   return (
     <div
@@ -664,6 +678,13 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
         style={cssVars as React.CSSProperties}
         dangerouslySetInnerHTML={{ __html: html }}
       />
+      {lightboxEnabled && (
+        <ImageLightbox
+          slides={lightbox?.slides ?? []}
+          initialIndex={lightbox?.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   )
 })

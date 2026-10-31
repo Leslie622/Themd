@@ -1,6 +1,7 @@
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState } from 'react'
 import 'highlight.js/styles/github.css'
 
+import { ImageLightbox, collectLightboxState, type LightboxSlide } from '@/components/ImageLightbox'
 import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
 import { compileTokens } from '@/lib/theme/compile'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
@@ -46,12 +47,28 @@ export const PreviewPane = memo(function PreviewPane({
   )
   useExtraCss(theme.id, theme.extraCss)
 
+  // 图片灯箱:事件委托监听渲染出来的 <img>,src 已在渲染期解析(asset:///data/https)。
+  // 一次收集本篇全部图片,可在灯箱里左右切换
+  const [lightbox, setLightbox] = useState<{ slides: LightboxSlide[]; index: number } | null>(null)
+  const handleClick = (e: React.MouseEvent) => {
+    const state = collectLightboxState(e.currentTarget, e.target)
+    if (!state) return
+    // 图片可能包在 <a> 里,拦掉导航
+    e.preventDefault()
+    setLightbox(state)
+  }
+
   return (
-    <div ref={bindScroller} className="h-full overflow-y-auto">
+    <div ref={bindScroller} className="h-full overflow-y-auto" onClick={handleClick}>
       <article
         className="themd-prose mx-auto px-6 py-8"
         style={cssVars as React.CSSProperties}
         dangerouslySetInnerHTML={{ __html: html }}
+      />
+      <ImageLightbox
+        slides={lightbox?.slides ?? []}
+        initialIndex={lightbox?.index}
+        onClose={() => setLightbox(null)}
       />
     </div>
   )
