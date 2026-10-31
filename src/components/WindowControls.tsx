@@ -10,7 +10,7 @@ const BTN = `${BTN_BASE} text-muted-foreground hover:bg-accent hover:text-foregr
 const BTN_CLOSE = `${BTN_BASE} text-muted-foreground hover:bg-[#c42b1c] hover:text-white`
 
 /**
- * 窗口控制三按钮(最小化/最大化/关闭),仅 Tauri 桌面端渲染。
+ * 窗口控制三按钮(最小化/最大化/关闭)。
  * 嵌在页面顶栏右端,尺寸与工具栏按钮一致(size-8);配合 decorations: false 使用,
  * 拖拽/双击最大化由顶栏的 data-tauri-drag-region 注入脚本处理。
  */
@@ -33,8 +33,6 @@ export function WindowControls() {
       unlisten?.()
     }
   }, [])
-
-  if (!platformServices.isDesktop) return null
 
   return (
     <div className="flex items-center gap-0.5">

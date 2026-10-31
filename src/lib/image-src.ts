@@ -1,4 +1,3 @@
-import { platformServices } from '@/app/platform'
 import { useEditorPrefs } from '@/store-editor'
 
 /**
@@ -25,9 +24,8 @@ let convertFileSrcFn: ((path: string) => string) | null = null
 /** 活动绑定笔记的所在目录;未绑定/库内笔记为 null */
 let activeNoteDir: string | null = null
 
-/** 应用启动时注入平台默认根目录与路径转换函数(桌面端),渲染期零异步 */
+/** 应用启动时注入平台默认根目录与路径转换函数,渲染期零异步 */
 export async function initImageSrcResolver(): Promise<void> {
-  if (!platformServices.isDesktop) return
   const [{ convertFileSrc }, { appDataDir, join }] = await Promise.all([
     import('@tauri-apps/api/core'),
     import('@tauri-apps/api/path'),

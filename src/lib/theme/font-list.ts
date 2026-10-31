@@ -1,13 +1,8 @@
 /**
- * 系统字体枚举,按运行环境双轨:
- * - Tauri 桌面端:IPC 调 Rust 侧枚举系统字体注册表,精确全量、无权限弹窗
- * - 浏览器:queryLocalFonts(需授权)/ canvas 测量法(常见字体名单探测)
+ * 系统字体枚举(桌面端):IPC 调 Rust 侧枚举系统字体注册表,精确全量、
+ * 无权限弹窗。canvas 测量法仅作首帧的快速近似(IPC 返回前先显示常见字体),
+ * localStorage 缓存上次完整列表供下次会话秒显。
  */
-
-/** 是否运行在 Tauri 桌面壳内 */
-export function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-}
 
 /** 桌面端:Rust 枚举的完整字体族列表(带会话内缓存) */
 let desktopFontsCache: string[] | null = null
@@ -80,58 +75,23 @@ export type FontAccessResult =
   | { ok: true; fonts: string[] }
   | { ok: false; reason: 'unsupported' | 'denied' | 'error' }
 
-/** Local Font Access 权限状态;不支持该 API 时返回 null */
-export async function localFontPermission(): Promise<
-  'granted' | 'denied' | 'prompt' | null
-> {
-  try {
-    const st = await navigator.permissions.query({ name: 'local-fonts' as PermissionName })
-    return st.state as 'granted' | 'denied' | 'prompt'
-  } catch {
-    return null // 部分浏览器没有该权限描述符
-  }
-}
-
-/** 授权完整枚举。桌面端走 IPC(无权限概念,直接成功);浏览器走 queryLocalFonts。
- * 新版 Chromium 在权限被拒后不再弹框,且 queryLocalFonts 直接回空数组,
- * 若不检查会被误当成成功、用空列表覆盖探测名单 */
+/** 完整枚举:Rust IPC,无权限概念。失败(如命令异常)返回 error 原因 */
 export async function requestAllFonts(): Promise<FontAccessResult> {
-  if (isTauri()) {
-    try {
-      const fonts = await desktopFontList()
-      return { ok: true, fonts }
-    } catch {
-      return { ok: false, reason: 'error' }
-    }
-  }
-  const api = (
-    window as unknown as {
-      queryLocalFonts?: () => Promise<Array<{ family: string }>>
-    }
-  ).queryLocalFonts
-  if (!api) return { ok: false, reason: 'unsupported' }
   try {
-    // 权限预检:denied 时把「回空数组」拦在覆盖数据之前
-    const perm = await localFontPermission()
-    if (perm === 'denied') return { ok: false, reason: 'denied' }
-    const fonts = await api()
-    if (fonts.length === 0) return { ok: false, reason: 'denied' } // 双保险
-    const families = [...new Set(fonts.map((f) => f.family))]
-    families.sort((a, b) => a.localeCompare(b))
-    // 完整列表缓存进 localStorage,后续会话免重复扫描
+    const fonts = await desktopFontList()
+    // 完整列表缓存进 localStorage,后续会话免重复 IPC,首帧即可显示
     try {
-      localStorage.setItem('themd-font-families', JSON.stringify(families))
+      localStorage.setItem('themd-font-families', JSON.stringify(fonts))
     } catch {
       // 配额异常不影响主流程
     }
-    return { ok: true, fonts: families }
+    return { ok: true, fonts }
   } catch {
-    // NotAllowedError 等:用户当场拒绝或浏览器策略阻止
-    return { ok: false, reason: 'denied' }
+    return { ok: false, reason: 'error' }
   }
 }
 
-/** 上次授权拿到的完整列表(免重复授权) */
+/** 上次的完整列表缓存(会话开始时先显示,免等 IPC) */
 export function getCachedFullFontList(): string[] | null {
   try {
     const raw = localStorage.getItem('themd-font-families')
@@ -143,9 +103,7 @@ export function getCachedFullFontList(): string[] | null {
   }
 }
 
-/** Local Font Access 是否可用(决定 UI 是否显示「获取完整列表」入口)。
- * 桌面端无权限门槛,始终视为可用 */
+/** 完整列表是否可获取(桌面端 IPC 恒可用;保留函数让 UI 逻辑不动) */
 export function isLocalFontAccessSupported(): boolean {
-  if (isTauri()) return true
-  return typeof window !== 'undefined' && 'queryLocalFonts' in window
+  return true
 }

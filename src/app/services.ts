@@ -8,7 +8,9 @@ import { migrateNoteAssets } from '@/lib/note-assets'
 export function createApplicationServices() {
   const platform = createPlatformServices()
   return {
-    notebook: new NotebookController(new IndexedDbNoteRepository(), platform.fileLink, migrateNoteAssets),
+    notebook: new NotebookController(new IndexedDbNoteRepository(), platform.fileLink, (content, fromDir, toDir) =>
+      migrateNoteAssets(platform.files, content, fromDir, toDir),
+    ),
     themes: new ThemeController(new IndexedDbThemeRepository()),
     platform,
   }

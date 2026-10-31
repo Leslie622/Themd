@@ -120,13 +120,12 @@ export function SettingsSheet({
   const setActiveTheme = useThemeStore((s) => s.setActive)
   const isDark = useAppearance((s) => s.isDark)
   const toggleDark = useAppearance((s) => s.toggleDark)
-  const { isDesktop } = platformServices
 
-  // 开机自启:仅桌面端有此能力。开关状态以系统注册表为准,
+  // 开机自启:开关状态以系统注册表为准,
   // 抽屉打开时拉一次,不落本地状态(避免与真实状态漂移)
   const [autostartEnabled, setAutostartEnabled] = useState(false)
   useEffect(() => {
-    if (!open || !isDesktop) return
+    if (!open) return
     let alive = true
     void platformServices.autostart.isEnabled().then((v) => {
       if (alive) setAutostartEnabled(v)
@@ -134,7 +133,7 @@ export function SettingsSheet({
     return () => {
       alive = false
     }
-  }, [open, isDesktop])
+  }, [open])
   const toggleAutostart = () => {
     const next = !autostartEnabled
     setAutostartEnabled(next) // 乐观更新,失败回滚
@@ -206,18 +205,18 @@ export function SettingsSheet({
               onWestern={(v) => setUiFont(v, uiFontCjk)}
               onCjk={(v) => setUiFont(uiFontWestern, v)}
             />
-            {/* 图片存储:本地文件夹仅桌面端;图床 Web 也可用(浏览器 fetch 直连) */}
+            {/* 图片存储三模式 */}
             <div className="mt-3 flex items-center justify-between">
               <span className="text-[13px] text-muted-foreground">图片存储</span>
               <Select
-                value={isDesktop ? imageMode : (imageMode === 'remote' ? 'remote' : 'embedded')}
+                value={imageMode}
                 onValueChange={(v) => setImageMode(v as 'assets' | 'embedded' | 'remote')}
               >
                 <SelectTrigger size="sm" className="w-[10.5rem]" aria-label="图片存储模式">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {isDesktop && <SelectItem value="assets">本地文件夹</SelectItem>}
+                  <SelectItem value="assets">本地文件夹</SelectItem>
                   <SelectItem value="remote">上传图床</SelectItem>
                   <SelectItem value="embedded">内嵌笔记</SelectItem>
                 </SelectContent>
@@ -229,7 +228,7 @@ export function SettingsSheet({
                 <UploaderField />
               </div>
             )}
-            {isDesktop && imageMode === 'assets' && (
+            {imageMode === 'assets' && (
               <div className="mt-3 flex items-center justify-between gap-2">
                 <span className="min-w-0 shrink-0 text-[13px] text-muted-foreground">图片目录</span>
                 <div className="flex min-w-0 items-center gap-1">
@@ -280,16 +279,14 @@ export function SettingsSheet({
                 </div>
               </div>
             )}
-            {isDesktop && (
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-[13px] text-muted-foreground">开机自启</span>
-                <Switch
-                  checked={autostartEnabled}
-                  onCheckedChange={toggleAutostart}
-                  aria-label="切换开机自启"
-                />
-              </div>
-            )}
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">开机自启</span>
+              <Switch
+                checked={autostartEnabled}
+                onCheckedChange={toggleAutostart}
+                aria-label="切换开机自启"
+              />
+            </div>
           </section>
 
           <section>

@@ -104,7 +104,7 @@ export default function App() {
    * in-flight 锁防重入:对话框打开期间后续击键不会叠加出更多对话框。
    */
   const promptBindIfNeeded = useCallback(async (id: string, respectSuppression: boolean): Promise<void> => {
-    if (!platformServices.isDesktop || bindPromptInFlight.current) return
+    if (bindPromptInFlight.current) return
     if (respectSuppression && bindPromptSuppressed.current) return
     const note = notebookController.getSnapshot().notes.find((n) => n.id === id)
     if (!note || note.sourcePath) return
@@ -194,11 +194,9 @@ export default function App() {
     window.addEventListener('blur', flush)
     document.addEventListener('visibilitychange', onVisibility)
     let offQuit: (() => void) | null = null
-    if (platformServices.isDesktop) {
-      void import('@tauri-apps/api/event').then(({ listen }) =>
-        listen('app-before-quit', flush).then((unlisten) => { offQuit = unlisten }),
-      )
-    }
+    void import('@tauri-apps/api/event').then(({ listen }) =>
+      listen('app-before-quit', flush).then((unlisten) => { offQuit = unlisten }),
+    )
     return () => {
       flush()
       window.removeEventListener('keydown', onKeyDown)

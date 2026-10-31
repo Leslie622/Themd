@@ -43,14 +43,13 @@ async function insertImageFiles(
   toast.info(files.length > 1 ? `正在插入 ${files.length} 张图片…` : '正在插入图片…')
   // 本地 assets 模式:图片落盘 `${root}/assets/`,正文引用相对路径;
   // 绑定磁盘文件的笔记落笔记自身目录(与相对路径解析基准一致,随文件走),
-  // 库内笔记 assetsRoot 未自定义时用平台默认(桌面端应用数据目录)。remote 模式:
-  // 上传图床拿外链(失败抛错即中止该张,不回落)。Web 端 gateway 无本地
-  // 文件能力,UI 已强制 embedded,这里兜底回落内嵌,不因模式残留导致插入失败
+  // 库内笔记 assetsRoot 未自定义时用平台默认(应用数据目录)。remote 模式:
+  // 上传图床拿外链(失败抛错即中止该张,不回落)
   const {
     imageMode, assetsRoot,
     uploaderProvider, githubRepo, githubToken, picgoUrl,
   } = useEditorPrefs.getState()
-  const useAssets = imageMode === 'assets' && platformServices.isDesktop
+  const useAssets = imageMode === 'assets'
   const useRemote = imageMode === 'remote'
   const uploaderConfig = { provider: uploaderProvider, githubRepo, githubToken, picgoUrl }
   const root = useAssets && noteDir

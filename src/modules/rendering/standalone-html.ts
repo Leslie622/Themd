@@ -90,18 +90,6 @@ ${md.render(note.content)}
 `
 }
 
-/** 触发浏览器下载独立 HTML 文件 */
-export function downloadNoteHtml(note: Note): void {
-  const blob = new Blob([buildStandaloneHtml(note)], {
-    type: 'text/html;charset=utf-8',
-  })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${note.title || 'note'}.html`
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 export const renderStandaloneHtml = buildStandaloneHtml
 

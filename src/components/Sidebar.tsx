@@ -1,5 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ChevronRight,
   FileInput,
@@ -68,9 +67,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { readFiles, readFolder, readFolderDesktop } from '@/lib/files'
+import { readFolderDesktop } from '@/lib/files'
 import { platformServices } from '@/app/platform'
-import type { ImportedFile } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -106,8 +104,6 @@ export function Sidebar() {
   const [deletingFolder, setDeletingFolder] = useState<{ id: string; name: string; noteCount: number } | null>(null)
   /** 待删除绑定笔记:确认后磁盘文件移入系统回收站 */
   const [deletingNote, setDeletingNote] = useState<{ id: string; title: string } | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const folderInputRef = useRef<HTMLInputElement>(null)
 
   const kw = keyword.trim().toLowerCase()
   const filtered = useMemo(
@@ -160,61 +156,21 @@ export function Sidebar() {
       .map((folder) => ({ folder, depth: depthOf(folder) }))
   }, [folders])
 
-  async function handleImport(e: ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files
-    if (!files?.length) return
-    const imported = await readFiles(files)
-    importFiles(imported)
-    e.target.value = '' // 允许再次导入同名文件
-  }
-
-  /** 桌面端原生文件导入:Rust 返回绝对路径,笔记直接绑定源文件(双向同步) */
-  async function handleImportDesktop() {
+  /** 原生文件导入:Rust 返回绝对路径,笔记直接绑定源文件(双向同步) */
+  async function handleImportClick() {
     const imported = await platformServices.files.pickFiles()
-    importFiles(imported)
-  }
-
-  /** 把导入的文件落库;带 filePath(仅桌面端)的笔记绑定源文件 */
-  function importFiles(imported: ImportedFile[]) {
     for (const f of imported) createNote(f.title, f.content, f.filePath)
   }
 
-  /** 导入文件夹:目录路径 → 自动建文件夹 */
-  async function handleFolderImport(e: ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files
-    if (!files?.length) return
-    const imported = await readFolder(files)
-    importFolderFiles(imported)
-    e.target.value = ''
-  }
-
-  /** 桌面端走原生目录选择(Rust 递归读取,无 WebView2 上传确认弹窗) */
-  async function handleFolderImportDesktop() {
+  /** 原生目录导入:Rust 递归读取,绑定源文件,文件夹按所在目录自动派生(不变式) */
+  async function handleImportFolderClick() {
     const imported = await readFolderDesktop()
     if (!imported?.length) return
-    importFolderFiles(imported)
-  }
-
-  /** 把导入的文件夹文件落库:桌面端绑定源文件,文件夹按所在目录自动派生(不变式) */
-  function importFolderFiles(imported: ImportedFile[]) {
     for (const f of imported) createNote(f.title, f.content, f.filePath)
-  }
-
-  /** 导入文件夹入口:桌面端原生对话框,浏览器端 webkitdirectory 兜底 */
-  const handleImportFolderClick = () => {
-    if (platformServices.isDesktop) void handleFolderImportDesktop()
-    else folderInputRef.current?.click()
-  }
-
-  /** 导入文件入口:桌面端走原生对话框(笔记绑定源文件),浏览器端隐藏 input 兜底 */
-  const handleImportFileClick = () => {
-    if (platformServices.isDesktop) void handleImportDesktop()
-    else fileInputRef.current?.click()
   }
 
   /** 新建文件夹 = 选一个(或经系统对话框新建)磁盘目录 */
   async function handleCreateFolder() {
-    if (!platformServices.isDesktop) return
     const dir = await platformServices.files.pickDirectory()
     if (!dir) return
     createFolder(dir)
@@ -250,13 +206,10 @@ export function Sidebar() {
           toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`)
         })
     },
-    onReveal:
-      platformServices.isDesktop
-        ? () =>
-            platformServices.files.revealItemInDir(f.path).catch((error: unknown) => {
-              toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
-            })
-        : undefined,
+    onReveal: () =>
+      platformServices.files.revealItemInDir(f.path).catch((error: unknown) => {
+        toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
+      }),
     onDelete: () => setDeletingFolder({ id: f.id, name: f.name, noteCount }),
   })
 
@@ -286,7 +239,7 @@ export function Sidebar() {
         })
       }}
       onReveal={
-        n.sourcePath && platformServices.isDesktop
+        n.sourcePath
           ? () =>
               platformServices.files.revealItemInDir(n.sourcePath!).catch((error: unknown) => {
                 toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -333,30 +286,27 @@ export function Sidebar() {
           <Button className="flex-1" onClick={() => createNote()}>
             <Plus /> 新建
           </Button>
-          {/* 文件夹=目录,仅桌面端有目录能力;Web 端笔记平铺 */}
-          {platformServices.isDesktop && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground"
-                  onClick={() => void handleCreateFolder()}
-                  aria-label="新建文件夹"
-                >
-                  <FolderPlus />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>新建文件夹:选择(或新建)磁盘目录</TooltipContent>
-            </Tooltip>
-          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 className="text-muted-foreground"
-                onClick={handleImportFileClick}
+                onClick={() => void handleCreateFolder()}
+                aria-label="新建文件夹"
+              >
+                <FolderPlus />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>新建文件夹:选择(或新建)磁盘目录</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground"
+                onClick={() => void handleImportClick()}
                 aria-label="导入文件"
               >
                 <FileInput />
@@ -370,7 +320,7 @@ export function Sidebar() {
                 variant="ghost"
                 size="icon"
                 className="text-muted-foreground"
-                onClick={handleImportFolderClick}
+                onClick={() => void handleImportFolderClick()}
                 aria-label="导入文件夹"
               >
                 <FolderInput />
@@ -378,22 +328,6 @@ export function Sidebar() {
             </TooltipTrigger>
             <TooltipContent>导入文件夹</TooltipContent>
           </Tooltip>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md,.markdown,.txt"
-            multiple
-            hidden
-            onChange={handleImport}
-          />
-          <input
-            ref={folderInputRef}
-            type="file"
-            // @ts-expect-error 非标准属性,Chromium 支持
-            webkitdirectory=""
-            hidden
-            onChange={handleFolderImport}
-          />
         </div>
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />

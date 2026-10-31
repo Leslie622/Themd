@@ -1,4 +1,4 @@
-import { platformServices } from '@/app/platform'
+import type { FileGateway } from '@/platform/contracts'
 import { useEditorPrefs } from '@/store-editor'
 
 /**
@@ -6,6 +6,9 @@ import { useEditorPrefs } from '@/store-editor'
  * `assets/…` 相对路径按「新笔记目录/assets」解析,原图不在那里就会裂图。
  * 绑定的那一刻把引用到的图片**原样字节**复制过来(零重编码,保真与
  * 本地 assets 模式一致),图片随文件走。
+ *
+ * files 网关由组合根注入(services.ts),本模块不 import platform——
+ * 否则 services → 本模块 → platform → services 成环,vitest 下炸初始化。
  */
 
 /** 从 markdown 正文提取本地 assets 图片引用(去重) */
@@ -28,12 +31,11 @@ function joinPath(dir: string, ...segs: string[]): string {
  * 插图当时落在全局 assetsRoot);目标已有同名文件跳过(幂等,重复另存不重写);
  * 单张失败不中断其余(缺一张图不该阻塞整个绑定)。
  */
-export async function migrateNoteAssets(content: string, fromDir: string | null, toDir: string): Promise<void> {
-  if (!platformServices.isDesktop) return
+export async function migrateNoteAssets(files: FileGateway, content: string, fromDir: string | null, toDir: string): Promise<void> {
   const refs = extractAssetRefs(content)
   if (!refs.length) return
   const customRoot = useEditorPrefs.getState().assetsRoot.trim()
-  const globalRoot = customRoot || await platformServices.files.defaultAssetsRoot()
+  const globalRoot = customRoot || await files.defaultAssetsRoot()
   const destDir = joinPath(toDir, 'assets')
   for (const ref of refs) {
     const name = ref.slice('assets/'.length)
@@ -44,8 +46,8 @@ export async function migrateNoteAssets(content: string, fromDir: string | null,
     ].filter((source): source is string => Boolean(source && source !== dest))
     for (const source of sources) {
       try {
-        const bytes = await platformServices.files.readBinaryFile(source)
-        await platformServices.files.writeBinaryFile(dest, bytes)
+        const bytes = await files.readBinaryFile(source)
+        await files.writeBinaryFile(dest, bytes)
         break
       } catch {
         // 该来源不存在/读失败:尝试下一个来源
