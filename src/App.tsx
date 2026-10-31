@@ -272,8 +272,7 @@ export default function App() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>保留原文件</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
+            <AlertDialogAction variant="destructive"
               onClick={() => {
                 const target = staleOriginal
                 setStaleOriginal(null)

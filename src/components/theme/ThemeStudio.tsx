@@ -710,7 +710,7 @@ function ThemeLibrary(props: {
     <div className="border-b p-2">
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="text-xs font-medium text-muted-foreground">主题库</span>
-        <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={props.onCreate}>
+        <Button variant="ghost" size="xs" onClick={props.onCreate}>
           <FilePlus2 /> 新建
         </Button>
       </div>
@@ -738,8 +738,8 @@ function ThemeLibrary(props: {
             {activeId !== t.id && (
               <Button
                 variant="ghost"
-                size="sm"
-                className="h-6 shrink-0 px-1.5 text-xs"
+                size="xs"
+                className="shrink-0"
                 onClick={() => props.onSelectPreview(t.id)}
               >
                 使用
@@ -775,7 +775,6 @@ function ThemeLibrary(props: {
           />
           <Button
             size="sm"
-            className="h-7 px-2"
             onClick={() => {
               if (renameValue.trim()) props.onRename(renamingId, renameValue.trim())
               setRenamingId(null)

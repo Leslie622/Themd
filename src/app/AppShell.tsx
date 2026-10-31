@@ -278,10 +278,11 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
               <div className="flex shrink-0 items-center gap-2 border-b bg-amber-500/10 px-4 py-1.5 text-xs text-amber-700 dark:text-amber-400">
                 <FileWarning className="size-3.5 shrink-0" />
                 <span className="min-w-0 flex-1">绑定文件已在磁盘上消失(被外部删除或移动);继续编辑将重建文件。</span>
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onNoteSaveAs}>
+                <Button variant="ghost" size="xs" onClick={onNoteSaveAs}>
                   另存为…
                 </Button>
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-destructive hover:text-destructive" onClick={onNoteDelete}>
+                {/* ghost 无 destructive 文本色变体,仅保留这一个覆盖 */}
+                <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={onNoteDelete}>
                   删除笔记
                 </Button>
               </div>
