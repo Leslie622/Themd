@@ -174,16 +174,19 @@ export function UploaderField() {
 
   return (
     <>
-      {/* 观感对齐 shadcn SelectTrigger(size=sm):同内边距/圆角/字号/下拉箭头 */}
-      <button
+      {/* 官方 Button(outline/sm)组合成「打开弹窗的类 Select 触发器」,与
+          SettingsSheet 其余 h-8 选择控件一致;不手写尺寸(换风格会漂移) */}
+      <Button
         type="button"
-        onClick={() => setOpen(true)}
-        className="flex h-7 w-[10.5rem] items-center justify-between gap-1.5 rounded-[min(var(--radius-md),10px)] border border-input bg-transparent py-2 pr-2 pl-2.5 text-left text-sm transition-colors outline-none select-none hover:bg-input/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
+        variant="outline"
+        size="sm"
+        className="w-[10.5rem] justify-between font-normal"
         aria-label="图床配置"
+        onClick={() => setOpen(true)}
       >
         <span className="truncate">{display}</span>
         <ChevronDown className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
-      </button>
+      </Button>
       <UploaderConfigDialog open={open} onOpenChange={setOpen} />
     </>
   )
