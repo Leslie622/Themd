@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -11,7 +12,7 @@ import { listAllThemes, useThemeStore } from '@/store-themes'
 import { EDITOR_FONT_RANGE, useEditorPrefs } from '@/store-editor'
 import { useAppearance } from '@/store-appearance'
 import { platformServices } from '@/app/platform'
-import { Minus, Plus, Settings } from 'lucide-react'
+import { Minus, Plus, Settings, XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
@@ -145,17 +146,26 @@ export function SettingsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-80 gap-0 overflow-y-auto sm:max-w-80">
+      {/* 紧凑 header:vega 默认关闭按钮按 p-6+ 定位(top-4),放这里会偏出
+          标题行,故 showCloseButton=false + 官方 SheetClose 放标题行内 */}
+      <SheetContent side="left" showCloseButton={false} className="w-80 gap-0 overflow-y-auto sm:max-w-80">
         {/* 抽屉盖住顶栏后窗口拖拽区随之失效,头部补一块拖拽区:
             属性必须落在 mousedown 的实际目标上,所以 header 与标题都带 */}
         <SheetHeader
           data-tauri-drag-region
-          className="flex-row items-center gap-2 shrink-0 border-b p-4"
+          className="flex-row items-center justify-between shrink-0 border-b p-4"
         >
-          {/* svg 的内部 path 会成为 mousedown 目标导致拖拽失效,
-              pointer-events-none 让事件落到带 drag-region 的父级上 */}
-          <Settings className="pointer-events-none size-4 text-muted-foreground" />
-          <SheetTitle data-tauri-drag-region className="text-sm">设置</SheetTitle>
+          <div className="flex items-center gap-2">
+            {/* svg 的内部 path 会成为 mousedown 目标导致拖拽失效,
+                pointer-events-none 让事件落到带 drag-region 的父级上 */}
+            <Settings className="pointer-events-none size-4 text-muted-foreground" />
+            <SheetTitle data-tauri-drag-region className="text-sm">设置</SheetTitle>
+          </div>
+          <SheetClose asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="关闭设置">
+              <XIcon />
+            </Button>
+          </SheetClose>
         </SheetHeader>
         {!contentReady ? (
           <div className="flex flex-col gap-4 px-4">
