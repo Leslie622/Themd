@@ -178,7 +178,7 @@ export function SettingsSheet({
                 <SelectTrigger size="sm" className="w-[10.5rem]" aria-label="全局 MD 主题">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent position="popper">
+                <SelectContent>
                   {listAllThemes({ themes: themeList, activeId: themeActiveId }).map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name}
@@ -215,7 +215,7 @@ export function SettingsSheet({
                 <SelectTrigger size="sm" className="w-[10.5rem]" aria-label="图片存储模式">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent position="popper">
+                <SelectContent>
                   <SelectItem value="assets">本地文件夹</SelectItem>
                   <SelectItem value="remote">上传图床</SelectItem>
                   <SelectItem value="embedded">内嵌笔记</SelectItem>

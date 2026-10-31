@@ -143,8 +143,6 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     </SelectTrigger>
                   </IconTip>
                   <SelectContent
-                    position="popper"
-                    className="min-w-(--radix-select-trigger-width)"
                     onPointerDown={() => {
                       themeSelectPointerDown.current = true
                     }}

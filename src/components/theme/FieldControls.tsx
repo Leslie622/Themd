@@ -90,7 +90,7 @@ function FieldControl({
           <SelectTrigger className="w-full" size="sm">
             <SelectValue placeholder="未设置" />
           </SelectTrigger>
-          <SelectContent position="popper">
+          <SelectContent>
             {['100', '200', '300', '400', '500', '600', '700', '800', '900'].map((w) => (
               <SelectItem key={w} value={w}>
                 {w}{weightHint(w)}
@@ -107,7 +107,7 @@ function FieldControl({
           <SelectTrigger className="w-full" size="sm">
             <SelectValue placeholder="未设置" />
           </SelectTrigger>
-          <SelectContent position="popper">
+          <SelectContent>
             {(field.options ?? []).map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
@@ -122,7 +122,7 @@ function FieldControl({
           <SelectTrigger className="w-full" size="sm">
             <SelectValue placeholder="未设置" />
           </SelectTrigger>
-          <SelectContent position="popper">
+          <SelectContent>
             <SelectItem value="start">左对齐</SelectItem>
             <SelectItem value="center">居中</SelectItem>
             <SelectItem value="justify">两端对齐</SelectItem>
@@ -349,7 +349,7 @@ function SizeInput({
         <SelectTrigger size="sm" className="w-16 shrink-0">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent position="popper">
+        <SelectContent>
           {['px', 'em', 'rem', '%'].map((u) => (
             <SelectItem key={u} value={u}>
               {u}
@@ -423,7 +423,7 @@ function FontFamilyInput({ value, onChange }: { value: string | undefined; onCha
         <SelectTrigger size="sm" className="w-32 shrink-0">
           <SelectValue placeholder="自定义" />
         </SelectTrigger>
-        <SelectContent position="popper" className="max-h-72">
+        <SelectContent className="max-h-72">
           <div className="px-2 py-1 text-xs font-medium text-muted-foreground">预设组合</div>
           {FONT_PRESETS.map((f) => (
             <SelectItem key={f.value} value={f.value}>
