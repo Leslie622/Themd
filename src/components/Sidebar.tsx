@@ -179,6 +179,16 @@ export function Sidebar() {
     })
   }
 
+  /** 在工作区根新建笔记并激活(侧栏「新建」;文件夹内右键走 createNoteInFolder) */
+  const handleCreateNote = () => {
+    if (!workspaceRoot) return
+    void createNoteInDir(workspaceRoot)
+      .then((id) => setActive(id))
+      .catch((error: unknown) => {
+        toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`)
+      })
+  }
+
   /** 新建文件夹 = 选一个(或经系统对话框新建)磁盘目录 */
   async function handleCreateFolder() {
     const dir = await platformServices.files.pickDirectory()
@@ -291,32 +301,22 @@ export function Sidebar() {
             </Tooltip>
           </div>
         </div>
-        {/* 工作区胶囊:当前目录名 + 切换菜单(最近/打开其他/清除) */}
-        <WorkspacePill
-          workspaceRoot={workspaceRoot}
-          recents={recents}
-          onOpenDir={openDir}
-          onPickDir={pickAndOpenDir}
-          onClear={() => {
-            void closeWorkspace().then(() => forgetWorkspace())
-          }}
-        />
-        {/* 主操作实心,次级操作 ghost 降噪,整行只剩一个视觉重心 */}
+        {/* 新建降为次级操作(ghost,不占整行):folder-first 下磁盘才是主角 */}
         <div className="flex items-center gap-1">
-          <Button
-            className="flex-1"
-            disabled={!workspaceRoot}
-            onClick={() => {
-              if (!workspaceRoot) return
-              void createNoteInDir(workspaceRoot)
-                .then((id) => setActive(id))
-                .catch((error: unknown) => {
-                  toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`)
-                })
-            }}
-          >
-            <Plus /> 新建
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                disabled={!workspaceRoot}
+                onClick={handleCreateNote}
+              >
+                <Plus /> 新建
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>在工作区根新建笔记</TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -333,6 +333,16 @@ export function Sidebar() {
             <TooltipContent>新建文件夹:选择(或新建)磁盘目录</TooltipContent>
           </Tooltip>
         </div>
+        {/* 工作区胶囊:当前目录名 + 切换菜单(最近/打开其他/清除) */}
+        <WorkspacePill
+          workspaceRoot={workspaceRoot}
+          recents={recents}
+          onOpenDir={openDir}
+          onPickDir={pickAndOpenDir}
+          onClear={() => {
+            void closeWorkspace().then(() => forgetWorkspace())
+          }}
+        />
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
