@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Spinner } from '@/components/ui/spinner'
 import { isFontAvailable } from './is-font-available'
 import { useLocalFontList } from './use-local-font-list'
 import { Check, ChevronDown, Copy, XIcon } from 'lucide-react'
@@ -80,16 +81,22 @@ function FontListDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="border-b px-4 py-2.5">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={requesting ? '正在读取本机字体…' : `搜索 ${fonts.length} 个字体…`}
-            className="h-7 text-xs"
-          />
+          <div className="relative">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={requesting ? '正在读取本机字体…' : `搜索 ${fonts.length} 个字体…`}
+              className="h-7 pr-8 text-xs"
+            />
+            {requesting && (
+              <Spinner className="absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            )}
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
           {filtered.length === 0 ? (
-            <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+            <p className="flex items-center justify-center gap-2 px-3 py-8 text-center text-xs text-muted-foreground">
+              {(requesting || fonts.length === 0) && <Spinner className="size-3.5" />}
               {requesting || fonts.length === 0 ? '正在读取本机字体…' : '没有匹配的字体'}
             </p>
           ) : (

@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { platformServices } from '@/app/platform'
 import { useEditorPrefs } from '@/store-editor'
 import { ChevronDown, Eye, EyeOff, XIcon } from 'lucide-react'
+import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
 
 /**
@@ -103,6 +104,7 @@ function UploaderConfigDialog({
             />
           )}
           <Button variant="outline" size="sm" disabled={testing} onClick={runTest}>
+            {testing && <Spinner data-icon="inline-start" />}
             {testing ? '上传中…' : '测试上传'}
           </Button>
         </div>
