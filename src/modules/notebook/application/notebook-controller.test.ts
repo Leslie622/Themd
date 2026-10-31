@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { NotebookController } from './notebook-controller'
 import type { NotebookSnapshot } from '../domain/note'
 import type { FileLinkGateway, FsChangeEvent } from '@/platform/contracts'
+import { isPathUnder } from '@/shared/paths'
 
 class MemoryRepository {
   snapshot: NotebookSnapshot | null = null
@@ -11,6 +12,7 @@ class MemoryRepository {
 
 class FakeFileLink implements FileLinkGateway {
   files = new Map<string, string>()
+  dirs = new Set<string>()
   writeCalls: Array<[path: string, contents: string]> = []
   watched: string[][] = []
   private listener: ((events: FsChangeEvent[]) => void) | null = null
@@ -30,6 +32,63 @@ class FakeFileLink implements FileLinkGateway {
   onFsChanges(listener: (events: FsChangeEvent[]) => void) {
     this.listener = listener
     return Promise.resolve(() => { this.listener = null })
+  }
+
+  async moveFile(src: string, destDir: string) {
+    if (!this.files.has(src)) throw new Error(`not found: ${src}`)
+    const name = src.split(/[\\/]/).pop() as string
+    const dest = `${destDir.replace(/[\\/]+$/, '')}\\${name}`
+    this.files.set(dest, this.files.get(src) as string)
+    this.files.delete(src)
+    return dest
+  }
+
+  async renameFile(src: string, newName: string) {
+    if (!this.files.has(src)) throw new Error(`not found: ${src}`)
+    const dir = src.slice(0, Math.max(src.lastIndexOf('\\'), src.lastIndexOf('/')))
+    const dest = `${dir}\\${newName}`
+    if (this.files.has(dest)) throw new Error(`目标已存在: ${dest}`)
+    this.files.set(dest, this.files.get(src) as string)
+    this.files.delete(src)
+    return dest
+  }
+
+  trashCalls: string[] = []
+
+  async trashFile(path: string) {
+    // 幂等:文件已不在(外部先删)视为成功
+    if (!this.files.has(path)) return
+    this.files.delete(path)
+    this.trashCalls.push(path)
+  }
+
+  async renameDirectory(oldPath: string, newPath: string) {
+    // 移动目录下所有文件到新前缀,模拟真实 rename
+    for (const key of [...this.files.keys()]) {
+      if (key.startsWith(oldPath)) {
+        this.files.set(`${newPath}${key.slice(oldPath.length)}`, this.files.get(key) as string)
+        this.files.delete(key)
+      }
+    }
+    if (this.dirs.delete(oldPath)) this.dirs.add(newPath)
+  }
+
+  async deleteDirectory(path: string) {
+    // 回收站语义:目录下文件从 fake 磁盘消失
+    for (const key of [...this.files.keys()]) {
+      if (key.startsWith(`${path}\\`) || key.startsWith(`${path}/`)) this.files.delete(key)
+    }
+    this.dirs.delete(path)
+  }
+
+  async uniqueDestination(dir: string, fileName: string) {
+    const base = fileName.replace(/[\\/:*?"<>|]/g, '_')
+    if (!this.files.has(`${dir}\\${base}`)) return `${dir}\\${base}`
+    const stem = base.replace(/\.[^.]+$/, '')
+    const ext = base.slice(stem.length)
+    let n = 2
+    while (this.files.has(`${dir}\\${stem}-${n}${ext}`)) n++
+    return `${dir}\\${stem}-${n}${ext}`
   }
 
   emit(events: FsChangeEvent[]) { this.listener?.(events) }
@@ -114,7 +173,8 @@ describe('NotebookController', () => {
       fileLink.emit([{ kind: 'modified', path: 'C:\\notes\\a.md' }])
       await flushAsync()
       expect(controller.getSnapshot().notes[0].content).toBe('# new heading')
-      expect(controller.getSnapshot().notes[0].title).toBe('new heading')
+      // 绑定笔记的标题跟随磁盘文件名,内容变化不再派生标题
+      expect(controller.getSnapshot().notes[0].title).toBe('a')
     })
 
     it('echo of own write-back does not trigger reload', async () => {
@@ -167,12 +227,47 @@ describe('NotebookController', () => {
       expect(controller.getSnapshot().notes[0].content).toBe('# hello')
     })
 
-    it('external removal marks the note missing and write-back recreates the file', async () => {
+    it('save-as (rebind to a new path) clears the missing flag and writes the new file', async () => {
       const fileLink = new FakeFileLink()
       const controller = new NotebookController(new MemoryRepository(), fileLink)
       await controller.hydrate()
       const id = controller.createNote(undefined, '# hello')
       await controller.bindNoteToFile(id, 'C:\\notes\\a.md')
+      // 未写回编辑 + 文件消失 = 失联(干净笔记会被直接移除)
+      controller.updateNote(id, '# hello\n\ndirty')
+      fileLink.files.delete('C:\\notes\\a.md')
+      fileLink.emit([{ kind: 'removed', path: 'C:\\notes\\a.md' }])
+      await flushAsync()
+      expect(controller.getSnapshot().fileMissingIds.has(id)).toBe(true)
+      controller.updateNote(id, '# hello\n\nrelocated')
+      await controller.bindNoteToFile(id, 'C:\\elsewhere\\b.md')
+      expect(controller.getSnapshot().fileMissingIds.has(id)).toBe(false)
+      expect(controller.getSnapshot().notes[0].sourcePath).toBe('C:\\elsewhere\\b.md')
+      expect(fileLink.files.get('C:\\elsewhere\\b.md')).toContain('relocated')
+    })
+
+    it('removing a missing note clears its missing flag', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      const id = controller.createNote(undefined, '# hello', 'C:\\notes\\a.md')
+      // 未写回编辑 + 文件消失才会标失联(干净笔记的外部删除直接移除)
+      controller.updateNote(id, '# hello\n\ndirty')
+      fileLink.files.delete('C:\\notes\\a.md')
+      fileLink.emit([{ kind: 'removed', path: 'C:\\notes\\a.md' }])
+      await flushAsync()
+      expect(controller.getSnapshot().fileMissingIds.has(id)).toBe(true)
+      await controller.removeNote(id)
+      expect(controller.getSnapshot().fileMissingIds.has(id)).toBe(false)
+    })
+
+    it('external removal of a dirty note marks it missing and write-back recreates the file', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      const id = controller.createNote(undefined, '# hello')
+      await controller.bindNoteToFile(id, 'C:\\notes\\a.md')
+      controller.updateNote(id, '# hello\n\nunsaved')
       fileLink.files.delete('C:\\notes\\a.md')
       fileLink.emit([{ kind: 'removed', path: 'C:\\notes\\a.md' }])
       await flushAsync()
@@ -182,6 +277,40 @@ describe('NotebookController', () => {
       await flushAsync()
       expect(fileLink.files.get('C:\\notes\\a.md')).toContain('recreate')
       expect(controller.getSnapshot().fileMissingIds.has(id)).toBe(false)
+    })
+
+    it('external removal of a clean note removes it from the list (tree = disk)', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      const id = controller.createNote(undefined, '# hello')
+      await controller.bindNoteToFile(id, 'C:\\notes\\a.md')
+      fileLink.files.delete('C:\\notes\\a.md')
+      fileLink.emit([{ kind: 'removed', path: 'C:\\notes\\a.md' }])
+      await flushAsync()
+      // Typora 语义:树是磁盘的实时视图,文件没了笔记就消失(文件在回收站可恢复)
+      expect(controller.getSnapshot().notes.some((n) => n.id === id)).toBe(false)
+      expect(controller.getSnapshot().fileMissingIds.has(id)).toBe(false)
+    })
+
+    it('external created md in a watched dir auto-imports as a bound note', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      const id = controller.createNote(undefined, '# anchor')
+      await controller.bindNoteToFile(id, 'C:\\notes\\anchor.md')
+      // 同目录外部新建(Explorer 里建文件):modified 事件 + 未知路径 → 自动入库
+      fileLink.files.set('C:\\notes\\dropped.md', '# dropped')
+      fileLink.emit([{ kind: 'modified', path: 'C:\\notes\\dropped.md' }])
+      await flushAsync()
+      const imported = controller.getSnapshot().notes.find((n) => n.sourcePath === 'C:\\notes\\dropped.md')
+      expect(imported?.title).toBe('dropped')
+      expect(imported?.content).toBe('# dropped')
+      // 非监听目录(无绑定笔记)的文件不收
+      fileLink.files.set('C:\\elsewhere\\x.md', '# x')
+      fileLink.emit([{ kind: 'modified', path: 'C:\\elsewhere\\x.md' }])
+      await flushAsync()
+      expect(controller.getSnapshot().notes.some((n) => n.sourcePath === 'C:\\elsewhere\\x.md')).toBe(false)
     })
 
     it('external rename rebinds path and retitles non-custom notes', async () => {
@@ -214,9 +343,11 @@ describe('NotebookController', () => {
         const id = controller.createNote(undefined, '# hello')
         await controller.bindNoteToFile(id, 'C:\\notes\\a.md')
         controller.updateNote(id, '# hello\n\ndoomed')
-        controller.removeNote(id)
+        await controller.removeNote(id)
         await vi.advanceTimersByTimeAsync(700)
-        expect(fileLink.files.get('C:\\notes\\a.md')).toBe('# hello')
+        // 删除 = 文件移入回收站(Typora 语义),未写回的编辑随之放弃
+        expect(fileLink.trashCalls).toEqual(['C:\\notes\\a.md'])
+        expect(fileLink.files.has('C:\\notes\\a.md')).toBe(false)
       } finally {
         vi.useRealTimers()
       }
@@ -231,7 +362,7 @@ describe('NotebookController', () => {
         const id = controller.createNote(undefined, '# hello', 'C:\\notes\\a.md')
         await vi.advanceTimersByTimeAsync(600)
         expect(fileLink.watched.at(-1)).toContain('C:\\notes\\a.md')
-        controller.removeNote(id)
+        await controller.removeNote(id)
         await vi.advanceTimersByTimeAsync(600)
         expect(fileLink.watched.at(-1)).not.toContain('C:\\notes\\a.md')
       } finally {
@@ -251,7 +382,129 @@ describe('NotebookController', () => {
       expect(controller.getSnapshot().notes[0].id).toBe('legacy')
       controller.updateNote('legacy', '# legacy\n\nedited')
       await new Promise((resolve) => setTimeout(resolve, 220))
-      expect(repository.snapshot?.schemaVersion).toBe(2)
+      expect(repository.snapshot?.schemaVersion).toBe(3)
+    })
+
+    it('v2 snapshot migrates: legacy folders dropped, groups rebuilt from bound note dirs', async () => {
+      const repository = new MemoryRepository()
+      repository.snapshot = {
+        schemaVersion: 2,
+        notes: [
+          { id: 'a', title: 'a', content: '', updatedAt: 1, sourcePath: 'C:\\lib\\docs\\a.md' },
+          { id: 'b', title: 'b', content: '', updatedAt: 1, sourcePath: 'C:\\lib\\docs\\b.md' },
+          { id: 'c', title: 'c', content: '', updatedAt: 1, sourcePath: 'C:\\lib\\other\\c.md' },
+          { id: 'd', title: 'd', content: '', updatedAt: 1, folderId: 'old-group' },
+        ],
+        folders: [{ id: 'old-group', name: '旧文件夹', order: 0 }],
+      } as unknown as NotebookSnapshot
+      const controller = new NotebookController(repository)
+      await controller.hydrate()
+      const state = controller.getSnapshot()
+      expect(state.schemaVersion).toBe(3)
+      expect(state.notes.every((n) => !('folderId' in n))).toBe(true)
+      expect(state.folders.map((f) => f.name).sort()).toEqual(['docs', 'other'])
+      expect(state.folders.every((f) => f.path.length > 0)).toBe(true)
+    })
+
+    it('every bound note dir gets a folder entity (derived-group invariant)', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      controller.createNote(undefined, '# hello', 'C:\\deep\\nested\\dir\\a.md')
+      const folder = controller.getSnapshot().folders.find((f) => f.path === 'C:\\deep\\nested\\dir')
+      expect(folder?.name).toBe('dir')
+    })
+
+    it('moveNoteToFolder physically moves the file and rebinds, migrating assets', async () => {
+      const fileLink = new FakeFileLink()
+      const migrated: Array<[string, string, string]> = []
+      const controller = new NotebookController(
+        new MemoryRepository(),
+        fileLink,
+        async (content, fromDir, toDir) => { migrated.push([content, fromDir, toDir]) },
+      )
+      await controller.hydrate()
+      const id = controller.createNote(undefined, '# hello', 'C:\\from\\a.md')
+      // 绑定笔记的磁盘文件真实存在(fake 磁盘预置;应用内来自导入/绑定写盘)
+      fileLink.files.set('C:\\from\\a.md', '# hello')
+      await controller.moveNoteToFolder(id, controller.createFolder('C:\\to'))
+      const note = controller.getSnapshot().notes.find((n) => n.id === id)
+      expect(note?.sourcePath).toBe('C:\\to\\a.md')
+      expect(migrated).toEqual([['# hello', 'C:\\from', 'C:\\to']])
+      expect(fileLink.files.has('C:\\to\\a.md')).toBe(true)
+      expect(fileLink.files.has('C:\\from\\a.md')).toBe(false)
+    })
+
+    it('moving an unbound note into a folder binds it to a unique path', async () => {
+      const fileLink = new FakeFileLink()
+      fileLink.files.set('C:\\to\\新笔记.md', '别人的文件')
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      const id = controller.createNote('我的笔记', '# mine')
+      const folderId = controller.createFolder('C:\\to')
+      await controller.moveNoteToFolder(id, folderId)
+      const note = controller.getSnapshot().notes.find((n) => n.id === id)
+      expect(note?.sourcePath).toBe('C:\\to\\我的笔记.md')
+      expect(fileLink.files.get('C:\\to\\我的笔记.md')).toBe('# mine')
+    })
+
+    it('renameFolder renames the disk dir and prefix-swaps nested notes', async () => {
+      vi.useFakeTimers()
+      try {
+        const fileLink = new FakeFileLink()
+        const controller = new NotebookController(new MemoryRepository(), fileLink)
+        await controller.hydrate()
+        const id = controller.createNote(undefined, '# hello', 'C:\\old-name\\sub\\a.md')
+        const folderId = controller.createFolder('C:\\old-name')
+        await controller.renameFolder(folderId, 'new-name')
+        const note = controller.getSnapshot().notes.find((n) => n.id === id)
+        expect(note?.sourcePath).toBe('C:\\new-name\\sub\\a.md')
+        expect(controller.getSnapshot().folders.find((f) => f.id === folderId)?.path).toBe('C:\\new-name')
+        // 子目录不存在的脏笔记:rename 本身不动文件内容,无 dirty 时不补写
+        expect(fileLink.files.has('C:\\new-name\\sub\\a.md')).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('directory-level renamed event swaps folder and note prefixes', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      controller.createNote(undefined, '# hello', 'C:\\before\\a.md')
+      controller.createNote(undefined, '# other', 'C:\\before\\sub\\b.md')
+      controller.createFolder('C:\\before')
+      fileLink.files.set('C:\\before\\a.md', '# hello')
+      fileLink.files.set('C:\\before\\sub\\b.md', '# other')
+      fileLink.emit([{ kind: 'renamed', oldPath: 'C:\\before', newPath: 'C:\\after' }])
+      await flushAsync()
+      const state = controller.getSnapshot()
+      expect(state.notes.find((n) => n.title === 'hello')?.sourcePath).toBe('C:\\after\\a.md')
+      expect(state.notes.find((n) => n.title === 'other')?.sourcePath).toBe('C:\\after\\sub\\b.md')
+      expect(state.folders.find((f) => f.path === 'C:\\after')).toBeDefined()
+    })
+
+    it('removeFolder deletes the disk dir and removes nested notes and subfolders', async () => {
+      const fileLink = new FakeFileLink()
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      controller.createNote(undefined, '# inner', 'C:\\doom\\a.md')
+      controller.createNote(undefined, '# nested', 'C:\\doom\\sub\\b.md')
+      controller.createNote(undefined, '# safe', 'C:\\elsewhere\\c.md')
+      controller.createFolder('C:\\doom')
+      // fake 磁盘预置真实文件(createNote 不写盘,应用内来自导入/绑定)
+      fileLink.files.set('C:\\doom\\a.md', '# inner')
+      fileLink.files.set('C:\\doom\\sub\\b.md', '# nested')
+      fileLink.files.set('C:\\elsewhere\\c.md', '# safe')
+      await controller.removeFolder(controller.getSnapshot().folders[0].id)
+      const state = controller.getSnapshot()
+      // 目录删除(回收站) → 其中笔记与子文件夹一并移除;目录外的笔记不受影响
+      expect(state.notes.find((n) => n.title === 'inner')).toBeUndefined()
+      expect(state.notes.find((n) => n.title === 'nested')).toBeUndefined()
+      expect(state.notes.find((n) => n.title === 'safe')).toBeDefined()
+      expect(state.folders.some((f) => isPathUnder(f.path, 'C:\\doom'))).toBe(false)
+      expect(fileLink.files.has('C:\\doom\\a.md')).toBe(false)
+      expect(fileLink.files.has('C:\\elsewhere\\c.md')).toBe(true)
     })
   })
 })

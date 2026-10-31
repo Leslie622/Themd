@@ -41,6 +41,14 @@ export function createWebFileGateway(): FileGateway {
       void bytes
       throw new Error(`浏览器端不支持写入本地文件: ${path}`)
     },
+    async readBinaryFile(path: string) {
+      void path
+      throw new Error('浏览器端不支持读取本地文件')
+    },
+    async deleteFile(path: string) {
+      void path
+      throw new Error('浏览器端不支持删除本地文件')
+    },
     async defaultAssetsRoot() {
       return ''
     },

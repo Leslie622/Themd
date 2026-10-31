@@ -22,4 +22,16 @@ export interface FileLinkGateway {
   watchPaths(paths: string[]): Promise<void>
   /** 订阅文件系统事件(已防抖归并);Tauri 的 listen 是异步的,返回退订 Promise */
   onFsChanges(listener: (events: FsChangeEvent[]) => void): Promise<() => void>
+  /** 移动文件到目标目录(重名自动加后缀);返回实际落点绝对路径;失败抛错 */
+  moveFile(src: string, destDir: string): Promise<string>
+  /** 同目录内重命名文件(笔记重命名 = 磁盘文件改名);重名自动加后缀,返回实际落点;失败抛错 */
+  renameFile(src: string, newName: string): Promise<string>
+  /** 重命名目录(仅同盘);组内笔记路径由调用方批量改绑;失败抛错 */
+  renameDirectory(oldPath: string, newPath: string): Promise<void>
+  /** 删除文件(移入系统回收站,可恢复);失败抛错 */
+  trashFile(path: string): Promise<void>
+  /** 删除目录(整棵移入系统回收站,可恢复);失败抛错 */
+  deleteDirectory(path: string): Promise<void>
+  /** 目标目录下求无冲突的文件路径(过滤非法字符 + 重名自动后缀) */
+  uniqueDestination(dir: string, fileName: string): Promise<string>
 }

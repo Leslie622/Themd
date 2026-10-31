@@ -17,15 +17,15 @@ export interface NotebookFacade {
   fileMissingIds: ReadonlySet<string>
   createNote: (title?: string, content?: string, sourcePath?: string) => string
   updateNote: (id: string, content: string) => void
-  renameNote: (id: string, title: string) => void
-  removeNote: (id: string) => void
+  renameNote: (id: string, title: string) => Promise<void>
+  removeNote: (id: string) => Promise<void>
   setActive: (id: string | null) => void
   setNoteTheme: (id: string, themeId: string | null) => void
-  createFolder: (name: string) => string
-  renameFolder: (id: string, name: string) => void
-  removeFolder: (id: string) => void
-  removeFolderWithNotes: (id: string) => void
-  setNoteFolder: (id: string, folderId: string | null) => void
+  createFolder: (path: string) => string
+  renameFolder: (id: string, name: string) => Promise<void>
+  removeFolder: (id: string) => Promise<void>
+  moveNoteToFolder: (id: string, folderId: string | null) => Promise<void>
+  createNoteInFolder: (folderId: string) => Promise<string>
   bindNoteToFile: (id: string, path: string) => Promise<void>
   flushNote: (id: string) => void
   flushAll: () => void
@@ -48,8 +48,8 @@ const facade: NotebookFacade = {
   createFolder: controller.createFolder.bind(controller),
   renameFolder: controller.renameFolder.bind(controller),
   removeFolder: controller.removeFolder.bind(controller),
-  removeFolderWithNotes: controller.removeFolderWithNotes.bind(controller),
-  setNoteFolder: controller.setNoteFolder.bind(controller),
+  moveNoteToFolder: controller.moveNoteToFolder.bind(controller),
+  createNoteInFolder: controller.createNoteInFolder.bind(controller),
   bindNoteToFile: controller.bindNoteToFile.bind(controller),
   flushNote: controller.flushNote.bind(controller),
   flushAll: controller.flushAll.bind(controller),

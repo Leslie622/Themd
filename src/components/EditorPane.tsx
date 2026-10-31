@@ -12,10 +12,16 @@ import {
 } from '@uiw/codemirror-theme-github'
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderOpen } from 'lucide-react'
+import { FolderOpen, ImagePlus } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import { imagePlaceholder } from '@/lib/image-decorator'
 import { fileToAssetImage, fileToEmbeddedImage, fileToUploadedImage, insertImageMarkdown } from '@/lib/image'
 import { assetsPathToAbsolute } from '@/lib/image-src'
@@ -469,9 +475,13 @@ export function EditorPane({
     }
   }, [bindScroller])
 
+  // 编辑器区域右键走自定义菜单(shadcn ContextMenu),压掉 WebView2 原生菜单;
+  // trigger 自带 select-none,这里用 select-text 覆盖回来,保证编辑器可选中
   return (
-    <div ref={rootRef} className="h-full overflow-hidden text-sm">
-      <CodeMirror
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div ref={rootRef} className="h-full overflow-hidden text-sm select-text">
+          <CodeMirror
         value={value}
         onChange={onChange}
         onCreateEditor={(view) => {
@@ -524,6 +534,14 @@ export function EditorPane({
           </Button>,
           document.body,
         )}
-    </div>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-40">
+        <ContextMenuItem onSelect={() => appEvents.emit('insertImage')}>
+          <ImagePlus />
+          插入图片
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

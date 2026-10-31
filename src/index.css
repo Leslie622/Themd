@@ -318,3 +318,27 @@ pre::-webkit-scrollbar,
   background: color-mix(in oklch, var(--primary) 12%, transparent);
   outline: 1px solid color-mix(in oklch, var(--primary) 30%, transparent);
 }
+
+/* ── 聚焦样式全局覆盖：去 3px 半透明晕圈，只留边框加深 ──────────────────
+ * shadcn 生成物把晕圈宽度写死在类里(focus-visible:ring-3 等)，官方无主题
+ * 变量可调；按规范不改 components/ui，这里在工具层之外统一拦截——清零
+ * --tw-ring-shadow 后 box-shadow 中的环解析为不可见，border-ring 的聚焦
+ * 加深保留。精确枚举 3px 晕圈的 data-slot，resizable-handle 的 1px 焦点
+ * 环是唯一键盘焦点指示，不在列。新增 shadcn 组件若也带 ring-3，记得补进来。 */
+[data-slot="button"]:focus-visible,
+[data-slot="input"]:focus-visible,
+[data-slot="textarea"]:focus-visible,
+[data-slot="select-trigger"]:focus-visible,
+[data-slot="switch"]:focus-visible,
+[data-slot="toggle"]:focus-visible,
+[data-slot="toggle-group-item"]:focus-visible,
+[data-slot="accordion-trigger"]:focus-visible,
+[data-slot="button"][aria-invalid="true"],
+[data-slot="input"][aria-invalid="true"],
+[data-slot="textarea"][aria-invalid="true"],
+[data-slot="select-trigger"][aria-invalid="true"],
+[data-slot="switch"][aria-invalid="true"],
+[data-slot="toggle"][aria-invalid="true"],
+[data-slot="toggle-group-item"][aria-invalid="true"] {
+  --tw-ring-shadow: 0 0 #0000;
+}

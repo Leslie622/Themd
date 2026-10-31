@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { ThemeStudio } from '@/components/theme/ThemeStudio'
 import {
   Dialog,
@@ -12,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { notebookController, useNotebook } from '@/store'
 import { platformServices } from '@/app/platform'
+import { migrateNoteAssets } from '@/lib/note-assets'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useSyncScroll } from '@/lib/scroll-sync'
 import { setActiveNoteDir } from '@/lib/image-src'
@@ -20,12 +31,21 @@ import { AppShell, type ViewMode } from '@/app/AppShell'
 import { clampSidebarWidth, useWorkspacePrefs } from '@/app/workspace-preferences'
 import { useExportActions } from '@/modules/export/application/use-export-actions'
 
+/** 绑定路径 → 笔记所在目录(图片迁移与相对路径解析共用语义) */
+function noteDirOf(path: string | undefined): string | null {
+  if (!path) return null
+  const parts = path.split(/[\\/]/)
+  parts.pop()
+  return parts.join('\\') || null
+}
+
 export default function App() {
   const hydrated = useNotebook((state) => state.hydrated)
   const notes = useNotebook((state) => state.notes)
   const activeId = useNotebook((state) => state.activeId)
   const updateNote = useNotebook((state) => state.updateNote)
   const createNote = useNotebook((state) => state.createNote)
+  const removeNote = useNotebook((state) => state.removeNote)
   const setNoteTheme = useNotebook((state) => state.setNoteTheme)
   const activeFileMissing = useNotebook((state) =>
     state.activeId ? state.fileMissingIds.has(state.activeId) : false,
@@ -48,6 +68,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewText, setPreviewText] = useState('')
   const [conflict, setConflict] = useState<{ noteId: string } | null>(null)
+  /** 另存为成功后仍留在原位置的原文件(弹确认框让用户决定删不删) */
+  const [staleOriginal, setStaleOriginal] = useState<{ path: string } | null>(null)
   /** 库内笔记首编弹保存框被取消后,打字流本次会话不再追问 */
   const bindPromptSuppressed = useRef(false)
   /** 保存框重入锁:对话框未关闭期间,后续击键/Ctrl+S 不再叠加新对话框 */
@@ -91,6 +113,14 @@ export default function App() {
         extensions: ['md', 'markdown', 'txt'],
       })
       if (path) {
+        // 绑定前把正文引用的本地 assets 图片迁入新笔记目录:
+        // 库内笔记的插图在全局根,绑定后相对路径按笔记目录解析,不搬就裂图
+        const toDir = noteDirOf(path)
+        if (toDir) {
+          await migrateNoteAssets(note.content, noteDirOf(note.sourcePath), toDir).catch((error: unknown) => {
+            console.error('迁移笔记图片失败:', error)
+          })
+        }
         await notebookController.bindNoteToFile(id, path)
       } else {
         bindPromptSuppressed.current = true
@@ -100,6 +130,43 @@ export default function App() {
       toast.error(`绑定文件失败: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       bindPromptInFlight.current = false
+    }
+  }, [])
+
+  /**
+   * 主动另存为:当前内容写到所选新位置并(重新)绑定,assets 图片随迁。
+   * 三种场景同一动作——未绑定笔记=选位置绑定文件;已绑定=迁到新位置重新绑定;
+   * 失联笔记=自救重新落盘。入口:导出菜单项与 Ctrl+Shift+S。
+   */
+  const handleNoteSaveAs = useCallback(async () => {
+    const { activeId, notes: current, fileMissingIds } = notebookController.getSnapshot()
+    if (!activeId) return
+    const note = current.find((n) => n.id === activeId)
+    if (!note) return
+    const path = await platformServices.files.chooseSavePath({
+      defaultName: `${note.title || '新笔记'}.md`,
+      filterName: 'Markdown 文档',
+      extensions: ['md', 'markdown', 'txt'],
+    })
+    if (!path) return
+    // 另存为是复制语义:原文件保留,成功后弹确认让用户决定是否删掉(=移动)。
+    // 失联笔记原文件已不在磁盘上,无需询问。
+    const previousPath = note.sourcePath
+    const wasMissing = fileMissingIds.has(activeId)
+    try {
+      // 另存为换目录:引用到的 assets 图片随迁(老目录 → 新目录),否则新位置裂图
+      const toDir = noteDirOf(path)
+      if (toDir) {
+        await migrateNoteAssets(note.content, noteDirOf(note.sourcePath), toDir).catch((error: unknown) => {
+          console.error('迁移笔记图片失败:', error)
+        })
+      }
+      await notebookController.bindNoteToFile(activeId, path)
+      toast.success(`已另存并重新绑定: ${path}`)
+      if (previousPath && previousPath !== path && !wasMissing) setStaleOriginal({ path: previousPath })
+    } catch (error: unknown) {
+      console.error('另存失败:', error)
+      toast.error(`另存失败: ${error instanceof Error ? error.message : String(error)}`)
     }
   }, [])
 
@@ -116,13 +183,18 @@ export default function App() {
     void promptBindIfNeeded(activeId, false)
   }, [promptBindIfNeeded])
 
-  // 文件绑定双向同步的落盘时机:Ctrl+S 显式保存;失焦/切后台/托盘退出前冲刷
+  // 文件绑定双向同步的落盘时机:Ctrl+S 显式保存;Ctrl+Shift+S 另存为;
+  // 失焦/切后台/托盘退出前冲刷
   useEffect(() => {
     const flush = () => notebookController.flushAll()
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
-        saveActiveNote()
+        if (event.shiftKey) {
+          void handleNoteSaveAs()
+        } else {
+          saveActiveNote()
+        }
       }
     }
     const onVisibility = () => {
@@ -144,7 +216,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisibility)
       offQuit?.()
     }
-  }, [saveActiveNote])
+  }, [handleNoteSaveAs, saveActiveNote])
 
   /**
    * 编辑入口:库内笔记(无 sourcePath)在桌面端首次编辑时弹原生保存框选位置,
@@ -199,6 +271,11 @@ export default function App() {
       exportPdf={exportPdf}
       exportNoteFile={exportNoteFile}
       fileMissing={activeFileMissing}
+      onNoteSaveAs={() => void handleNoteSaveAs()}
+      onNoteDelete={() => {
+          if (activeId)
+            void removeNote(activeId).catch((error: unknown) => console.error('删除笔记失败:', error))
+        }}
       bindEditorScroller={bindEditorScroller}
       bindPreviewScroller={bindPreviewScroller}
     >
@@ -232,6 +309,35 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* 另存为后的原文件清理:另存为是复制语义,默认保留,用户确认后可删(=移动) */}
+      <AlertDialog open={staleOriginal !== null} onOpenChange={(open) => { if (!open) setStaleOriginal(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除原文件?</AlertDialogTitle>
+            <AlertDialogDescription>
+              已另存到新位置并重新绑定。原文件仍保留在原位置:
+              <span className="mt-1 block break-all font-mono text-xs">{staleOriginal?.path}</span>
+              要把它一并删除吗?(正文引用的图片已复制到新位置,原位置的图片不动)
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>保留原文件</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                const target = staleOriginal
+                setStaleOriginal(null)
+                if (!target) return
+                void platformServices.files.deleteFile(target.path)
+                  .then(() => toast.success(`已删除原文件: ${target.path}`))
+                  .catch((error: unknown) => toast.error(`删除原文件失败: ${error instanceof Error ? error.message : String(error)}`))
+              }}
+            >
+              删除原文件
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   )
 }

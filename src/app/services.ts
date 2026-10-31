@@ -3,11 +3,12 @@ import { IndexedDbNoteRepository } from '@/modules/notebook/infrastructure/index
 import { ThemeController } from '@/modules/themes/application/theme-controller'
 import { IndexedDbThemeRepository } from '@/modules/themes/infrastructure/indexeddb-theme-repository'
 import { createPlatformServices } from '@/platform/create-platform-services'
+import { migrateNoteAssets } from '@/lib/note-assets'
 
 export function createApplicationServices() {
   const platform = createPlatformServices()
   return {
-    notebook: new NotebookController(new IndexedDbNoteRepository(), platform.fileLink),
+    notebook: new NotebookController(new IndexedDbNoteRepository(), platform.fileLink, migrateNoteAssets),
     themes: new ThemeController(new IndexedDbThemeRepository()),
     platform,
   }

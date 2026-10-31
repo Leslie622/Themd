@@ -22,6 +22,8 @@ tauri-plugin-http = "2"
 # 文件绑定双向同步:监听绑定笔记的外部改动(notify 经 debouncer 再导出,
 # 统一用 notify_debouncer_full::notify 路径引用,避免双版本 notify 类型冲突)
 notify-debouncer-full = "0.6"
+# 删除文件夹 = 删除磁盘目录:经系统回收站(可恢复),不做永久删除
+trash = "2"
 
 # 导出 PDF:走 WebView2 的 PrintToPdf COM 接口(ICoreWebView2_7),
 # 版本须与 wry 所用的 webview2-com/windows 对齐,避免接口重复注册

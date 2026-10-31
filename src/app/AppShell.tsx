@@ -1,5 +1,5 @@
 import { type ReactElement, type ReactNode, useRef } from 'react'
-import { Columns2, Eye, FileCode2, FileSymlink, FileText, FileWarning, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Settings } from 'lucide-react'
+import { Columns2, Eye, FileCode2, FileSymlink, FileText, FileWarning, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Save, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Toaster } from '@/components/ui/sonner'
@@ -22,11 +22,16 @@ import type { ThemeFile } from '@/lib/theme/schema'
 export type ViewMode = 'edit' | 'split' | 'preview'
 const FOLLOW_GLOBAL = '__follow__'
 function IconTip({ label, children }: { label: string; children: ReactElement }) { return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent side="bottom">{label}</TooltipContent></Tooltip> }
-export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; fileMissing: boolean; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void; children?: ReactNode }
-export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, fileMissing, bindEditorScroller, bindPreviewScroller, children }: AppShellProps) {
+export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; fileMissing: boolean; onNoteSaveAs: () => void; onNoteDelete: () => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void; children?: ReactNode }
+export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, fileMissing, onNoteSaveAs, onNoteDelete, bindEditorScroller, bindPreviewScroller, children }: AppShellProps) {
   const imageCount = active ? countImages(active.content) : 0
   /* 侧栏容器:拖拽期间 SidebarResizeHandle 直改它的 style.width,绕开 React */
   const sidebarRef = useRef<HTMLDivElement | null>(null)
+  /* 弹层内发生过指针按下 → 关闭时不让 Radix 把焦点还给触发器:
+     那次还焦点会继承列表项的 :focus-visible,触发器常驻聚焦环,
+     且 tooltip focus 守卫把它当键盘焦点放行 → tooltip 常驻 */
+  const themeSelectPointerDown = useRef(false)
+  const exportMenuPointerDown = useRef(false)
   return (
     /* Provider 包整个根:顶栏左侧的"展开侧栏"按钮(仅折叠时渲染)也在 Tooltip
        作用域内,否则一折叠就 Tooltip 脱离 Provider 导致 React 崩溃白屏 */
@@ -137,7 +142,19 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                       )}
                     </SelectTrigger>
                   </IconTip>
-                  <SelectContent position="popper" className="min-w-(--radix-select-trigger-width)">
+                  <SelectContent
+                    position="popper"
+                    className="min-w-(--radix-select-trigger-width)"
+                    onPointerDown={() => {
+                      themeSelectPointerDown.current = true
+                    }}
+                    onCloseAutoFocus={(e) => {
+                      if (themeSelectPointerDown.current) {
+                        themeSelectPointerDown.current = false
+                        e.preventDefault()
+                      }
+                    }}
+                  >
                     <SelectItem value={FOLLOW_GLOBAL}>跟随全局</SelectItem>
                     {allThemes.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
@@ -161,6 +178,20 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     <ImagePlus />
                   </Button>
                 </IconTip>
+                {/* 另存为是「文件落到哪」的操作,不属于导出格式,独立成按钮:
+                    未绑定笔记 = 选位置绑定文件;已绑定 = 迁到新位置重新绑定
+                    (正文引用的 assets 图片随迁);失联笔记 = 自救重新落盘 */}
+                <IconTip label="另存为 / 绑定到文件:选位置写盘并重新绑定,图片随迁(Ctrl+Shift+S)">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={onNoteSaveAs}
+                    aria-label="另存为"
+                  >
+                    <Save />
+                  </Button>
+                </IconTip>
                 {/* 导出:三种格式进下拉;FileSymlink 箭头向右穿出文件,
                     与侧栏 FileInput/FolderInput(箭头指入)构成导入/导出一对。
                     IconTip 必须包在 DropdownMenu 内、套住 Trigger:
@@ -180,7 +211,19 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     </DropdownMenuTrigger>
                   </IconTip>
                   {/* 基类把菜单宽度锁在触发按钮宽度,导出条目文本长,抬个下限防换行 */}
-                  <DropdownMenuContent align="end" style={{ minWidth: '12rem' }}>
+                  <DropdownMenuContent
+                    align="end"
+                    style={{ minWidth: '12rem' }}
+                    onPointerDown={() => {
+                      exportMenuPointerDown.current = true
+                    }}
+                    onCloseAutoFocus={(e) => {
+                      if (exportMenuPointerDown.current) {
+                        exportMenuPointerDown.current = false
+                        e.preventDefault()
+                      }
+                    }}
+                  >
                     <DropdownMenuItem onClick={() => void exportNoteFile('md')}>
                       <FileText />
                       导出 Markdown (.md)
@@ -229,11 +272,18 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
 
         {active ? (
           <>
-            {/* 绑定文件在磁盘上消失(外部删除/移动):提示但不阻塞编辑,写回会重建 */}
+            {/* 绑定文件在磁盘上消失(外部删除/移动):提示但不阻塞编辑,写回会重建;
+                另存为 = 选新位置重新绑定(自救),删除 = 移除笔记(不碰磁盘) */}
             {fileMissing && (
               <div className="flex shrink-0 items-center gap-2 border-b bg-amber-500/10 px-4 py-1.5 text-xs text-amber-700 dark:text-amber-400">
                 <FileWarning className="size-3.5 shrink-0" />
-                绑定文件已在磁盘上消失(被外部删除或移动);继续编辑将重建文件。
+                <span className="min-w-0 flex-1">绑定文件已在磁盘上消失(被外部删除或移动);继续编辑将重建文件。</span>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onNoteSaveAs}>
+                  另存为…
+                </Button>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-destructive hover:text-destructive" onClick={onNoteDelete}>
+                  删除笔记
+                </Button>
               </div>
             )}
             {view === 'split' ? (

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import {
   ChevronRight,
@@ -6,8 +6,8 @@ import {
   FileText,
   Folder,
   FolderInput,
+  FolderOpen,
   FolderPlus,
-  Link2,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -17,6 +17,25 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,14 +73,18 @@ import { platformServices } from '@/app/platform'
 import type { ImportedFile } from '@/lib/files'
 import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { useNotebook } from '@/store'
 import { appEvents } from '@/shared/events/app-events'
+import { isPathUnder, isSamePath, normalizePath, noteDirOf } from '@/shared/paths'
+import type { Folder as FolderEntity } from '@/modules/notebook/domain/note'
 import type { Note } from '@/store'
 
 export function Sidebar() {
   const notes = useNotebook((s) => s.notes)
   const folders = useNotebook((s) => s.folders)
   const activeId = useNotebook((s) => s.activeId)
+  const fileMissingIds = useNotebook((s) => s.fileMissingIds)
   const setActive = useNotebook((s) => s.setActive)
   const createNote = useNotebook((s) => s.createNote)
   const renameNote = useNotebook((s) => s.renameNote)
@@ -69,18 +92,20 @@ export function Sidebar() {
   const createFolder = useNotebook((s) => s.createFolder)
   const renameFolder = useNotebook((s) => s.renameFolder)
   const removeFolder = useNotebook((s) => s.removeFolder)
-  const removeFolderWithNotes = useNotebook((s) => s.removeFolderWithNotes)
-  const setNoteFolder = useNotebook((s) => s.setNoteFolder)
+  const moveNoteToFolder = useNotebook((s) => s.moveNoteToFolder)
+  const createNoteInFolder = useNotebook((s) => s.createNoteInFolder)
 
   const [keyword, setKeyword] = useState('')
-  // 分组展开状态受控:搜索时强制全开(命中笔记所在的分组必须可见),
+  // 文件夹展开状态受控:搜索时强制全开(命中笔记所在的文件夹必须可见),
   // 清空搜索后回到用户手动控制的展开/收起
   const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set())
   const [renaming, setRenaming] = useState<
     { kind: 'note' | 'folder'; id: string; value: string } | null
   >(null)
-  // 待删除的分组:弹确认框,由用户选择「仅删分组」还是「连笔记一起删」
-  const [deletingFolder, setDeletingFolder] = useState<{ id: string; name: string } | null>(null)
+  /** 待删除文件夹:确认后整棵目录移入系统回收站,其中笔记从应用一并移除 */
+  const [deletingFolder, setDeletingFolder] = useState<{ id: string; name: string; noteCount: number } | null>(null)
+  /** 待删除绑定笔记:确认后磁盘文件移入系统回收站 */
+  const [deletingNote, setDeletingNote] = useState<{ id: string; title: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
@@ -95,15 +120,45 @@ export function Sidebar() {
       ),
     [notes, kw],
   )
+  /** 文件夹=目录:绑定笔记归属其所在目录的文件夹,未绑定笔记平铺在顶层 */
+  const folderIdOfNote = useCallback(
+    (n: Note): string => {
+      const dir = noteDirOf(n.sourcePath)
+      if (!dir) return ''
+      return folders.find((f) => f.path && isSamePath(f.path, dir))?.id ?? ''
+    },
+    [folders],
+  )
   const byFolder = useMemo(() => {
     const map = new Map<string, Note[]>()
     for (const n of filtered) {
-      const key = n.folderId ?? ''
+      const key = folderIdOfNote(n)
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(n)
     }
     return map
-  }, [filtered])
+  }, [filtered, folderIdOfNote])
+  /**
+   * 目录树展平:按路径排序保证父文件夹在子文件夹前,depth = 祖先目录数(缩进用)。
+   * 文件夹与磁盘目录一一对应,只显示出现过的目录。
+   */
+  const folderNodes = useMemo(() => {
+    const depthOf = (f: FolderEntity): number => {
+      let depth = 0
+      let parent = noteDirOf(f.path)
+      while (parent) {
+        const dir = parent
+        const pf = folders.find((x) => isSamePath(x.path, dir))
+        if (!pf) break
+        depth++
+        parent = noteDirOf(pf.path)
+      }
+      return depth
+    }
+    return [...folders]
+      .sort((a, b) => normalizePath(a.path).localeCompare(normalizePath(b.path)))
+      .map((folder) => ({ folder, depth: depthOf(folder) }))
+  }, [folders])
 
   async function handleImport(e: ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
@@ -124,7 +179,7 @@ export function Sidebar() {
     for (const f of imported) createNote(f.title, f.content, f.filePath)
   }
 
-  /** 导入文件夹:目录路径 → 自动建分组 */
+  /** 导入文件夹:目录路径 → 自动建文件夹 */
   async function handleFolderImport(e: ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
     if (!files?.length) return
@@ -140,21 +195,9 @@ export function Sidebar() {
     importFolderFiles(imported)
   }
 
-  /** 把导入的文件落库:每个目录路径自动建一个分组 */
+  /** 把导入的文件夹文件落库:桌面端绑定源文件,文件夹按所在目录自动派生(不变式) */
   function importFolderFiles(imported: ImportedFile[]) {
-    const pathToId = new Map<string, string>()
-    for (const f of imported) {
-      let folderId: string | undefined
-      if (f.folderPath) {
-        folderId = pathToId.get(f.folderPath)
-        if (!folderId) {
-          folderId = createFolder(f.folderPath.split('/').pop() || f.folderPath)
-          pathToId.set(f.folderPath, folderId)
-        }
-      }
-      const id = createNote(f.title, f.content, f.filePath)
-      if (folderId) setNoteFolder(id, folderId)
-    }
+    for (const f of imported) createNote(f.title, f.content, f.filePath)
   }
 
   /** 导入文件夹入口:桌面端原生对话框,浏览器端 webkitdirectory 兜底 */
@@ -169,56 +212,69 @@ export function Sidebar() {
     else fileInputRef.current?.click()
   }
 
-  /** 新建分组:建完立即进入内联重命名 */
-  const handleCreateFolder = () => {
-    const id = createFolder('新建分组')
-    setRenaming({ kind: 'folder', id, value: '新建分组' })
+  /** 新建文件夹 = 选一个(或经系统对话框新建)磁盘目录 */
+  async function handleCreateFolder() {
+    if (!platformServices.isDesktop) return
+    const dir = await platformServices.files.pickDirectory()
+    if (!dir) return
+    createFolder(dir)
   }
 
   const commitRename = () => {
     if (!renaming) return
     const name = renaming.value.trim()
-    if (name) {
-      if (renaming.kind === 'note') renameNote(renaming.id, name)
-      else renameFolder(renaming.id, name)
+    // 空名不提交也不关弹窗,让用户改到合法为止
+    if (!name) return
+    if (renaming.kind === 'note') {
+      // 绑定笔记的重命名 = 磁盘文件改名(双向);失败 toast 提示(弹窗照常关闭)
+      void renameNote(renaming.id, name).catch((error: unknown) => {
+        toast.error(`重命名笔记失败: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }
+    else {
+      // 文件夹重命名 = 磁盘目录改名,失败(占用/跨盘/重名)提示且不改状态
+      void renameFolder(renaming.id, name).catch((error: unknown) => {
+        toast.error(`重命名文件夹失败: ${error instanceof Error ? error.message : String(error)}`)
+      })
     }
     setRenaming(null)
   }
 
-  const renameInput = (
-    <Input
-      value={renaming?.value ?? ''}
-      autoFocus
-      className="h-7 text-xs"
-      onChange={(e) => {
-        if (renaming) setRenaming({ ...renaming, value: e.target.value })
+  const renderNoteItem = (n: Note) => (
+    <NoteItem
+      key={n.id}
+      note={n}
+      active={n.id === activeId}
+      keyword={kw}
+      onClick={() => setActive(n.id)}
+      onRename={() => setRenaming({ kind: 'note', id: n.id, value: n.title })}
+      onDelete={() => {
+        if (n.sourcePath && !fileMissingIds.has(n.id)) {
+          setDeletingNote({ id: n.id, title: n.title })
+        } else {
+          // 未绑定/失联笔记:仅从应用移除,不碰磁盘
+          void removeNote(n.id).catch((error: unknown) => {
+            toast.error(`删除笔记失败: ${error instanceof Error ? error.message : String(error)}`)
+          })
+        }
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') commitRename()
-        if (e.key === 'Escape') setRenaming(null)
+      folders={folderNodes}
+      currentFolderId={folderIdOfNote(n)}
+      onMove={(folderId) => {
+        void moveNoteToFolder(n.id, folderId).catch((error: unknown) => {
+          toast.error(`移动笔记失败: ${error instanceof Error ? error.message : String(error)}`)
+        })
       }}
+      onReveal={
+        n.sourcePath && platformServices.isDesktop
+          ? () =>
+              platformServices.files.revealItemInDir(n.sourcePath!).catch((error: unknown) => {
+                toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
+              })
+          : undefined
+      }
     />
   )
-
-  const renderNoteItem = (n: Note) =>
-    renaming?.kind === 'note' && renaming.id === n.id ? (
-      <div key={n.id} className="flex items-center gap-1 px-2 py-1">
-        {renameInput}
-      </div>
-    ) : (
-      <NoteItem
-        key={n.id}
-        note={n}
-        active={n.id === activeId}
-        keyword={kw}
-        onClick={() => setActive(n.id)}
-        onRename={() => setRenaming({ kind: 'note', id: n.id, value: n.title })}
-        onDelete={() => removeNote(n.id)}
-        folders={folders}
-        currentFolderId={n.folderId ?? null}
-        onMove={(folderId) => setNoteFolder(n.id, folderId)}
-      />
-    )
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -257,20 +313,23 @@ export function Sidebar() {
           <Button className="flex-1" onClick={() => createNote()}>
             <Plus /> 新建
           </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground"
-                onClick={handleCreateFolder}
-                aria-label="新建分组"
-              >
-                <FolderPlus />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>新建分组</TooltipContent>
-          </Tooltip>
+          {/* 文件夹=目录,仅桌面端有目录能力;Web 端笔记平铺 */}
+          {platformServices.isDesktop && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground"
+                  onClick={() => void handleCreateFolder()}
+                  aria-label="新建文件夹"
+                >
+                  <FolderPlus />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>新建文件夹:选择(或新建)磁盘目录</TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -297,7 +356,7 @@ export function Sidebar() {
                 <FolderInput />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>导入文件夹(文件夹即分组)</TooltipContent>
+            <TooltipContent>导入文件夹</TooltipContent>
           </Tooltip>
           <input
             ref={fileInputRef}
@@ -328,11 +387,10 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
-        {folders.map((f) => {
+        {folderNodes.map(({ folder: f, depth }) => {
           const items = byFolder.get(f.id) ?? []
-          // 搜索态:没有命中笔记的分组整个隐藏,连"空分组"占位一起
+          // 搜索态:没有命中笔记的文件夹整个隐藏,连"空文件夹"占位一起
           if (kw && items.length === 0) return null
-          const isRenaming = renaming?.kind === 'folder' && renaming.id === f.id
           // 搜索时强制展开(忽略手动收起),无搜索时按用户手动状态
           const open = kw ? true : !closedFolders.has(f.id)
           return (
@@ -348,61 +406,91 @@ export function Sidebar() {
                 })
               }
             >
-              {isRenaming ? (
-                <div className="flex items-center gap-1 px-2 py-1">{renameInput}</div>
-              ) : (
-                <div className="group/row flex items-center rounded-lg transition-colors hover:bg-sidebar-accent">
-                  <CollapsibleTrigger className="group/chev flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium">
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
-                      <Folder className="size-3" />
-                    </span>
-                    <span className="truncate">{f.name}</span>
-                    <span className="text-xs text-muted-foreground">{items.length}</span>
-                  </CollapsibleTrigger>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
-                        aria-label={`分组 ${f.name} 操作`}
-                      >
-                        <MoreHorizontal className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-40">
-                      <DropdownMenuItem
-                        onClick={() => setRenaming({ kind: 'folder', id: f.id, value: f.name })}
-                      >
-                        <Pencil /> 重命名分组
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          const id = createNote()
-                          setNoteFolder(id, f.id)
-                          setActive(id)
-                        }}
-                      >
-                        <Plus /> 新笔记到此分组
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => setDeletingFolder({ id: f.id, name: f.name })}
-                      >
-                        <Trash2 /> 删除分组
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
-              <CollapsibleContent>
-                {/* 组内笔记缩进并加参考线,和根目录笔记拉开层级 */}
-                <div className="ml-4 border-l border-sidebar-border/70 pl-1.5">
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <div className="group/row flex items-center rounded-lg transition-colors hover:bg-sidebar-accent" style={{ marginLeft: depth * 14 }}>
+                    <CollapsibleTrigger className="group/chev flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium">
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
+                      <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
+                        <Folder className="size-3" />
+                      </span>
+                      <span className="truncate" title={f.path}>{f.name}</span>
+                      <span className="text-xs text-muted-foreground">{items.length}</span>
+                    </CollapsibleTrigger>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
+                          aria-label={`文件夹 ${f.name} 操作`}
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-40">
+                        <FolderMenuItems
+                          parts={{ Item: DropdownMenuItem, Separator: DropdownMenuSeparator }}
+                          onRename={() => setRenaming({ kind: 'folder', id: f.id, value: f.name })}
+                          onCreateNote={() => {
+                            void createNoteInFolder(f.id)
+                              .then((id) => setActive(id))
+                              .catch((error: unknown) => {
+                                toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`)
+                              })
+                          }}
+                          onReveal={
+                            platformServices.isDesktop
+                              ? () =>
+                                  platformServices.files.revealItemInDir(f.path).catch((error: unknown) => {
+                                    toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
+                                  })
+                              : undefined
+                          }
+                          onDelete={() => setDeletingFolder({
+                            id: f.id,
+                            name: f.name,
+                            noteCount: notes.filter((n) => isPathUnder(n.sourcePath, f.path)).length,
+                          })}
+                        />
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </ContextMenuTrigger>
+                {/* 右键文件夹行:与「⋯」完全同一套操作 */}
+                <ContextMenuContent className="min-w-40">
+                  <FolderMenuItems
+                    parts={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }}
+                    onRename={() => setRenaming({ kind: 'folder', id: f.id, value: f.name })}
+                    onCreateNote={() => {
+                      void createNoteInFolder(f.id)
+                        .then((id) => setActive(id))
+                        .catch((error: unknown) => {
+                          toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`)
+                        })
+                    }}
+                    onReveal={
+                      platformServices.isDesktop
+                        ? () =>
+                            platformServices.files.revealItemInDir(f.path).catch((error: unknown) => {
+                              toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
+                            })
+                        : undefined
+                    }
+                    onDelete={() => setDeletingFolder({
+                      id: f.id,
+                      name: f.name,
+                      noteCount: notes.filter((n) => isPathUnder(n.sourcePath, f.path)).length,
+                    })}
+                  />
+                </ContextMenuContent>
+              </ContextMenu>
+            <CollapsibleContent>
+                {/* 文件夹内笔记缩进并加参考线,和根目录笔记拉开层级 */}
+                <div className="ml-4 border-l border-sidebar-border/70 pl-1.5" style={{ marginLeft: depth * 14 + 16 }}>
                   {items.map(renderNoteItem)}
                   {items.length === 0 && (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">空分组</p>
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">空文件夹</p>
                   )}
                 </div>
               </CollapsibleContent>
@@ -428,39 +516,104 @@ export function Sidebar() {
       </nav>
       </aside>
 
+      {/* 删除文件夹 = 删除磁盘目录(移入系统回收站,可恢复);其中笔记从应用一并移除 */}
       <AlertDialog
         open={deletingFolder !== null}
         onOpenChange={(open) => !open && setDeletingFolder(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除分组</AlertDialogTitle>
+            <AlertDialogTitle>删除文件夹「{deletingFolder?.name}」?</AlertDialogTitle>
             <AlertDialogDescription>
-              删除分组「{deletingFolder?.name}」会删除该分组下所有文件，是否继续删除？
+              将把该目录及其全部内容移入<b>系统回收站</b>(可恢复)。其中 {deletingFolder?.noteCount ?? 0} 篇笔记会同时从应用移除。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (deletingFolder) removeFolder(deletingFolder.id)
-                setDeletingFolder(null)
-              }}
-            >
-              仅删除分组
-            </AlertDialogAction>
-            <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                if (deletingFolder) removeFolderWithNotes(deletingFolder.id)
+                const target = deletingFolder
                 setDeletingFolder(null)
+                if (!target) return
+                void removeFolder(target.id).catch((error: unknown) => {
+                  toast.error(`删除文件夹失败: ${error instanceof Error ? error.message : String(error)}`)
+                })
               }}
             >
-              删除所有文件
+              删除目录
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 删除绑定笔记 = 磁盘文件移入回收站(可恢复);未绑定笔记不走此弹窗 */}
+      <AlertDialog
+        open={deletingNote !== null}
+        onOpenChange={(open) => !open && setDeletingNote(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除笔记「{deletingNote?.title}」?</AlertDialogTitle>
+            <AlertDialogDescription>
+              将把对应的磁盘文件移入<b>系统回收站</b>(可恢复)。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                const target = deletingNote
+                setDeletingNote(null)
+                if (!target) return
+                void removeNote(target.id).catch((error: unknown) => {
+                  toast.error(`删除笔记失败: ${error instanceof Error ? error.message : String(error)}`)
+                })
+              }}
+            >
+              删除并移入回收站
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 重命名弹窗:笔记/文件夹共用。不用内联编辑——WebView2 在菜单关闭后
+          会程序性抢焦,内联输入框的聚焦/失焦都不可靠;弹窗内 Radix Dialog
+          自带焦点管理,完全避开 */}
+      <Dialog
+        open={renaming !== null}
+        onOpenChange={(open) => !open && setRenaming(null)}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {renaming?.kind === 'folder' ? '重命名文件夹' : '重命名笔记'}
+            </DialogTitle>
+            <DialogDescription>
+              {renaming?.kind === 'folder' ? '将同步改名对应的磁盘目录。' : '输入新的笔记标题。'}
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renaming?.value ?? ''}
+            aria-label="新名称"
+            onChange={(e) =>
+              setRenaming((r) => (r ? { ...r, value: e.target.value } : r))
+            }
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename()
+              if (e.key === 'Escape') setRenaming(null)
+            }}
+          />
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button onClick={commitRename}>确定</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   )
 }
@@ -499,6 +652,111 @@ function matchSnippet(content: string, keyword: string): string | null {
   return (start > 0 ? '…' : '') + content.slice(start, end).replace(/\s+/g, ' ') + (end < content.length ? '…' : '')
 }
 
+/** 文件夹操作项:「⋯」下拉和右键菜单共用同一套 */
+function FolderMenuItems({
+  parts,
+  onRename,
+  onCreateNote,
+  onReveal,
+  onDelete,
+}: {
+  parts: { Item: React.ElementType; Separator: React.ElementType }
+  onRename: () => void
+  onCreateNote: () => void
+  /** 打开文件位置(资源管理器);Web 端不传则不显示 */
+  onReveal?: () => void
+  onDelete: () => void
+}) {
+  const { Item, Separator } = parts
+  return (
+    <>
+      <Item onClick={onRename}>
+        <Pencil /> 重命名文件夹
+      </Item>
+      <Item onClick={onCreateNote}>
+        <Plus /> 在此文件夹新建笔记
+      </Item>
+      {onReveal && (
+        <Item onClick={onReveal}>
+          <FolderOpen /> 打开文件位置
+        </Item>
+      )}
+      <Separator />
+      <Item variant="destructive" onClick={onDelete}>
+        <Trash2 /> 删除文件夹(移入回收站)
+      </Item>
+    </>
+  )
+}
+
+/** 笔记操作项:「⋯」下拉和右键菜单共用同一套,parts 传入对应组件族的 Sub 系列 */
+function NoteMenuItems({
+  parts,
+  onRename,
+  onMove,
+  onReveal,
+  onDelete,
+  folders,
+  currentFolderId,
+}: {
+  parts: {
+    Item: React.ElementType
+    Sub: React.ElementType
+    SubTrigger: React.ElementType
+    SubContent: React.ElementType
+    Separator: React.ElementType
+  }
+  onRename: () => void
+  onMove: (folderId: string | null) => void
+  /** 打开文件位置(资源管理器);未绑定文件/Web 端不传则不显示 */
+  onReveal?: () => void
+  onDelete: () => void
+  /** 展平的目录树(父文件夹在前),depth 决定缩进 */
+  folders: { folder: FolderEntity; depth: number }[]
+  /** 当前所在文件夹 id;'' = 未绑定笔记平铺在顶层 */
+  currentFolderId: string | null
+}) {
+  const { Item, Sub, SubTrigger, SubContent, Separator } = parts
+  return (
+    <>
+      <Item onClick={onRename}>
+        <Pencil /> 重命名
+      </Item>
+      {onReveal && (
+        <Item onClick={onReveal}>
+          <FolderOpen /> 打开文件位置
+        </Item>
+      )}
+      <Sub>
+        <SubTrigger>
+          <FolderInput /> 移动到文件夹
+        </SubTrigger>
+        {/* 菜单默认宽度跟随触发器,被 min-w-32 兜底;文件夹名长时避免换行 */}
+        <SubContent className="min-w-32">
+          {/* 绑定笔记永远属于其所在目录的文件夹,没有「未文件夹」;移动即物理搬文件 */}
+          {!currentFolderId && (
+            <Item disabled>✓ 未绑定文件</Item>
+          )}
+          {folders.map(({ folder, depth }) => (
+            <Item
+              key={folder.id}
+              onClick={() => onMove(folder.id)}
+              style={{ paddingLeft: depth * 14 + 8 }}
+            >
+              {currentFolderId === folder.id ? '✓ ' : ''}
+              {folder.name}
+            </Item>
+          ))}
+        </SubContent>
+      </Sub>
+      <Separator />
+      <Item variant="destructive" onClick={onDelete}>
+        <Trash2 /> 删除
+      </Item>
+    </>
+  )
+}
+
 function NoteItem({
   note,
   active,
@@ -509,6 +767,7 @@ function NoteItem({
   folders,
   currentFolderId,
   onMove,
+  onReveal,
 }: {
   note: Note
   active: boolean
@@ -517,81 +776,119 @@ function NoteItem({
   onClick: () => void
   onRename: () => void
   onDelete: () => void
-  folders: { id: string; name: string }[]
+  folders: { folder: FolderEntity; depth: number }[]
   currentFolderId: string | null
   onMove: (folderId: string | null) => void
+  /** 打开文件位置(资源管理器);未绑定文件/Web 端为 undefined,菜单不显示该项 */
+  onReveal?: () => void
 }) {
   const titleHit = keyword && note.title.toLowerCase().includes(keyword.toLowerCase())
   const snippet = keyword && !titleHit ? matchSnippet(note.content, keyword) : null
-  return (
-    <div
-      className={cn(
-        'group flex w-full items-center gap-2 rounded-lg pr-1 transition-colors hover:bg-sidebar-accent',
-        active ? 'bg-sidebar-accent' : '',
-      )}
-    >
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm"
-      >
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400">
-          {/* 绑定磁盘文件的笔记用链接图标区分:内容与源文件双向同步 */}
-          {note.sourcePath ? <Link2 className="size-4" aria-label="已绑定文件" /> : <FileText className="size-4" />}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className={cn('block truncate', active && 'font-medium')}>
-            <Highlight text={note.title} keyword={keyword} />
-          </span>
-          {snippet ? (
-            <span className="block truncate text-xs text-muted-foreground">
-              <Highlight text={snippet} keyword={keyword} />
-            </span>
-          ) : (
-            <span className="block truncate text-xs text-muted-foreground">
-              {fromNow(note.updatedAt)}
-            </span>
+
+  // 图标统一 FileText——笔记本质是 md 文件;绑定态用实心芯片区分(未绑定=淡色),
+  // 悬停显示绑定的源文件名
+  const boundName = note.sourcePath?.split(/[\\/]/).pop()
+  const icon = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'flex size-6 shrink-0 items-center justify-center rounded-md',
+            note.sourcePath
+              ? 'bg-sky-600 text-white dark:bg-sky-500'
+              : 'bg-sky-500/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400',
           )}
+        >
+          <FileText className="size-4" />
         </span>
-      </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-            aria-label={`笔记 ${note.title} 操作`}
+      </TooltipTrigger>
+      {boundName && <TooltipContent side="right">已绑定 {boundName}</TooltipContent>}
+    </Tooltip>
+  )
+  const titleArea = (
+    <span className="min-w-0 flex-1">
+      <span className={cn('block truncate', active && 'font-medium')}>
+        <Highlight text={note.title} keyword={keyword} />
+      </span>
+      {snippet ? (
+        <span className="block truncate text-xs text-muted-foreground">
+          <Highlight text={snippet} keyword={keyword} />
+        </span>
+      ) : (
+        <span className="block truncate text-xs text-muted-foreground">
+          {fromNow(note.updatedAt)}
+        </span>
+      )}
+    </span>
+  )
+
+  return (
+    <ContextMenu>
+      {/* 右键任意位置唤出操作菜单;菜单回调逐条目绑定,操作对象与选中状态无关 */}
+      <ContextMenuTrigger asChild>
+        <div
+          className={cn(
+            'group flex w-full items-center gap-2 rounded-lg pr-1 transition-colors hover:bg-sidebar-accent',
+            active ? 'bg-sidebar-accent' : '',
+          )}
+        >
+          <button
+            type="button"
+            onClick={onClick}
+            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm"
           >
-            <MoreHorizontal className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        {/* 菜单默认宽度跟随 ⋯ 触发器,被 min-w-32 兜底;「移动到分组」差一点就换行,加宽到 min-w-44 */}
-        <DropdownMenuContent align="end" className="min-w-44">
-          <DropdownMenuItem onClick={onRename}>
-            <Pencil /> 重命名
-          </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <FolderInput /> 移动到分组
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="min-w-32">
-              <DropdownMenuItem onClick={() => onMove(null)}>
-                {currentFolderId === null ? '✓ ' : ''}未分组
-              </DropdownMenuItem>
-              {folders.map((f) => (
-                <DropdownMenuItem key={f.id} onClick={() => onMove(f.id)}>
-                  {currentFolderId === f.id ? '✓ ' : ''}
-                  {f.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={onDelete}>
-            <Trash2 /> 删除
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+            {icon}
+            {titleArea}
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                aria-label={`笔记 ${note.title} 操作`}
+              >
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            {/* 菜单默认宽度跟随 ⋯ 触发器,被 min-w-32 兜底;「移动到文件夹」差一点就换行,加宽到 min-w-44 */}
+            <DropdownMenuContent align="end" className="min-w-44">
+              <NoteMenuItems
+                parts={{
+                  Item: DropdownMenuItem,
+                  Sub: DropdownMenuSub,
+                  SubTrigger: DropdownMenuSubTrigger,
+                  SubContent: DropdownMenuSubContent,
+                  Separator: DropdownMenuSeparator,
+                }}
+                onRename={onRename}
+                onMove={onMove}
+                onReveal={onReveal}
+                onDelete={onDelete}
+                folders={folders}
+                currentFolderId={currentFolderId}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-44">
+        <NoteMenuItems
+          parts={{
+            Item: ContextMenuItem,
+            Sub: ContextMenuSub,
+            SubTrigger: ContextMenuSubTrigger,
+            SubContent: ContextMenuSubContent,
+            Separator: ContextMenuSeparator,
+          }}
+          onRename={onRename}
+          onMove={onMove}
+          onReveal={onReveal}
+          onDelete={onDelete}
+          folders={folders}
+          currentFolderId={currentFolderId}
+        />
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

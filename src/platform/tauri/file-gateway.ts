@@ -32,6 +32,12 @@ export function createTauriFileGateway(): FileGateway {
     async writeBinaryFile(path, bytes) {
       await invoke('write_image_file', { path, bytes: Array.from(bytes) })
     },
+    async readBinaryFile(path) {
+      return invoke<number[]>('read_binary_file', { path }).then((bytes) => Uint8Array.from(bytes))
+    },
+    async deleteFile(path) {
+      await invoke('delete_file', { path })
+    },
     async defaultAssetsRoot() {
       // 语义 = 图片文件的最终存放目录(不再在其下拼 assets/ 子层,
       // 否则默认值会出现 assets/assets/ 嵌套)。正文统一引用

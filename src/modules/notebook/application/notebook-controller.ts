@@ -1,7 +1,8 @@
-import type { Note, NotebookSnapshot } from '../domain/note'
+import type { Folder, Note, NotebookSnapshot } from '../domain/note'
 import { deriveTitle, fileNameStem, NOTEBOOK_SCHEMA_VERSION } from '../domain/note'
 import type { FileLinkGateway, FsChangeEvent } from '@/platform/contracts'
 import { appEvents } from '@/shared/events/app-events'
+import { isPathUnder, isSamePath, normalizePath, noteDirOf, pathBaseName, sanitizeFileName, swapPathPrefix } from '@/shared/paths'
 
 export interface NoteRepository {
   load(): Promise<NotebookSnapshot | null>
@@ -23,8 +24,8 @@ const WELCOME = '# 欢迎使用 MD 笔记本\n\n开始记录你的想法吧。'
 const WRITE_BACK_DEBOUNCE_MS = 500
 /** 监听集合(watchPaths)全量同步的防抖间隔 */
 const WATCH_SYNC_DEBOUNCE_MS = 500
-/** 旧版快照(无 sourcePath 字段)仍然可读 */
-const SUPPORTED_SCHEMA_VERSIONS = [1, 2]
+/** 旧版快照仍然可读:v1/v2 无 Folder.path(v2 有 sourcePath),读入时迁移 */
+const SUPPORTED_SCHEMA_VERSIONS = [1, 2, 3]
 
 function initialState(): NotebookState {
   const note: Note = {
@@ -43,6 +44,21 @@ function initialState(): NotebookState {
   }
 }
 
+/** v≤2 → v3 迁移:按绑定笔记的实际所在目录重建文件夹(去重,层级由路径派生) */
+function rebuildFoldersFromNotes(notes: Note[]): Folder[] {
+  const folders: Folder[] = []
+  const seen = new Set<string>()
+  for (const note of notes) {
+    const dir = noteDirOf(note.sourcePath)
+    if (!dir) continue
+    const key = dir.replace(/[\\/]+/g, '/').toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    folders.push({ id: crypto.randomUUID(), name: pathBaseName(dir), path: dir, order: folders.length })
+  }
+  return folders
+}
+
 export class NotebookController {
   private state: NotebookState = initialState()
   private readonly listeners = new Set<Listener>()
@@ -58,10 +74,17 @@ export class NotebookController {
 
   private readonly repository: NoteRepository
   private readonly fileLink: FileLinkGateway | null
+  /** 移动笔记到其他目录组时的图片资产随迁(组合根注入,见 lib/note-assets) */
+  private readonly migrateAssets: ((content: string, fromDir: string, toDir: string) => Promise<void>) | null
 
-  constructor(repository: NoteRepository, fileLink?: FileLinkGateway | null) {
+  constructor(
+    repository: NoteRepository,
+    fileLink?: FileLinkGateway | null,
+    migrateAssets?: (content: string, fromDir: string, toDir: string) => Promise<void>,
+  ) {
     this.repository = repository
     this.fileLink = fileLink ?? null
+    this.migrateAssets = migrateAssets ?? null
     this.fileLink?.onFsChanges((events) => void this.handleFsEvents(events))
   }
 
@@ -72,7 +95,8 @@ export class NotebookController {
   }
 
   private publish(next: NotebookState): void {
-    this.state = next
+    // 不变式:每个绑定笔记所在目录都有 Folder 实体(文件夹=目录,派生自 sourcePath)
+    this.state = this.ensureFoldersForBoundNotes(next)
     for (const listener of this.listeners) listener()
     if (this.saveTimer) clearTimeout(this.saveTimer)
     this.saveTimer = setTimeout(() => {
@@ -91,8 +115,17 @@ export class NotebookController {
       const saved = await this.repository.load()
       if (saved && SUPPORTED_SCHEMA_VERSIONS.includes(saved.schemaVersion)) {
         const activeId = saved.notes[0]?.id ?? null
-        // v1 快照无 sourcePath 字段,读入后统一按 v2 协议继续保存
-        this.state = { ...this.state, ...saved, schemaVersion: NOTEBOOK_SCHEMA_VERSION, activeId, hydrated: true, fileMissingIds: new Set() }
+        // v≤2 迁移:旧 folderId 无磁盘语义,整体丢弃,按绑定笔记实际目录重建文件夹
+        const notes: Note[] = saved.notes.map((note) => {
+          const { folderId: _legacy, ...rest } = note as Note & { folderId?: string }
+          void _legacy
+          return rest
+        })
+        const folders: Folder[] = saved.schemaVersion >= 3
+          ? // v3 也做边界净化:HMR/半程升级可能留下缺 path 的旧形状文件夹
+            saved.folders.filter((f) => f && typeof f.path === 'string' && typeof f.name === 'string')
+          : rebuildFoldersFromNotes(notes)
+        this.state = { ...this.state, ...saved, notes, folders, schemaVersion: NOTEBOOK_SCHEMA_VERSION, activeId, hydrated: true, fileMissingIds: new Set() }
       } else {
         this.state = { ...this.state, hydrated: true }
       }
@@ -134,21 +167,58 @@ export class NotebookController {
       notes: this.state.notes.map((note) => {
         if (note.id !== id) return note
         const derived = deriveTitle(content)
-        return { ...note, content, updatedAt: Date.now(), title: !note.titleCustom && derived ? derived : note.title }
+        return { ...note, content, updatedAt: Date.now(), title: !note.sourcePath && !note.titleCustom && derived ? derived : note.title }
       }),
     })
     if (target?.sourcePath) this.scheduleWriteBack(id, target.sourcePath)
   }
 
-  renameNote(id: string, title: string): void {
-    this.publish({ ...this.state, notes: this.state.notes.map((n) => n.id === id ? { ...n, title: title || n.title, titleCustom: true } : n) })
+  /**
+   * 重命名笔记:绑定笔记 = 同目录内磁盘文件改名(双向,重名自动加后缀),
+   * 标题以实际落点的文件名为准;未绑定笔记仅改显示名。失败抛错,状态不动。
+   */
+  async renameNote(id: string, title: string): Promise<void> {
+    const note = this.state.notes.find((n) => n.id === id)
+    if (!note) return
+    const clean = title.trim()
+    if (!clean || clean === note.title) return
+    if (!note.sourcePath) {
+      this.publish({ ...this.state, notes: this.state.notes.map((n) => n.id === id ? { ...n, title: clean, titleCustom: true } : n) })
+      return
+    }
+    if (!this.fileLink) throw new Error('当前环境不支持文件操作')
+    const oldPath = note.sourcePath
+    const wasDirty = this.dirtyPaths.has(oldPath)
+    this.cancelPendingWriteBack(id)
+    // 同名只差 .md 大小写等场景由 renameFile 的去重后缀兜底
+    const actual = await this.fileLink.renameFile(oldPath, `${sanitizeFileName(clean)}.md`)
+    this.lastWritten.delete(oldPath)
+    const stem = fileNameStem(actual)
+    this.publish({
+      ...this.state,
+      notes: this.state.notes.map((n) => n.id === id
+        ? { ...n, sourcePath: actual, title: stem || clean, titleCustom: true }
+        : n),
+    })
+    if (wasDirty) this.scheduleWriteBack(id, actual)
   }
 
-  removeNote(id: string): void {
-    // 移除笔记时放弃未写回的编辑(用户显式删除,不应把内容复活到磁盘)
+  /**
+   * 删除笔记:绑定笔记 = 磁盘文件移入系统回收站(Typora 语义,树=磁盘,可恢复);
+   * 未绑定/失联笔记仅从应用移除。放弃未写回的编辑(文件已进回收站,
+   * 不应把内容复活到磁盘)。移入回收站失败抛错,状态不动。
+   */
+  async removeNote(id: string): Promise<void> {
     this.cancelPendingWriteBack(id)
+    const note = this.state.notes.find((n) => n.id === id)
+    if (note?.sourcePath && !this.state.fileMissingIds.has(id)) {
+      if (!this.fileLink) throw new Error('当前环境不支持文件操作')
+      await this.fileLink.trashFile(note.sourcePath)
+    }
+    const fileMissingIds = new Set(this.state.fileMissingIds)
+    fileMissingIds.delete(id)
     const notes = this.state.notes.filter((note) => note.id !== id)
-    this.publish({ ...this.state, notes, activeId: this.state.activeId === id ? (notes[0]?.id ?? null) : this.state.activeId })
+    this.publish({ ...this.state, notes, fileMissingIds, activeId: this.state.activeId === id ? (notes[0]?.id ?? null) : this.state.activeId })
   }
 
   setActive(id: string | null): void {
@@ -158,31 +228,146 @@ export class NotebookController {
   }
 
   setNoteTheme(id: string, themeId: string | null): void { this.publish({ ...this.state, notes: this.state.notes.map((n) => n.id === id ? { ...n, themeId: themeId ?? undefined } : n) }) }
-  createFolder(name: string): string { const id = crypto.randomUUID(); this.publish({ ...this.state, folders: [...this.state.folders, { id, name, order: this.state.folders.length }] }); return id }
-  renameFolder(id: string, name: string): void { this.publish({ ...this.state, folders: this.state.folders.map((f) => f.id === id ? { ...f, name } : f) }) }
-  removeFolder(id: string): void { this.publish({ ...this.state, folders: this.state.folders.filter((f) => f.id !== id), notes: this.state.notes.map((n) => n.folderId === id ? { ...n, folderId: undefined } : n) }) }
-  removeFolderWithNotes(id: string): void {
-    this.state.notes.filter((n) => n.folderId === id).forEach((n) => this.cancelPendingWriteBack(n.id))
-    const notes = this.state.notes.filter((n) => n.folderId !== id)
-    this.publish({ ...this.state, folders: this.state.folders.filter((f) => f.id !== id), notes, activeId: notes.some((n) => n.id === this.state.activeId) ? this.state.activeId : (notes[0]?.id ?? null) })
+
+  // ── 文件夹 = 磁盘目录 ────────────────────────────────────────────────
+  // 层级由 Folder.path 前缀派生(不存 parentId);绑定笔记归属其所在目录的
+  // 文件夹,publish 时惰性补建。旧 folderId/setNoteFolder 已随 v3 移除。
+
+  /** 注册目录为文件夹(幂等:同一路径返回既有文件夹) */
+  createFolder(path: string): string {
+    const existing = this.state.folders.find((f) => isSamePath(f.path, path))
+    if (existing) return existing.id
+    const id = crypto.randomUUID()
+    this.publish({
+      ...this.state,
+      folders: [...this.state.folders, { id, name: pathBaseName(path), path, order: this.state.folders.length }],
+    })
+    return id
   }
-  setNoteFolder(id: string, folderId: string | null): void { this.publish({ ...this.state, notes: this.state.notes.map((n) => n.id === id ? { ...n, folderId: folderId ?? undefined } : n) }) }
+
+  /**
+   * 重命名文件夹 = 物理重命名磁盘目录:成功后其中子文件夹与笔记路径一并前缀换算,
+   * 有未写回编辑的笔记改绑后立即补写。失败抛错,状态不动。
+   */
+  async renameFolder(id: string, newName: string): Promise<void> {
+    const folder = this.state.folders.find((f) => f.id === id)
+    if (!folder) return
+    const clean = newName.trim()
+    if (!clean || clean === folder.name) return
+    if (!this.fileLink) throw new Error('当前环境不支持文件操作')
+    const parent = noteDirOf(folder.path)
+    const newPath = parent ? `${parent}\\${clean}` : clean
+    const affected = this.state.notes.filter((n) => n.sourcePath && swapPathPrefix(n.sourcePath, folder.path, newPath) !== null)
+    const dirtyAffected = affected
+      .filter((n) => n.sourcePath && this.dirtyPaths.has(n.sourcePath))
+      .map((n) => ({ id: n.id, newPath: swapPathPrefix(n.sourcePath as string, folder.path, newPath) as string }))
+    affected.forEach((n) => this.cancelPendingWriteBack(n.id))
+    await this.fileLink.renameDirectory(folder.path, newPath)
+    this.publish({
+      ...this.state,
+      folders: this.state.folders.map((f) => {
+        const swapped = swapPathPrefix(f.path, folder.path, newPath)
+        return swapped ? { ...f, path: swapped, name: f.id === id ? clean : pathBaseName(swapped) } : f
+      }),
+      notes: this.state.notes.map((n) => {
+        const swapped = n.sourcePath ? swapPathPrefix(n.sourcePath, folder.path, newPath) : null
+        return swapped ? { ...n, sourcePath: swapped } : n
+      }),
+    })
+    for (const item of dirtyAffected) this.scheduleWriteBack(item.id, item.newPath)
+  }
+
+  /**
+   * 移动笔记到目录组:绑定笔记物理移动文件(引用的 assets 图片随迁)后改绑;
+   * 未绑定笔记直接求无冲突路径写盘绑定(移动即绑定)。
+   * folderId=null 仅对未绑定笔记有意义(绑定笔记永远属于某个目录),no-op。
+   */
+  async moveNoteToFolder(id: string, folderId: string | null): Promise<void> {
+    if (folderId === null) return
+    const folder = this.state.folders.find((f) => f.id === folderId)
+    const note = this.state.notes.find((n) => n.id === id)
+    if (!folder || !note) return
+    if (!this.fileLink) throw new Error('当前环境不支持文件操作')
+    if (note.sourcePath && isSamePath(noteDirOf(note.sourcePath) ?? '', folder.path)) return
+    this.cancelPendingWriteBack(id)
+    if (!note.sourcePath) {
+      const dest = await this.fileLink.uniqueDestination(folder.path, sanitizeFileName(`${note.title || '新笔记'}.md`))
+      await this.bindNoteToFile(id, dest)
+      return
+    }
+    const oldPath = note.sourcePath
+    const oldDir = noteDirOf(oldPath)
+    if (oldDir && this.migrateAssets) {
+      await this.migrateAssets(note.content, oldDir, folder.path).catch((error: unknown) => {
+        console.error('迁移笔记图片失败:', error)
+      })
+    }
+    const newPath = await this.fileLink.moveFile(oldPath, folder.path)
+    this.lastWritten.delete(oldPath)
+    this.publish({
+      ...this.state,
+      notes: this.state.notes.map((n) => n.id === id ? { ...n, sourcePath: newPath } : n),
+    })
+  }
+
+  /** 在目录组里新建笔记:求无冲突路径 → 建笔记 → 立即写盘绑定 */
+  async createNoteInFolder(folderId: string): Promise<string> {
+    const folder = this.state.folders.find((f) => f.id === folderId)
+    if (!folder) throw new Error('文件夹不存在')
+    if (!this.fileLink) throw new Error('当前环境不支持文件操作')
+    const dest = await this.fileLink.uniqueDestination(folder.path, sanitizeFileName('新笔记.md'))
+    const id = this.createNote('新笔记', '')
+    await this.bindNoteToFile(id, dest)
+    return id
+  }
+
+  /**
+   * 删除文件夹 = 删除磁盘目录(Typora 文件树语义,网关侧移入回收站可恢复)。
+   * 成功后其下子文件夹与笔记从应用一并移除——文件已不存在,笔记不能留着
+   * 假装还能编辑。失败抛错,状态不动。
+   */
+  async removeFolder(id: string): Promise<void> {
+    const folder = this.state.folders.find((f) => f.id === id)
+    if (!folder) return
+    if (!this.fileLink) throw new Error('当前环境不支持文件操作')
+    await this.fileLink.deleteDirectory(folder.path)
+    const affectedNotes = this.state.notes.filter((n) => isPathUnder(n.sourcePath, folder.path))
+    affectedNotes.forEach((n) => this.cancelPendingWriteBack(n.id))
+    const fileMissingIds = new Set(this.state.fileMissingIds)
+    for (const note of affectedNotes) fileMissingIds.delete(note.id)
+    this.publish({
+      ...this.state,
+      folders: this.state.folders.filter((f) => !isPathUnder(f.path, folder.path)),
+      notes: this.state.notes.filter((n) => !isPathUnder(n.sourcePath, folder.path)),
+      fileMissingIds,
+      activeId: isPathUnder(this.state.notes.find((n) => n.id === this.state.activeId)?.sourcePath, folder.path)
+        ? (this.state.notes.find((n) => !isPathUnder(n.sourcePath, folder.path))?.id ?? null)
+        : this.state.activeId,
+    })
+  }
 
   // ── 文件绑定:双向同步 ──────────────────────────────────────────────
 
   /**
-   * 把笔记绑定到磁盘文件:设置 sourcePath 并立即把当前内容写盘一次。
-   * 失败抛错由调用方处理(绑定期内容尚未落盘)。
+   * 把笔记绑定到磁盘文件:先写盘成功再设置 sourcePath(失败时状态不变,
+   * 调用方拿抛错提示用户);失联标记随重新绑定解除(「另存为」自救路径)。
    */
   async bindNoteToFile(id: string, path: string): Promise<void> {
-    this.publish({
-      ...this.state,
-      notes: this.state.notes.map((n) => n.id === id ? { ...n, sourcePath: path } : n),
-    })
+    if (!this.fileLink) throw new Error('当前环境不支持写入本地文件')
     const note = this.state.notes.find((n) => n.id === id)
-    if (!note || !this.fileLink) return
+    if (!note) return
     await this.fileLink.writeTextFile(path, note.content)
     this.lastWritten.set(path, note.content)
+    const fileMissingIds = new Set(this.state.fileMissingIds)
+    fileMissingIds.delete(id)
+    // 绑定后标题与磁盘文件名统一:标题取文件名(双向同步的唯一事实在磁盘)
+    this.publish({
+      ...this.state,
+      fileMissingIds,
+      notes: this.state.notes.map((n) => n.id === id
+        ? { ...n, sourcePath: path, title: fileNameStem(path) || n.title, titleCustom: true }
+        : n),
+    })
     this.scheduleWatchSync()
   }
 
@@ -268,7 +453,7 @@ export class NotebookController {
       notes: this.state.notes.map((note) => {
         if (note.id !== id) return note
         const derived = deriveTitle(content)
-        return { ...note, content, updatedAt: Date.now(), title: !note.titleCustom && derived ? derived : note.title }
+        return { ...note, content, updatedAt: Date.now(), title: !note.sourcePath && !note.titleCustom && derived ? derived : note.title }
       }),
     })
   }
@@ -285,33 +470,103 @@ export class NotebookController {
         // 真读不到才标记失联。
         const disk = await this.fileLink.readTextFile(event.path).catch(() => null)
         if (disk === null) {
-          const fileMissingIds = new Set(this.state.fileMissingIds)
-          fileMissingIds.add(note.id)
-          this.publish({ ...this.state, fileMissingIds })
+          if (this.dirtyPaths.has(event.path)) {
+            // 有未写回编辑:标记失联走横幅自救(继续编辑会重建文件),不静默消失
+            const fileMissingIds = new Set(this.state.fileMissingIds)
+            fileMissingIds.add(note.id)
+            this.publish({ ...this.state, fileMissingIds })
+            continue
+          }
+          // 干净笔记:文件真没了 → 从列表移除(树=磁盘实时视图;文件在回收站可恢复)
+          const notes = this.state.notes.filter((n) => n.id !== note.id)
+          this.publish({
+            ...this.state,
+            notes,
+            activeId: this.state.activeId === note.id ? (notes[0]?.id ?? null) : this.state.activeId,
+          })
           continue
         }
         this.handleDiskContent(event.path, note, disk)
         continue
       }
       if (event.kind === 'renamed') {
+        // 目录级重命名/移动:watcher 报不了其下单文件事件,按前缀批量换算
+        // folders + notes。判定标准是「严格位于 oldPath 之下」——路径完全相等
+        // 是单文件重命名,走下面的文件级分支(标题跟随文件名)。
+        const fromNorm = normalizePath(event.oldPath)
+        const dirNotes = this.state.notes.filter((n) => n.sourcePath && normalizePath(n.sourcePath).startsWith(`${fromNorm}/`))
+        const dirFolders = this.state.folders.filter((f) => {
+          const p = normalizePath(f.path)
+          return p === fromNorm || p.startsWith(`${fromNorm}/`)
+        })
+        if (dirFolders.length > 0 || dirNotes.length > 0) {
+          const dirty = dirNotes
+            .filter((n) => n.sourcePath && this.dirtyPaths.has(n.sourcePath))
+            .map((n) => ({ id: n.id, newPath: swapPathPrefix(n.sourcePath as string, event.oldPath, event.newPath) as string }))
+          dirNotes.forEach((n) => this.cancelPendingWriteBack(n.id))
+          this.publish({
+            ...this.state,
+            folders: this.state.folders.map((f) => {
+              const swapped = swapPathPrefix(f.path, event.oldPath, event.newPath)
+              return swapped ? { ...f, path: swapped, name: pathBaseName(swapped) } : f
+            }),
+            notes: this.state.notes.map((n) => {
+              const swapped = n.sourcePath ? swapPathPrefix(n.sourcePath, event.oldPath, event.newPath) : null
+              return swapped ? { ...n, sourcePath: swapped } : n
+            }),
+          })
+          for (const item of dirty) this.scheduleWriteBack(item.id, item.newPath)
+          continue
+        }
         const note = this.noteByPath(event.oldPath)
         if (!note) continue
+        const wasDirty = this.dirtyPaths.has(event.oldPath)
+        this.cancelPendingWriteBack(note.id)
         const stem = fileNameStem(event.newPath)
         this.publish({
           ...this.state,
           notes: this.state.notes.map((n) => n.id === note.id
-            ? { ...n, sourcePath: event.newPath, title: !n.titleCustom && stem ? stem : n.title }
+            ? { ...n, sourcePath: event.newPath, title: stem || n.title, titleCustom: true }
             : n),
         })
+        if (wasDirty) this.scheduleWriteBack(note.id, event.newPath)
         continue
       }
       // modified:自家写回的回声(内容与上次写回一致)直接忽略
       const note = this.noteByPath(event.path)
-      if (!note) continue
+      if (!note) {
+        // 未知路径 = 外部新建:监听目录内出现的 .md 自动入库(Typora 文件树语义,
+        // 树是磁盘的实时视图);自家绑定写回的建文件已先 publish,这里能找到,不会重复入库
+        await this.importExternalCreated(event.path)
+        continue
+      }
       const disk = await this.fileLink.readTextFile(event.path).catch(() => null)
       if (disk === null) continue
       this.handleDiskContent(event.path, note, disk)
     }
+  }
+
+  /**
+   * 外部新建的 .md 文件自动入库(绑定笔记所在目录 = 监听目录,树=磁盘实时视图):
+   * 非监听目录(如 assets)不收;读取失败(非 UTF-8 等)跳过;标题=文件名。
+   */
+  private async importExternalCreated(path: string): Promise<void> {
+    if (!/\.md$/i.test(path)) return
+    if (this.noteByPath(path)) return
+    const dir = noteDirOf(path)
+    if (!dir) return
+    if (!this.state.notes.some((n) => n.sourcePath && isSamePath(noteDirOf(n.sourcePath) ?? '', dir))) return
+    const content = await this.fileLink?.readTextFile(path).catch(() => null)
+    if (content == null) return
+    const id = crypto.randomUUID()
+    this.publish({
+      ...this.state,
+      notes: [
+        { id, title: fileNameStem(path) || '新笔记', content, updatedAt: Date.now(), sourcePath: path, titleCustom: true },
+        ...this.state.notes,
+      ],
+    })
+    this.scheduleWatchSync()
   }
 
   /**
@@ -332,6 +587,20 @@ export class NotebookController {
 
   private noteByPath(path: string): Note | undefined {
     return this.state.notes.find((note) => note.sourcePath === path)
+  }
+
+  /** 不变式:绑定笔记所在目录缺文件夹时补建(仅叶子目录,层级由路径前缀派生) */
+  private ensureFoldersForBoundNotes(state: NotebookState): NotebookState {
+    let folders = state.folders
+    let changed = false
+    for (const note of state.notes) {
+      const dir = noteDirOf(note.sourcePath)
+      if (!dir) continue
+      if (folders.some((f) => isSamePath(f.path, dir))) continue
+      folders = [...folders, { id: crypto.randomUUID(), name: pathBaseName(dir), path: dir, order: folders.length }]
+      changed = true
+    }
+    return changed ? { ...state, folders } : state
   }
 
   /** 把当前所有绑定路径全量同步给 watcher(增删改笔记后自动跟上) */

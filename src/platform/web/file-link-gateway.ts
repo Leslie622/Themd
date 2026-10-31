@@ -18,5 +18,25 @@ export function createWebFileLinkGateway(): FileLinkGateway {
     async onFsChanges() {
       return () => {}
     },
+    async moveFile(src) {
+      throw new Error(`浏览器端不支持移动本地文件: ${src}`)
+    },
+    async renameFile(src) {
+      throw new Error(`浏览器端不支持重命名本地文件: ${src}`)
+    },
+    async trashFile(path) {
+      throw new Error(`浏览器端不支持删除本地文件: ${path}`)
+    },
+    async renameDirectory(oldPath) {
+      throw new Error(`浏览器端不支持重命名本地目录: ${oldPath}`)
+    },
+    async deleteDirectory(path) {
+      throw new Error(`浏览器端不支持删除本地目录: ${path}`)
+    },
+    async uniqueDestination(dir, fileName) {
+      void dir
+      void fileName
+      throw new Error('浏览器端不支持本地文件操作')
+    },
   }
 }

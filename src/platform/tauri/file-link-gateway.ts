@@ -19,5 +19,23 @@ export function createTauriFileLinkGateway(): FileLinkGateway {
       const unlisten = await listen<FsChangeEvent[]>(FS_CHANGED_EVENT, (event) => listener(event.payload))
       return unlisten
     },
+    async moveFile(src, destDir) {
+      return invoke<string>('move_note_file', { src, destDir })
+    },
+    async renameFile(src, newName) {
+      return invoke<string>('rename_note_file', { src, newName })
+    },
+    async trashFile(path) {
+      await invoke('trash_file', { path })
+    },
+    async renameDirectory(oldPath, newPath) {
+      await invoke('rename_directory', { oldPath, newPath })
+    },
+    async deleteDirectory(path) {
+      await invoke('delete_directory', { path })
+    },
+    async uniqueDestination(dir, fileName) {
+      return invoke<string>('unique_destination', { dir, fileName })
+    },
   }
 }

@@ -159,3 +159,135 @@ pub(crate) fn write_image_file(path: String, bytes: Vec<u8>) -> Result<(), Strin
     }
     std::fs::write(&path, bytes).map_err(|e| format!("写入失败: {}", e))
 }
+
+/// 读取二进制文件(绑定/另存为时迁移正文引用的 assets 图片用)。
+/// 与 write_image_file 对偶:读原字节 → 原样写到新目录,零重编码保真。
+#[tauri::command]
+pub(crate) fn read_binary_file(path: String) -> Result<Vec<u8>, String> {
+    std::fs::read(&path).map_err(|e| format!("读取失败: {}", e))
+}
+
+/// 删除单个普通文件(另存为后可选清理原文件,是否删除由用户确认)。
+/// 仅限普通文件:目录等一律拒绝,防止误删整棵子树。
+#[tauri::command]
+pub(crate) fn delete_file(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.is_file() {
+        return Err(format!("不是普通文件: {}", path));
+    }
+    std::fs::remove_file(p).map_err(|e| format!("删除失败: {}", e))
+}
+
+/// 过滤 Windows 文件名非法字符(与前端 sanitizeFileName 语义一致)
+fn sanitize_file_name(name: &str) -> String {
+    let cleaned: String = name.chars().map(|c| if matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }).collect();
+    let trimmed = cleaned.trim().trim_matches(|c: char| c == '.' || c.is_whitespace()).to_string();
+    if trimmed.is_empty() { "未命名".to_string() } else { trimmed }
+}
+
+/// 目录下求无冲突文件路径:重名自动加 -2/-3 后缀(保留扩展名)。
+fn resolve_unique_path(dir: &str, file_name: &str) -> PathBuf {
+    let base = sanitize_file_name(file_name);
+    let stem = Path::new(&base)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or(base.clone());
+    let ext = Path::new(&base).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let mut candidate = Path::new(dir).join(&base);
+    let mut n = 2;
+    while candidate.exists() {
+        candidate = Path::new(dir).join(format!("{}-{}{}", stem, n, ext));
+        n += 1;
+    }
+    candidate
+}
+
+/// 求目标目录下无冲突的文件路径(未绑定笔记「移动即绑定」/ 文件夹内新建用)。
+#[tauri::command]
+pub(crate) fn unique_destination(dir: String, file_name: String) -> Result<String, String> {
+    if dir.is_empty() {
+        return Err("目录为空".to_string());
+    }
+    Ok(resolve_unique_path(&dir, &file_name).to_string_lossy().to_string())
+}
+
+/// 移动文件到目标目录(文件夹=目录的「移动到文件夹」):自动建父目录,
+/// 重名自动加后缀,返回实际落点。同盘 rename 原子;跨盘回落 copy+delete
+/// (先 copy 成功再删源,失败时源仍在,不丢数据)。
+#[tauri::command]
+pub(crate) fn move_note_file(src: String, dest_dir: String) -> Result<String, String> {
+    let src_path = Path::new(&src);
+    if !src_path.is_file() {
+        return Err(format!("源不是普通文件: {}", src));
+    }
+    std::fs::create_dir_all(&dest_dir).map_err(|e| format!("创建目录失败: {}", e))?;
+    let file_name = src_path
+        .file_name()
+        .ok_or_else(|| format!("路径缺少文件名: {}", src))?
+        .to_string_lossy().to_string();
+    let dest = resolve_unique_path(&dest_dir, &file_name);
+    match std::fs::rename(src_path, &dest) {
+        Ok(()) => Ok(dest.to_string_lossy().to_string()),
+        Err(_) => {
+            std::fs::copy(src_path, &dest).map_err(|e| format!("跨盘移动失败(复制阶段): {}", e))?;
+            std::fs::remove_file(src_path).map_err(|e| format!("跨盘移动失败(删除源阶段,新文件已就位): {}", e))?;
+            Ok(dest.to_string_lossy().to_string())
+        }
+    }
+}
+
+/// 删除文件(笔记删除 = 磁盘文件移入系统回收站,可恢复);幂等:
+/// 文件已不在(外部先删了一步)视为成功,让应用侧的删除照常完成。
+#[tauri::command]
+pub(crate) fn trash_file(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if !p.is_file() {
+        return Ok(());
+    }
+    trash::delete(p).map_err(|e| format!("删除失败(移入回收站): {}", e))
+}
+
+/// 重命名文件(笔记重命名 = 磁盘文件改名):同目录内改名,重名自动加后缀,
+/// 返回实际落点绝对路径。
+#[tauri::command]
+pub(crate) fn rename_note_file(src: String, new_name: String) -> Result<String, String> {
+    let src_path = Path::new(&src);
+    if !src_path.is_file() {
+        return Err(format!("源不是普通文件: {}", src));
+    }
+    let dir = src_path
+        .parent()
+        .ok_or_else(|| format!("路径缺少父目录: {}", src))?
+        .to_string_lossy().to_string();
+    let dest = resolve_unique_path(&dir, &new_name);
+    std::fs::rename(src_path, &dest).map_err(|e| format!("文件重命名失败: {}", e))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// 重命名目录(文件夹重命名):仅同盘 rename;跨盘需要复制整棵树,明确拒绝。
+#[tauri::command]
+pub(crate) fn rename_directory(old_path: String, new_path: String) -> Result<(), String> {
+    let from = Path::new(&old_path);
+    if !from.is_dir() {
+        return Err(format!("目录不存在: {}", old_path));
+    }
+    if Path::new(&new_path).exists() {
+        return Err(format!("目标已存在: {}", new_path));
+    }
+    std::fs::rename(from, &new_path).map_err(|e| format!("目录重命名失败(跨盘移动不支持): {}", e))
+}
+
+/// 删除目录(文件夹删除):整棵移入系统回收站(可恢复),不做永久删除。
+/// 拒绝盘符根,防止误删整盘。
+#[tauri::command]
+pub(crate) fn delete_directory(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if !p.is_dir() {
+        return Err(format!("目录不存在: {}", path));
+    }
+    // 'C:\' 长度 3,'C:' 长度 2——盘符根一律拒绝
+    if p.to_string_lossy().trim_end_matches('\\').len() <= 3 && p.to_string_lossy().ends_with(':') {
+        return Err("拒绝删除盘符根目录".to_string());
+    }
+    trash::delete(p).map_err(|e| format!("删除失败(移入回收站): {}", e))
+}

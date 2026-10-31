@@ -40,6 +40,14 @@ fn main() {
             commands::files::read_text_file,
             commands::files::write_text_file,
             commands::files::write_image_file,
+            commands::files::read_binary_file,
+            commands::files::delete_file,
+            commands::files::trash_file,
+            commands::files::move_note_file,
+            commands::files::rename_note_file,
+            commands::files::rename_directory,
+            commands::files::delete_directory,
+            commands::files::unique_destination,
             commands::watch::watch_paths,
             commands::pdf::export_pdf
         ])
