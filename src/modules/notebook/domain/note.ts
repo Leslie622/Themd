@@ -1,18 +1,18 @@
 export interface Note {
   id: string
+  /** 标题恒等于磁盘文件名主干(树=磁盘,双向同步的唯一事实在磁盘) */
   title: string
   content: string
   updatedAt: number
-  titleCustom?: boolean
   themeId?: string
-  /** 绑定的磁盘文件绝对路径;无此字段 = 纯库内笔记(Web 端全部如此) */
-  sourcePath?: string
+  /** 磁盘文件绝对路径(folder-first:每个笔记都是工作区内的文件) */
+  sourcePath: string
 }
 
 /**
- * 文件夹 = 磁盘目录(桌面端):`path` 是绝对目录路径,层级由路径前缀派生,
+ * 文件夹 = 磁盘目录:`path` 是绝对目录路径,层级由路径前缀派生,
  * 不存 parentId。绑定笔记归属「其所在目录」的文件夹,由控制器惰性补建
- * (不变式:每个绑定笔记的目录都有 Folder 实体);Web 端无目录能力,不用文件夹。
+ * (不变式:每个绑定笔记的目录都有 Folder 实体)。
  */
 export interface Folder {
   id: string
@@ -24,19 +24,9 @@ export interface Folder {
 }
 
 export interface NotebookSnapshot {
-  schemaVersion: 3
+  schemaVersion: 4
   notes: Note[]
   folders: Folder[]
-}
-
-export function deriveTitle(content: string): string {
-  const heading = content.match(/^#\s+(.+)$/m)
-  if (heading) return heading[1].trim().slice(0, 50)
-  const line = content
-    .split('\n')
-    .map((item) => item.trim())
-    .find((item) => item && !item.startsWith('#') && !item.startsWith('!['))
-  return line ? line.replace(/^[#>*`\-\s]+/, '').slice(0, 50) : ''
 }
 
 /**
@@ -55,7 +45,7 @@ export function countImages(content: string): number {
   return content.match(/!\[[^\]]*\]\([^)]*\)/g)?.length ?? 0
 }
 
-export const NOTEBOOK_SCHEMA_VERSION = 3 as const
+export const NOTEBOOK_SCHEMA_VERSION = 4 as const
 
 /**
  * 从绝对/相对路径取文件名主干(去扩展名),外部重命名文件时用作新标题。

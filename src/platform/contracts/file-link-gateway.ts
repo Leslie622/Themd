@@ -1,12 +1,12 @@
 /**
- * 文件绑定网关:绑定笔记与磁盘文件之间的双向同步能力(仅桌面端有真实实现)。
+ * 文件绑定网关:绑定笔记与磁盘文件之间的双向同步能力。
  *
  * - `writeTextFile` 原子写(临时文件 + 替换),编辑防抖后写回原文件
- * - `watchPaths` 全量替换监听集合,Rust 侧按父目录分组监听外部改动
+ * - `readFolderNotes` 递归读取目录笔记文件(打开工作区用)
+ * - `watchWorkspace` 对工作区根建递归监听(Rust notify),null = 停止
  * - `onFsChanges` 订阅外部文件系统事件(modified/removed/renamed)
- *
- * Web 端浏览器沙箱无本地文件能力,实现为 no-op stub,库内笔记模式不受影响。
  */
+import type { ImportedFile } from './file-gateway'
 
 export type FsChangeEvent =
   | { kind: 'modified'; path: string }
@@ -16,10 +16,12 @@ export type FsChangeEvent =
 export interface FileLinkGateway {
   /** 读取磁盘文件文本(外部改动后重载用);失败抛错 */
   readTextFile(path: string): Promise<string>
+  /** 递归读取目录下全部笔记文件(.md/.markdown/.txt,非 UTF-8 无 filePath);失败抛错 */
+  readFolderNotes(root: string): Promise<ImportedFile[]>
   /** 原子写文本文件到指定绝对路径(绑定写回);失败抛错 */
   writeTextFile(path: string, contents: string): Promise<void>
-  /** 全量替换监听集合(按父目录分组);空数组 = 停止监听 */
-  watchPaths(paths: string[]): Promise<void>
+  /** 监听工作区根(递归,整棵目录树实时);null = 停止监听 */
+  watchWorkspace(root: string | null): Promise<void>
   /** 订阅文件系统事件(已防抖归并);Tauri 的 listen 是异步的,返回退订 Promise */
   onFsChanges(listener: (events: FsChangeEvent[]) => void): Promise<() => void>
   /** 移动文件到目标目录(重名自动加后缀);返回实际落点绝对路径;失败抛错 */

@@ -1,4 +1,5 @@
 import type { FileLinkGateway, FsChangeEvent } from '../contracts'
+import type { ImportedFile } from '../contracts'
 import { invoke } from './commands'
 
 const FS_CHANGED_EVENT = 'fs-changed'
@@ -8,11 +9,14 @@ export function createTauriFileLinkGateway(): FileLinkGateway {
     async readTextFile(path) {
       return invoke<string>('read_text_file', { path })
     },
+    async readFolderNotes(root) {
+      return invoke<ImportedFile[]>('read_folder_notes', { root })
+    },
     async writeTextFile(path, contents) {
       await invoke('write_text_file', { path, contents })
     },
-    async watchPaths(paths) {
-      await invoke('watch_paths', { paths })
+    async watchWorkspace(root) {
+      await invoke('watch_workspace', { root })
     },
     async onFsChanges(listener) {
       const { listen } = await import('@tauri-apps/api/event')

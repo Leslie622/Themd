@@ -1,30 +1,33 @@
 /** Compatibility facade. New code should import NotebookController directly. */
 import { useSyncExternalStore } from 'react'
 import { applicationServices } from '@/app/services'
-import { countWords, deriveTitle, type Folder, type Note } from '@/modules/notebook/domain/note'
+import { countWords, type Folder, type Note } from '@/modules/notebook/domain/note'
 
 const controller = applicationServices.notebook
 void controller.hydrate().catch((error: unknown) => console.error('笔记初始化失败:', error))
 
 export type { Folder, Note }
-export { countWords, deriveTitle }
+export { countWords }
 
 export interface NotebookFacade {
   notes: Note[]
   folders: Folder[]
   activeId: string | null
   hydrated: boolean
+  workspaceRoot: string | null
   fileMissingIds: ReadonlySet<string>
-  createNote: (title?: string, content?: string, sourcePath?: string) => string
   updateNote: (id: string, content: string) => void
   renameNote: (id: string, title: string) => Promise<void>
   removeNote: (id: string) => Promise<void>
   setActive: (id: string | null) => void
   setNoteTheme: (id: string, themeId: string | null) => void
+  openWorkspace: (root: string) => Promise<void>
+  closeWorkspace: () => Promise<void>
+  createNoteInDir: (dir: string) => Promise<string>
   createFolder: (path: string) => string
   renameFolder: (id: string, name: string) => Promise<void>
   removeFolder: (id: string) => Promise<void>
-  moveNoteToFolder: (id: string, folderId: string | null) => Promise<void>
+  moveNoteToFolder: (id: string, folderId: string) => Promise<void>
   createNoteInFolder: (folderId: string) => Promise<string>
   bindNoteToFile: (id: string, path: string) => Promise<void>
   flushNote: (id: string) => void
@@ -38,13 +41,16 @@ const facade: NotebookFacade = {
   get folders() { return controller.getSnapshot().folders },
   get activeId() { return controller.getSnapshot().activeId },
   get hydrated() { return controller.getSnapshot().hydrated },
+  get workspaceRoot() { return controller.getSnapshot().workspaceRoot },
   get fileMissingIds() { return controller.getSnapshot().fileMissingIds },
-  createNote: controller.createNote.bind(controller),
   updateNote: controller.updateNote.bind(controller),
   renameNote: controller.renameNote.bind(controller),
   removeNote: controller.removeNote.bind(controller),
   setActive: controller.setActive.bind(controller),
   setNoteTheme: controller.setNoteTheme.bind(controller),
+  openWorkspace: controller.openWorkspace.bind(controller),
+  closeWorkspace: controller.closeWorkspace.bind(controller),
+  createNoteInDir: controller.createNoteInDir.bind(controller),
   createFolder: controller.createFolder.bind(controller),
   renameFolder: controller.renameFolder.bind(controller),
   removeFolder: controller.removeFolder.bind(controller),

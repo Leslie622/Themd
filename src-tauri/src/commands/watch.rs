@@ -1,13 +1,13 @@
-//! 文件绑定监听:外部改动 → 防抖归并 → `fs-changed` 事件推给前端。
+//! 工作区文件监听:外部改动 → 防抖归并 → `fs-changed` 事件推给前端。
 //!
-//! 设计:前端把「所有绑定笔记的绝对路径」全量同步过来(见 FileLinkGateway.watchPaths),
-//! 这里按父目录分组建**非递归** watch(一个文件夹一个句柄,数量可控);
-//! 事件经 debouncer 归并后映射为 modified/removed/renamed 推送。
+//! 设计:folder-first 模式下所有笔记都在工作区内,这里对工作区根建**递归**
+//! watch(单根句柄,notify 在 Windows 原生支持递归);事件经 debouncer 归并后
+//! 映射为 modified/removed/renamed 推送。工作区内 assets 等非 .md 文件的
+//! 事件由前端过滤(未绑定的路径不会触发任何动作)。
 //!
 //! 回声抑制不做在 Rust 侧:应用自己的原子写(tmp+rename)也会触发事件,
 //! 前端用「内容与最近一次写回一致则忽略」过滤,见 NotebookController。
 
-use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -34,26 +34,22 @@ enum FsEvent {
 
 struct WatchState {
     debouncer: Option<Debouncer<notify_debouncer_full::notify::RecommendedWatcher, notify_debouncer_full::FileIdMap>>,
-    watched_dirs: HashSet<String>,
+    watched_root: Option<String>,
 }
 
 static WATCH: Mutex<Option<WatchState>> = Mutex::new(None);
 
-/// 全量替换监听集合:paths 为绑定文件绝对路径;空数组 = 停止监听。
+/// 监听工作区根(递归);root 为 None = 停止监听。
+/// 重复传同一根幂等(不重建 watcher);换根时退订旧根、订阅新根。
 #[tauri::command]
-pub(crate) fn watch_paths(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
+pub(crate) fn watch_workspace(app: AppHandle, root: Option<String>) -> Result<(), String> {
     let mut guard = WATCH.lock().map_err(|e| e.to_string())?;
-    let state = guard.get_or_insert_with(|| WatchState { debouncer: None, watched_dirs: HashSet::new() });
+    let state = guard.get_or_insert_with(|| WatchState { debouncer: None, watched_root: None });
 
-    let dirs: HashSet<String> = paths
-        .iter()
-        .filter_map(|p| Path::new(p).parent().map(|d| d.to_string_lossy().to_string()))
-        .collect();
-
-    if paths.is_empty() {
+    if root.is_none() {
         // drop 掉 debouncer 即停掉后台线程与全部 watch
         state.debouncer = None;
-        state.watched_dirs.clear();
+        state.watched_root = None;
         return Ok(());
     }
 
@@ -72,17 +68,19 @@ pub(crate) fn watch_paths(app: AppHandle, paths: Vec<String>) -> Result<(), Stri
         state.debouncer = Some(debouncer);
     }
 
+    if state.watched_root.as_deref() == root.as_deref() {
+        return Ok(());
+    }
+
     let debouncer = state.debouncer.as_mut().expect("debouncer just created");
-    // 差量增删:不再需要的目录退订,新增目录订阅(非递归,子目录由各自文件路径带出)
-    for dir in state.watched_dirs.difference(&dirs) {
-        let _ = debouncer.unwatch(Path::new(dir));
+    if let Some(old) = &state.watched_root {
+        let _ = debouncer.unwatch(Path::new(old));
     }
-    for dir in &dirs {
-        if !state.watched_dirs.contains(dir) {
-            let _ = debouncer.watch(Path::new(dir), notify_debouncer_full::notify::RecursiveMode::NonRecursive);
-        }
-    }
-    state.watched_dirs = dirs;
+    let root_path = root.expect("root checked non-none above");
+    debouncer
+        .watch(Path::new(&root_path), notify_debouncer_full::notify::RecursiveMode::Recursive)
+        .map_err(|e| format!("监听工作区失败: {}", e))?;
+    state.watched_root = Some(root_path);
     Ok(())
 }
 

@@ -12,10 +12,6 @@ export function createTauriFileGateway(): FileGateway {
       if (!paths.length) return []
       return invoke<ImportedFile[]>('read_text_files', { paths })
     },
-    async pickFolder() {
-      const root = await open({ directory: true })
-      return typeof root === 'string' ? invoke('read_folder_notes', { root }) : null
-    },
     async chooseSavePath(input) {
       return (await save({ defaultPath: input.defaultName, filters: [{ name: input.filterName, extensions: input.extensions }] })) ?? null
     },

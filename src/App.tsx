@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -35,9 +35,10 @@ export default function App() {
   const notes = useNotebook((state) => state.notes)
   const activeId = useNotebook((state) => state.activeId)
   const updateNote = useNotebook((state) => state.updateNote)
-  const createNote = useNotebook((state) => state.createNote)
   const removeNote = useNotebook((state) => state.removeNote)
   const setNoteTheme = useNotebook((state) => state.setNoteTheme)
+  const workspaceRoot = useNotebook((state) => state.workspaceRoot)
+  const createNoteInDir = useNotebook((state) => state.createNoteInDir)
   const activeFileMissing = useNotebook((state) =>
     state.activeId ? state.fileMissingIds.has(state.activeId) : false,
   )
@@ -61,13 +62,18 @@ export default function App() {
   const [conflict, setConflict] = useState<{ noteId: string } | null>(null)
   /** 另存为成功后仍留在原位置的原文件(弹确认框让用户决定删不删) */
   const [staleOriginal, setStaleOriginal] = useState<{ path: string } | null>(null)
-  /** 库内笔记首编弹保存框被取消后,打字流本次会话不再追问 */
-  const bindPromptSuppressed = useRef(false)
-  /** 保存框重入锁:对话框未关闭期间,后续击键/Ctrl+S 不再叠加新对话框 */
-  const bindPromptInFlight = useRef(false)
   const sidebarWidth = useWorkspacePrefs((state) => state.sidebarWidth)
   const setSidebarWidth = useWorkspacePrefs((state) => state.setSidebarWidth)
+  const rememberedWorkspace = useWorkspacePrefs((state) => state.current)
   const { exportPdf, exportNoteFile } = useExportActions({ active, view, setView })
+
+  // 启动恢复:有工作区记忆就重扫磁盘重建笔记列表(磁盘是唯一事实,
+  // 快照只是缓存)。失败提示;无记忆 = 空态,侧栏引导「打开目录」
+  useEffect(() => {
+    if (!hydrated || !rememberedWorkspace) return
+    void notebookController.openWorkspace(rememberedWorkspace)
+      .catch((error: unknown) => toast.error(`打开工作区失败: ${error instanceof Error ? error.message : String(error)}`))
+  }, [hydrated, rememberedWorkspace])
 
   useEffect(() => {
     const offCollapse = appEvents.on('collapseSidebar', () => setSidebarCollapsed(true))
@@ -98,41 +104,9 @@ export default function App() {
   }, [activeId]) // eslint-disable-line react-hooks/exhaustive-deps -- 目录只取决于绑定路径,切笔记时更新即可
 
   /**
-   * 未绑定笔记选路径并绑定落盘。respectSuppression 区分两种入口:
-   * - 打字流(true):用户取消过一次就不再追问,本次会话保持库内模式
-   * - Ctrl+S(false):显式保存指令,永远允许弹框(Typora 行为),取消则静默
-   * in-flight 锁防重入:对话框打开期间后续击键不会叠加出更多对话框。
-   */
-  const promptBindIfNeeded = useCallback(async (id: string, respectSuppression: boolean): Promise<void> => {
-    if (bindPromptInFlight.current) return
-    if (respectSuppression && bindPromptSuppressed.current) return
-    const note = notebookController.getSnapshot().notes.find((n) => n.id === id)
-    if (!note || note.sourcePath) return
-    bindPromptInFlight.current = true
-    try {
-      const path = await platformServices.files.chooseSavePath({
-        defaultName: `${note.title || '新笔记'}.md`,
-        filterName: 'Markdown 文档',
-        extensions: ['md', 'markdown', 'txt'],
-      })
-      if (path) {
-        // 图片随迁统一在 bindNoteToFile 内(首绑从全局图片根迁入笔记目录)
-        await notebookController.bindNoteToFile(id, path)
-      } else {
-        bindPromptSuppressed.current = true
-      }
-    } catch (error: unknown) {
-      console.error('绑定文件失败:', error)
-      toast.error(`绑定文件失败: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      bindPromptInFlight.current = false
-    }
-  }, [])
-
-  /**
-   * 主动另存为:当前内容写到所选新位置并(重新)绑定,assets 图片随迁。
-   * 三种场景同一动作——未绑定笔记=选位置绑定文件;已绑定=迁到新位置重新绑定;
-   * 失联笔记=自救重新落盘。入口:导出菜单项与 Ctrl+Shift+S。
+   * 主动另存为:当前内容写到所选新位置并重新绑定,assets 图片随迁。
+   * 两种场景同一动作——已绑定=迁到新位置重新绑定;失联笔记=自救重新落盘。
+   * 入口:导出菜单项与 Ctrl+Shift+S。
    */
   const handleNoteSaveAs = useCallback(async () => {
     const { activeId, notes: current, fileMissingIds } = notebookController.getSnapshot()
@@ -160,18 +134,11 @@ export default function App() {
     }
   }, [])
 
-  /** Ctrl+S:绑定笔记立即写回;未绑定笔记弹保存框绑定落盘 */
+  /** Ctrl+S:活动笔记立即写回(树=磁盘,保存即落盘) */
   const saveActiveNote = useCallback(() => {
-    const { activeId, notes: current } = notebookController.getSnapshot()
-    if (!activeId) return
-    const note = current.find((n) => n.id === activeId)
-    if (!note) return
-    if (note.sourcePath) {
-      notebookController.flushNote(activeId)
-      return
-    }
-    void promptBindIfNeeded(activeId, false)
-  }, [promptBindIfNeeded])
+    const { activeId } = notebookController.getSnapshot()
+    if (activeId) notebookController.flushNote(activeId)
+  }, [])
 
   // 文件绑定双向同步的落盘时机:Ctrl+S 显式保存;Ctrl+Shift+S 另存为;
   // 失焦/切后台/托盘退出前冲刷
@@ -206,19 +173,9 @@ export default function App() {
     }
   }, [handleNoteSaveAs, saveActiveNote])
 
-  /**
-   * 编辑入口:库内笔记(无 sourcePath)在桌面端首次编辑时弹原生保存框选位置,
-   * 选中即绑定文件(内容写盘,此后双向同步);取消则打字流本次会话不再追问,
-   * 笔记保持库内模式。Web 端无本地写能力,始终库内模式。
-   */
-  const handleEditorChange = async (id: string, content: string) => {
-    const target = notes.find((note) => note.id === id)
-    if (target && !target.sourcePath) await promptBindIfNeeded(id, true)
-    updateNote(id, content)
-  }
-
+  /** 编辑入口:直接更新(写回由 controller 防抖落盘) */
   const handleEditorChangeSync = (id: string, content: string) => {
-    void handleEditorChange(id, content)
+    updateNote(id, content)
   }
 
   useEffect(() => {
@@ -254,7 +211,12 @@ export default function App() {
       setSettingsOpen={setSettingsOpen}
       setStudioOpen={setStudioOpen}
       updateNote={handleEditorChangeSync}
-      createNote={() => createNote()}
+      createNote={() => {
+        // folder-first:新建 = 工作区根直接落盘;无工作区时按钮不可见(空态引导)
+        if (!workspaceRoot) return
+        void createNoteInDir(workspaceRoot).catch((error: unknown) =>
+          toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`))
+      }}
       setNoteTheme={setNoteTheme}
       exportPdf={exportPdf}
       exportNoteFile={exportNoteFile}

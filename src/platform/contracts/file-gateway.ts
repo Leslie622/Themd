@@ -4,7 +4,6 @@ export interface SavePathInput { defaultName: string; filterName: string; extens
 export type SaveResult = { kind: 'canceled' } | { kind: 'saved'; path: string }
 export interface FileGateway {
   pickFiles(): Promise<ImportedFile[]>
-  pickFolder(): Promise<ImportedFile[] | null>
   chooseSavePath(input: SavePathInput): Promise<string | null>
   saveText(input: SaveTextInput): Promise<SaveResult>
   /** 选择目录返回绝对路径(本地图片根目录);取消返回 null */

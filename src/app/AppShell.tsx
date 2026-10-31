@@ -324,7 +324,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-4">
-            <p className="text-sm text-muted-foreground">选择左侧笔记，或开始一篇新笔记</p>
+            <p className="text-sm text-muted-foreground">选择左侧笔记，或新建一篇笔记</p>
             <Button onClick={() => createNote()}>
               <Plus /> 新建笔记
             </Button>

@@ -48,7 +48,7 @@ fn main() {
             commands::files::rename_directory,
             commands::files::delete_directory,
             commands::files::unique_destination,
-            commands::watch::watch_paths,
+            commands::watch::watch_workspace,
             commands::pdf::export_pdf
         ])
         .setup(|app| {
