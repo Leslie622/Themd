@@ -272,7 +272,7 @@ export function Sidebar() {
   return (
     <TooltipProvider delayDuration={300}>
       <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
-      <div className="flex flex-col gap-3.5 border-b px-4 pb-3.5 pt-3">
+      <div className="flex flex-col gap-3.5 px-4 pb-3.5 pt-3">
         <div
           data-tauri-drag-region
           className="flex h-10 items-center justify-between text-foreground"
@@ -476,7 +476,7 @@ export function Sidebar() {
       </nav>
 
       {/* 工作区胶囊固定侧栏底部:目录是全局上下文,不是头部操作 */}
-      <div className="border-t p-2">
+      <div className="p-2">
         <WorkspacePill
           workspaceRoot={workspaceRoot}
           recents={recents}
