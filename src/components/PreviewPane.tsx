@@ -12,6 +12,7 @@ import { useAppearance } from '@/store-appearance'
 import { useEditorPrefs } from '@/store-editor'
 import { useExtraCss } from '@/components/theme/useExtraCss'
 import { Button } from '@/components/ui/button'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { cn } from '@/lib/utils'
 
 /**
@@ -127,32 +128,46 @@ export const PreviewPane = memo(function PreviewPane({
   }, [])
 
   return (
-    <div className="relative flex h-full">
-      <div
-        ref={setScrollEl}
-        className="h-full min-w-0 flex-1 overflow-y-auto"
-        onClick={handleClick}
-        onScroll={handleScroll}
-      >
-        <article
-          className="themd-prose mx-auto px-6 py-8"
-          style={cssVars as React.CSSProperties}
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-        <ImageLightbox
-          slides={lightbox?.slides ?? []}
-          initialIndex={lightbox?.index}
-          onClose={() => setLightbox(null)}
-        />
-      </div>
-      {outlineEnabled && outline.length > 0 && (
-        <OutlinePanel
-          items={outline}
-          activeId={activeHeadingId}
-          onJump={jumpTo}
-          onClose={() => setOutlineEnabled(false)}
-        />
-      )}
+    <div className="relative h-full">
+      {/* 大纲分栏用官方 Resizable(与编辑/预览分屏同款;分屏本身不做宽度持久化) */}
+      <ResizablePanelGroup orientation="horizontal" className="h-full">
+        <ResizablePanel
+          id="outline-preview"
+          defaultSize={outlineEnabled && outline.length > 0 ? '60' : '100'}
+          minSize="40"
+        >
+          <div
+            ref={setScrollEl}
+            className="h-full min-w-0 overflow-y-auto"
+            onClick={handleClick}
+            onScroll={handleScroll}
+          >
+            <article
+              className="themd-prose mx-auto px-6 py-8"
+              style={cssVars as React.CSSProperties}
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+            <ImageLightbox
+              slides={lightbox?.slides ?? []}
+              initialIndex={lightbox?.index}
+              onClose={() => setLightbox(null)}
+            />
+          </div>
+        </ResizablePanel>
+        {outlineEnabled && outline.length > 0 && (
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel id="outline-panel" defaultSize="40" minSize="12" maxSize="45">
+              <OutlinePanel
+                items={outline}
+                activeId={activeHeadingId}
+                onJump={jumpTo}
+                onClose={() => setOutlineEnabled(false)}
+              />
+            </ResizablePanel>
+          </>
+        )}
+      </ResizablePanelGroup>
       {!outlineEnabled && (
         <Button
           variant="ghost"
@@ -183,7 +198,7 @@ function OutlinePanel({
   onClose: () => void
 }) {
   return (
-    <aside className="flex w-52 shrink-0 flex-col border-l bg-sidebar/50">
+    <aside className="flex h-full flex-col border-l bg-sidebar/50">
       <div className="flex items-center justify-between py-1.5 pr-1 pl-3">
         <span className="text-xs font-medium text-muted-foreground">大纲</span>
         <Button
