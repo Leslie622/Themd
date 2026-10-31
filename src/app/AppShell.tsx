@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Sidebar } from '@/components/Sidebar'
 import { SidebarResizeHandle } from '@/components/SidebarResizeHandle'
 import { SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from '@/app/workspace-preferences'
@@ -153,15 +153,17 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                       }
                     }}
                   >
-                    <SelectItem value={FOLLOW_GLOBAL}>跟随全局</SelectItem>
-                    {allThemes.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        <span className="truncate">{t.name}</span>
-                        {active.themeId === t.id && active.themeId ? (
-                          <span className="ml-auto pl-2 text-xs text-primary">仅此笔记</span>
-                        ) : null}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectItem value={FOLLOW_GLOBAL}>跟随全局</SelectItem>
+                      {allThemes.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          <span className="truncate">{t.name}</span>
+                          {active.themeId === t.id && active.themeId ? (
+                            <span className="ml-auto pl-2 text-xs text-primary">仅此笔记</span>
+                          ) : null}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
 

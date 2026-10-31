@@ -6,13 +6,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { listAllThemes, useThemeStore } from '@/store-themes'
 import { EDITOR_FONT_RANGE, useEditorPrefs } from '@/store-editor'
 import { useAppearance } from '@/store-appearance'
@@ -179,12 +173,14 @@ export function SettingsSheet({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectGroup>
                   {listAllThemes({ themes: themeList, activeId: themeActiveId }).map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
+                      <SelectItem key={t.id} value={t.id}>
                       {t.name}
                     </SelectItem>
                   ))}
-                </SelectContent>
+                  </SelectGroup>
+          </SelectContent>
               </Select>
             </div>
             <div className="mt-3 flex items-center justify-between">
@@ -216,10 +212,12 @@ export function SettingsSheet({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="assets">本地文件夹</SelectItem>
-                  <SelectItem value="remote">上传图床</SelectItem>
-                  <SelectItem value="embedded">内嵌笔记</SelectItem>
-                </SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="assets">本地文件夹</SelectItem>
+                    <SelectItem value="remote">上传图床</SelectItem>
+                    <SelectItem value="embedded">内嵌笔记</SelectItem>
+                  </SelectGroup>
+          </SelectContent>
               </Select>
             </div>
             {imageMode === 'remote' && (

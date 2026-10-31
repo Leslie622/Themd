@@ -11,13 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { FieldDef } from '@/lib/theme/elements'
 import { cn } from '@/lib/utils'
 
@@ -91,11 +85,13 @@ function FieldControl({
             <SelectValue placeholder="未设置" />
           </SelectTrigger>
           <SelectContent>
+            <SelectGroup>
             {['100', '200', '300', '400', '500', '600', '700', '800', '900'].map((w) => (
-              <SelectItem key={w} value={w}>
+                <SelectItem key={w} value={w}>
                 {w}{weightHint(w)}
               </SelectItem>
             ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
       )
@@ -108,11 +104,13 @@ function FieldControl({
             <SelectValue placeholder="未设置" />
           </SelectTrigger>
           <SelectContent>
+            <SelectGroup>
             {(field.options ?? []).map((o) => (
-              <SelectItem key={o.value} value={o.value}>
+                <SelectItem key={o.value} value={o.value}>
                 {o.label}
               </SelectItem>
             ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
       )
@@ -123,9 +121,11 @@ function FieldControl({
             <SelectValue placeholder="未设置" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="start">左对齐</SelectItem>
-            <SelectItem value="center">居中</SelectItem>
-            <SelectItem value="justify">两端对齐</SelectItem>
+            <SelectGroup>
+              <SelectItem value="start">左对齐</SelectItem>
+              <SelectItem value="center">居中</SelectItem>
+              <SelectItem value="justify">两端对齐</SelectItem>
+            </SelectGroup>
           </SelectContent>
         </Select>
       )
@@ -350,12 +350,14 @@ function SizeInput({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
+          <SelectGroup>
           {['px', 'em', 'rem', '%'].map((u) => (
-            <SelectItem key={u} value={u}>
+              <SelectItem key={u} value={u}>
               {u}
             </SelectItem>
           ))}
-        </SelectContent>
+          </SelectGroup>
+          </SelectContent>
       </Select>
     </div>
   )
@@ -424,9 +426,10 @@ function FontFamilyInput({ value, onChange }: { value: string | undefined; onCha
           <SelectValue placeholder="自定义" />
         </SelectTrigger>
         <SelectContent className="max-h-72">
+          <SelectGroup>
           <div className="px-2 py-1 text-xs font-medium text-muted-foreground">预设组合</div>
           {FONT_PRESETS.map((f) => (
-            <SelectItem key={f.value} value={f.value}>
+              <SelectItem key={f.value} value={f.value}>
               {f.label}
             </SelectItem>
           ))}
@@ -449,7 +452,7 @@ function FontFamilyInput({ value, onChange }: { value: string | undefined; onCha
                 )}
               </div>
               {localFonts.map((f) => (
-                <SelectItem key={f} value={`'${f}'`}>
+                  <SelectItem key={f} value={`'${f}'`}>
                   <span className="truncate" style={{ fontFamily: `'${f}', monospace` }}>
                     {f}
                   </span>
@@ -457,8 +460,9 @@ function FontFamilyInput({ value, onChange }: { value: string | undefined; onCha
               ))}
             </>
           )}
-          <SelectItem value="custom">自定义…</SelectItem>
-        </SelectContent>
+            <SelectItem value="custom">自定义…</SelectItem>
+          </SelectGroup>
+          </SelectContent>
       </Select>
       <Input
         value={value ?? ''}

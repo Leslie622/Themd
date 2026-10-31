@@ -9,13 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { platformServices } from '@/app/platform'
 import { useEditorPrefs } from '@/store-editor'
 import { ChevronDown, Eye, EyeOff } from 'lucide-react'
@@ -68,9 +62,11 @@ function UploaderConfigDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="github">GitHub 仓库</SelectItem>
-                <SelectItem value="picgo">PicGo 本地桥</SelectItem>
-              </SelectContent>
+                <SelectGroup>
+                  <SelectItem value="github">GitHub 仓库</SelectItem>
+                  <SelectItem value="picgo">PicGo 本地桥</SelectItem>
+                </SelectGroup>
+          </SelectContent>
             </Select>
           </div>
           {provider === 'github' && (
