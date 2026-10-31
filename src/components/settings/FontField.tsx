@@ -169,13 +169,15 @@ export function FontField({
   return (
     <div className="flex flex-col gap-1">
       {label && <span className="text-xs text-muted-foreground">{label}</span>}
-      {/* 观感对齐 shadcn SelectTrigger(size=sm):同内边距/圆角/字号/下拉箭头,
-          让设置页所有选择类控件视觉语言一致 */}
-      <button
+      {/* 官方 Button(outline/sm)组合成「打开弹窗的类 Select 触发器」:
+          高度(h-8)/圆角/边框与 vega SelectTrigger size=sm 一致,不手写尺寸 */}
+      <Button
         type="button"
-        onClick={() => setOpen(true)}
-        className="flex h-7 w-full items-center justify-between gap-1.5 rounded-[min(var(--radius-md),10px)] border border-input bg-transparent py-2 pr-2 pl-2.5 text-left text-sm transition-colors outline-none select-none hover:bg-input/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
+        variant="outline"
+        size="sm"
+        className="w-full justify-between font-normal"
         aria-label={`选择${label}字体`}
+        onClick={() => setOpen(true)}
       >
         <span
           className="truncate"
@@ -184,7 +186,7 @@ export function FontField({
           {display || <span className="text-muted-foreground">{placeholder}</span>}
         </span>
         <ChevronDown className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
-      </button>
+      </Button>
       {notInstalled && (
         <p className="text-xs text-amber-600 dark:text-amber-400">未安装,显示回落效果</p>
       )}
