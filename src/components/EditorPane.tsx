@@ -674,7 +674,11 @@ export function EditorPane({
               hideAssetHoverNow()
               if (target) openAsset(target)
             }}
-            onMouseLeave={hideAssetHoverNow}
+            onMouseLeave={(e) => {
+              // 从按钮移回图片行时按钮不能闪没:指针还在等待区内交给编辑器
+              // mousemove 维持;甩出去(侧栏/窗外)才隐藏
+              if (!inAssetHoverKeep(e.clientX, e.clientY)) hideAssetHoverNow()
+            }}
           >
             <FolderOpen />
             打开图片位置

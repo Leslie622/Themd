@@ -277,13 +277,15 @@ export const LiveEditorPane = memo(function LiveEditorPane({
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     setAssetHover(null)
   }
+  /** 等待区(按钮+图片+两者间缝隙)判定:指针还在区内就不隐藏。
+   * 按钮是 portal(document.body 子元素)不是容器子元素——指针落到按钮上时
+   * 容器和按钮各自收到的是 mouseleave,必须都用等待区兜住,否则一碰就没 */
+  const inHoverKeep = (x: number, y: number) =>
+    !!assetHover &&
+    x >= assetHover.keep.l && x <= assetHover.keep.r &&
+    y >= assetHover.keep.t && y <= assetHover.keep.b
   const onMouseMove = (e: React.MouseEvent) => {
-    const x = e.clientX
-    const y = e.clientY
-    // 等待区内保持现状(按钮不是容器子元素,移动途中防误隐藏)
-    if (assetHover && x >= assetHover.keep.l && x <= assetHover.keep.r && y >= assetHover.keep.t && y <= assetHover.keep.b) {
-      return
-    }
+    if (inHoverKeep(e.clientX, e.clientY)) return
     const target = e.target as HTMLElement
     const img = target.closest('img')
     const raw = img instanceof HTMLImageElement ? rawSrcOf(img) : null
@@ -375,7 +377,11 @@ export const LiveEditorPane = memo(function LiveEditorPane({
           style={cssVars}
           onContextMenu={handleContextMenu}
           onMouseMove={onMouseMove}
-          onMouseLeave={hideHover}
+          onMouseLeave={(e) => {
+            // 指针移到浮层按钮上也会让容器收到 mouseleave(按钮非容器子元素);
+            // 等待区内不隐藏,与 CM 版 EditorPane 同款处理
+            if (!inHoverKeep(e.clientX, e.clientY)) hideHover()
+          }}
         >
           <EditorContent editor={editor} className="live-editor-shell" />
         </div>
@@ -540,7 +546,11 @@ export const LiveEditorPane = memo(function LiveEditorPane({
               hideHover()
               if (absolute) openAsset(absolute)
             }}
-            onMouseLeave={hideHover}
+            onMouseLeave={(e) => {
+              // 从按钮移回图片/缝隙时按钮不能闪没:指针还在等待区(按钮+图)内
+              // 就交给容器 mousemove 维持;甩出去(侧栏/窗外)才隐藏
+              if (!inHoverKeep(e.clientX, e.clientY)) hideHover()
+            }}
           >
             <FolderOpen />
             打开图片位置
