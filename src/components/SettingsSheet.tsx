@@ -106,6 +106,8 @@ export function SettingsSheet({
   const setSyncScrollEnabled = useEditorPrefs((s) => s.setSyncScrollEnabled)
   const lineWrapEnabled = useEditorPrefs((s) => s.lineWrapEnabled)
   const setLineWrapEnabled = useEditorPrefs((s) => s.setLineWrapEnabled)
+  const liveEngine = useEditorPrefs((s) => s.liveEngine)
+  const setLiveEngine = useEditorPrefs((s) => s.setLiveEngine)
   const imageMode = useEditorPrefs((s) => s.imageMode)
   const setImageMode = useEditorPrefs((s) => s.setImageMode)
   const assetsRoot = useEditorPrefs((s) => s.assetsRoot)
@@ -357,6 +359,16 @@ export function SettingsSheet({
                 checked={lineWrapEnabled}
                 onCheckedChange={setLineWrapEnabled}
                 aria-label="切换自动换行"
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">
+                实时预览引擎(TipTap 渲染态编辑,实验)
+              </span>
+              <Switch
+                checked={liveEngine === 'prosemirror'}
+                onCheckedChange={(v) => setLiveEngine(v ? 'prosemirror' : 'codemirror')}
+                aria-label="切换实时预览引擎"
               />
             </div>
           </section>

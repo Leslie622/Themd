@@ -410,3 +410,40 @@ pre::-webkit-scrollbar,
 [data-slot="textarea"][aria-invalid="true"] {
   border-color: var(--destructive);
 }
+
+/* ── 实时预览编辑器(TipTap/ProseMirror,P1 骨架) ──────────────────────
+ * 编辑器元素直接挂 .themd-prose(theme-base.css 整套排版生效,与预览/导出
+ * 同源);这里只补 ProseMirror 编辑面本身与任务列表 DOM(TipTap 结构与
+ * markdown-it 产出的 class 不同,theme-base 的 .task-list-item 管不到)。 */
+.live-editor-shell {
+  height: 100%;
+}
+.live-editor-shell .ProseMirror {
+  min-height: 100%;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 40vh;
+  outline: none;
+  caret-color: var(--t-strong, var(--primary));
+}
+.live-editor-shell ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+.live-editor-shell ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.live-editor-shell ul[data-type='taskList'] li > label {
+  flex: none;
+  margin-top: 0.35em;
+  line-height: 1;
+  user-select: none;
+}
+.live-editor-shell ul[data-type='taskList'] li > label input {
+  accent-color: var(--t-strong, var(--primary));
+}
+.live-editor-shell ul[data-type='taskList'] li[data-checked='false'] > div > p {
+  color: inherit;
+}

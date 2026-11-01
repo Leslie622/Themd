@@ -39,6 +39,12 @@ const VIEW_MODES: readonly EditorViewMode[] = ['edit', 'split', 'live', 'preview
 interface EditorPrefsState {
   /** 主工作区视图模式(顶栏视图组,重启记住上次选择) */
   viewMode: EditorViewMode
+  /**
+   * 实时预览视图的引擎:codemirror = v1 装饰层(默认,过渡期兜底);
+   * prosemirror = v2 TipTap 渲染态编辑(方案见 docs/实时预览实施方案.md,
+   * P3 过全部红线后设为默认)。
+   */
+  liveEngine: 'prosemirror' | 'codemirror'
   /** CodeMirror 字号(px) */
   fontSize: number
   /** 界面西文字体:空 = Geist Variable(打包默认) */
@@ -78,6 +84,7 @@ interface EditorPrefsState {
   /** PicGo Server 上传接口地址(端口可在 PicGo 里改) */
   picgoUrl: string
   setViewMode: (mode: EditorViewMode) => void
+  setLiveEngine: (engine: 'prosemirror' | 'codemirror') => void
   setFontSize: (px: number) => void
   setUiFont: (western: string, cjk: string) => void
   setEditorFont: (western: string, cjk: string) => void
@@ -120,6 +127,8 @@ const applyFonts = (s: Pick<EditorPrefsState, 'uiFontWestern' | 'uiFontCjk' | 'e
 
 const DEFAULTS = {
   viewMode: 'split' as EditorViewMode,
+  /** P1-P3 过渡期默认 v1 装饰层;红线全过(P3 末)切 prosemirror */
+  liveEngine: 'codemirror' as 'prosemirror' | 'codemirror',
   fontSize: 13.5,
   /** 空 = 西文不单独指定,由中文字体/通用族承担(中文字体通常自带拉丁字形) */
   uiFontWestern: '',
@@ -158,6 +167,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         set({ editorFontWestern: western, editorFontCjk: cjk })
       },
       setViewMode: (mode) => set({ viewMode: mode }),
+      setLiveEngine: (engine) => set({ liveEngine: engine }),
       setFoldEnabled: (v) => set({ foldEnabled: v }),
       setSyncScrollEnabled: (v) => set({ syncScrollEnabled: v }),
       setLineWrapEnabled: (v) => set({ lineWrapEnabled: v }),
@@ -168,7 +178,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
     }),
     {
       name: 'themd/ui-preferences/v1',
-      version: 7,
+      version: 8,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<EditorPrefsState>
         const next = { ...DEFAULTS, ...state }
@@ -181,6 +191,12 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         // v7 实时预览视图登场:viewMode 记住顶栏视图组的选择,非法值落 split
         if (version < 7) {
           if (!VIEW_MODES.includes(next.viewMode)) next.viewMode = 'split'
+        }
+        // v8 实时预览引擎开关:非法值落 codemirror(v1 装饰层,过渡期默认)
+        if (version < 8) {
+          if (next.liveEngine !== 'prosemirror' && next.liveEngine !== 'codemirror') {
+            next.liveEngine = 'codemirror'
+          }
         }
         if (version < 2) {
           if (!next.editorFontWestern?.trim()) next.editorFontWestern = 'JetBrains Mono'
