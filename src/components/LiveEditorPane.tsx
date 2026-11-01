@@ -72,7 +72,9 @@ import {
 import { imageFilesToMarkdown } from '@/modules/live-editor/application/live-image-insert'
 import { liveEditorExtensions } from '@/modules/live-editor/application/live-shortcuts'
 
-/** 菜单里的图标按钮(Typora 式网格,与 EditorPane 同款) */
+/** 菜单里的图标按钮(Typora 式网格,与 EditorPane 同款)。
+ * 必须是 ContextMenuItem(asChild)而非普通 Button:Radix 只在「菜单项」被
+ * 选中时关菜单,裸按钮点了菜单不消失。 */
 function MenuIconBtn({
   icon: Icon,
   title,
@@ -85,20 +87,17 @@ function MenuIconBtn({
   onSelect: () => void
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      className="h-8 w-full text-foreground/80"
-      onClick={(e) => {
-        e.preventDefault()
-        onSelect()
-      }}
-    >
-      <Icon />
-    </Button>
+    <ContextMenuItem asChild disabled={disabled} onSelect={() => onSelect()}>
+      <Button
+        variant="ghost"
+        size="icon"
+        title={title}
+        aria-label={title}
+        className="h-8 w-full px-0 text-foreground/80"
+      >
+        <Icon />
+      </Button>
+    </ContextMenuItem>
   )
 }
 
