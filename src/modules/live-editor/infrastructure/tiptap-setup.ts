@@ -21,6 +21,7 @@ import type { JSONContent } from '@tiptap/core'
 import { resolveImageSrcSync } from '@/lib/image-src'
 import { currentProfile } from './serialize-profile-state'
 import { MathBlock, MathInline } from './math-node'
+import { CodeBlockCm } from './codeblock-cm'
 
 /** MarkdownManager 渲染辅助器的最小面(官方 h 的子集,够表格用) */
 export interface RenderHelper {
@@ -130,13 +131,14 @@ const ProfileItalic = Italic.extend({
 /** 实时编辑扩展集:编辑器 schema 与 markdown 解析/序列化的唯一装配点 */
 export function liveExtensions() {
   return [
-    // bold/italic 换成档案感知版(schema 同型);其余走 StarterKit 默认
-    StarterKit.configure({ bold: false, italic: false }),
+    // bold/italic 换档案感知版、codeBlock 换 CM 内嵌版(schema 均同型)
+    StarterKit.configure({ bold: false, italic: false, codeBlock: false }),
     ProfileBold,
     ProfileItalic,
     LiveImage,
     MathBlock,
     MathInline,
+    CodeBlockCm,
     Table.extend({ renderMarkdown: renderLeanTable }),
     TableRow,
     TableCell,

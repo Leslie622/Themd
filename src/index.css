@@ -474,3 +474,29 @@ pre::-webkit-scrollbar,
 .live-math-error {
   color: var(--destructive);
 }
+
+/* ── 实时编辑器·代码块内嵌 CodeMirror(P4b) ────────────────────────────
+ * 容器是 pre(theme-base 的代码块底色/圆角生效),CM 透明融入 */
+.live-editor-shell .live-codeblock {
+  position: relative;
+  margin: 0;
+}
+.live-editor-shell .live-codeblock .cm-editor {
+  background: transparent;
+}
+.live-codeblock-lang {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 1;
+  font-size: 0.7em;
+  font-family: var(--font-ui-sans, sans-serif);
+  color: color-mix(in oklch, currentColor 45%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+.live-codeblock-selected {
+  outline: 2px solid color-mix(in oklch, var(--primary) 40%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
