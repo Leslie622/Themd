@@ -15,6 +15,7 @@ export type FieldType =
   | 'select'       // 枚举下拉
   | 'text-align'   // 对齐分段控件
   | 'text'         // 自由文本（如 box-shadow）
+  | 'background'   // 画布背景：完整 CSS background 值（颜色/渐变/图片）
 
 export interface FieldDef {
   /** 令牌键（TOKEN_VAR 的键名） */
@@ -70,7 +71,8 @@ export const ELEMENTS: ElementDef[] = [
       { key: 'root.size', label: '字号', type: 'size', unit: 'px', placeholder: '16px' },
       { key: 'root.leading', label: '行高', type: 'number', min: 1, max: 3, step: 0.05, placeholder: '1.75' },
       { key: 'root.color', label: '文字颜色', type: 'color' },
-      { key: 'root.bg', label: '页面背景', type: 'color', hint: '留空 = 透明,跟随应用背景' },
+      { key: 'app.bg', label: '画布背景', type: 'background', hint: '正文纸张之外的预览区整体;支持颜色、渐变与图片' },
+      { key: 'root.bg', label: '纸张颜色', type: 'color', hint: '正文这页「纸」的底色;留空 = 透明,透出画布背景' },
       { key: 'root.width', label: '页面宽度', type: 'size', unit: 'rem', placeholder: '48rem', hint: '正文最大宽度' },
       { key: 'root.spacing', label: '字间距', type: 'size', unit: 'px', placeholder: 'normal' },
     ],
@@ -110,6 +112,7 @@ export const ELEMENTS: ElementDef[] = [
     label,
     group: 'headings' as const,
     fields: [
+      { key: `${id}.font` as TokenKey, label: '字体', type: 'font-family' as const },
       { key: `${id}.size` as TokenKey, label: '字号', type: 'size' as const, unit: 'em', placeholder: size },
       { key: `${id}.color` as TokenKey, label: '颜色', type: 'color' as const },
       ...(id === 'h1' || id === 'h2'

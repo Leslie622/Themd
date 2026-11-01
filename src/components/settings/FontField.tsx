@@ -160,6 +160,7 @@ export function FontField({
   placeholder,
   mono,
   fonts,
+  echo,
 }: {
   /** 行上方小标签;空串 = 不渲染(行内布局,由外层行名表意) */
   label: string
@@ -168,10 +169,22 @@ export function FontField({
   placeholder: string
   mono?: boolean
   fonts: string[]
+  /** 值未设置时的回显文案(如「跟随正文 · Geist Variable」),灰斜体;设置模块不传即无此行为 */
+  echo?: string
 }) {
   const [open, setOpen] = useState(false)
   const display = value.trim()
-  const notInstalled = display && !isFontAvailable(display.split(',')[0].trim())
+  // font-family 是逐族回落的栈值:任一「真实族名」可用即算已安装。
+  // 通用关键字与浏览器私有前缀(-apple-system 等)不参与判断,
+  // 否则 GitHub 主题这类长栈(-apple-system 打头)在 Windows 上永远误报
+  const GENERIC_FAMILY =
+    /^(sans-serif|serif|monospace|system-ui|ui-monospace|cursive|fantasy|math|emoji|fangsong|-\w+-\w+)$/i
+  const namedFamilies = display
+    .split(',')
+    .map((f) => f.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((f) => f !== '' && !GENERIC_FAMILY.test(f))
+  const notInstalled =
+    display !== '' && namedFamilies.length > 0 && namedFamilies.every((f) => !isFontAvailable(f))
 
   return (
     <div className="flex flex-col gap-1">
@@ -190,7 +203,18 @@ export function FontField({
           className="truncate"
           style={display ? { fontFamily: `'${display.split(',')[0].trim()}', ${mono ? 'monospace' : 'sans-serif'}` } : undefined}
         >
-          {display || <span className="text-muted-foreground">{placeholder}</span>}
+          {display || (
+            echo ? (
+              <span
+                className="truncate italic text-muted-foreground"
+                title="未设置,显示当前生效的回落字体;点选即可覆盖"
+              >
+                {echo}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">{placeholder}</span>
+            )
+          )}
         </span>
         <ChevronDown className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
       </Button>

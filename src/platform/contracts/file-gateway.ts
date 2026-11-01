@@ -8,6 +8,8 @@ export interface FileGateway {
   saveText(input: SaveTextInput): Promise<SaveResult>
   /** 选择目录返回绝对路径(本地图片根目录);取消返回 null */
   pickDirectory(): Promise<string | null>
+  /** 选择单个本地图片文件(主题画布背景等);取消返回 null */
+  pickImageFile(): Promise<{ path: string; name: string } | null>
   /** 写二进制文件(本地 assets 模式图片落盘),自动创建父目录 */
   writeBinaryFile(path: string, bytes: Uint8Array): Promise<void>
   /** 读二进制文件(绑定/另存为时迁移正文引用的 assets 图片用) */

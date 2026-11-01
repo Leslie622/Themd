@@ -7,13 +7,18 @@ import {
   ChevronRight,
   Copy,
   Crosshair,
-  Download,
-  FilePlus2,
-  FileUp,
+  FileCode2,
+  FileInput,
+  FileJson,
+  FileSymlink,
+  FileText,
+  FolderOpen,
+  Focus,
+  Paintbrush,
   Pencil,
+  Plus,
   RotateCcw,
   Trash2,
-  Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -33,22 +38,29 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
+import { Spinner } from '@/components/ui/spinner'
 import { Toaster } from '@/components/ui/sonner'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Toggle } from '@/components/ui/toggle'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { WindowControls } from '@/components/WindowControls'
 import { CssEditorPanel } from '@/components/theme/CssEditorPanel'
 import { FieldRow } from '@/components/theme/FieldControls'
 import { ColorFieldRow } from '@/components/theme/FieldControls'
+import { LiveEditorPane } from '@/components/LiveEditorPane'
+import { NotePicker } from '@/components/theme/NotePicker'
 import { useExtraCss } from '@/components/theme/useExtraCss'
 import { compileTokens, } from '@/lib/theme/compile'
 import { exportThemeCss, importThemeCss } from '@/lib/theme/css-io'
 import { ELEMENTS, ELEMENT_GROUPS, elementTokenKeys } from '@/lib/theme/elements'
-import { ELEMENT_SAMPLES } from '@/lib/theme/element-samples'
+import { FOCUSED_SAMPLES } from '@/lib/theme/element-samples'
 import { TOKEN_VAR } from '@/lib/theme/tokens'
 import type { FieldDef } from '@/lib/theme/elements'
-import { resolveFallbackColors } from '@/lib/theme/color-fallbacks'
+import { resolveFallbackColors, resolveFallbackFonts } from '@/lib/theme/color-fallbacks'
 import { inspectElementId } from '@/lib/theme/inspect'
 import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
 import { SAMPLE_DOC } from '@/lib/theme/sample'
+import { setActiveNoteDir } from '@/lib/image-src'
 import type { ThemeFile } from '@/lib/theme/schema'
 import type { ThemeTokens, TokenKey } from '@/lib/theme/tokens'
 import {
@@ -56,15 +68,25 @@ import {
   listAllThemes,
   useThemeStore,
 } from '@/store-themes'
-import { useNotebook } from '@/store'
+import { notebookController, useNotebook } from '@/store'
 import { useAppearance } from '@/store-appearance'
 import { cn } from '@/lib/utils'
 
 /**
- * 主题工场：左=主题库+元素导航，中=实时预览，右=属性面板。
- * UI 完全由 lib/theme/elements.ts 的元数据生成。
+ * 主题工场：左=主题库+元素导航，中=预览（专注样例/全内容样例/导入笔记），
+ * 右=属性面板。UI 完全由 lib/theme/elements.ts 的元数据生成。
  * 所有主题就地修改；内置主题改动时 store 自动先复制为副本。
  */
+
+/** 顶栏右侧图标按钮的悬停提示（与主页 AppShell 同款结构） */
+function IconTip({ label, children }: { label: string; children: React.ReactElement }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 function downloadFile(name: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime })
@@ -74,13 +96,16 @@ function downloadFile(name: string, content: string, mime: string) {
   a.click()
   URL.revokeObjectURL(a.href)
 }
+
+/** 中栏预览模式:专注样例跟随左侧选中元素;全内容样例是标准完整文档;导入 = 工作区笔记副本(可编辑) */
+type PreviewMode = 'focused' | 'full' | 'imported'
+
 export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const themes = useThemeStore((s) => s.themes)
   const activeId = useThemeStore((s) => s.activeId)
   const setActive = useThemeStore((s) => s.setActive)
   const isDark = useAppearance((s) => s.isDark)
   const updateTokens = useThemeStore((s) => s.updateTokens)
-  const updateTokensDark = useThemeStore((s) => s.updateTokensDark)
   const setExtraCss = useThemeStore((s) => s.setExtraCss)
   const duplicateTheme = useThemeStore((s) => s.duplicateTheme)
   const renameTheme = useThemeStore((s) => s.renameTheme)
@@ -93,36 +118,77 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const editingId = editId ?? activeId
   const editing =
     listAllThemes({ themes, activeId }).find((t) => t.id === editingId) ?? BUILTIN_THEMES[0]
-  const editingIsBuiltin = editing.builtin === true
 
   const [selectedElement, setSelectedElement] = useState('root')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  // 明/暗令牌套编辑切换(主题仅有暗色差异时也在此编辑)
-  const [editDark, setEditDark] = useState(false)
-  const activeTokens = editDark ? (editing.dark ?? {}) : editing.tokens
+  const activeTokens = editing.tokens
 
-  // 中栏预览文稿来源:sample=内置样例 / note=当前笔记 / custom=用户导入的 md
+  // 中栏预览:专注样例(默认)/全内容样例/导入的工作区笔记
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('focused')
+  // 导入模式:选中的工作区笔记 id 与其内容副本(本地编辑,不写回源文件)
   const notes = useNotebook((s) => s.notes)
-  const activeNoteId = useNotebook((s) => s.activeId)
-  const activeNote = notes.find((n) => n.id === activeNoteId) ?? notes[0] ?? null
-  const [previewSource, setPreviewSource] = useState<'sample' | 'note' | 'custom'>('sample')
-  const [customDoc, setCustomDoc] = useState('')
+  const [importedNoteId, setImportedNoteId] = useState<string | null>(null)
+  const [importedDoc, setImportedDoc] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  /** 待载入正文的笔记 id:选择后经 effect 等正文懒加载完成再填充副本 */
+  const pendingImportRef = useRef<string | null>(null)
+  const importedNote = notes.find((n) => n.id === importedNoteId) ?? null
+
   const [cssOpen, setCssOpen] = useState(false)
   const [inspectMode, setInspectMode] = useState(false)
-  const mdInputRef = useRef<HTMLInputElement>(null)
-  const previewDoc =
-    previewSource === 'sample' ? SAMPLE_DOC : previewSource === 'note' ? (activeNote?.content ?? '') : customDoc
 
   const jsonInputRef = useRef<HTMLInputElement>(null)
 
   const element = ELEMENTS.find((e) => e.id === selectedElement) ?? ELEMENTS[0]
 
-  // 回落色预览:从「元素效果」迷你预览实测各颜色项未设置时的实际观感色。
-  // 依赖令牌/元素/明暗编辑态,变化后重测(浏览器渲染完成后测量,保证拿到的是最新样式)
-  const miniPreviewRef = useRef<HTMLDivElement | null>(null)
+  // 选择工作区笔记 → 复制内容为编辑副本。正文懒加载未读盘的笔记先 ensureNoteContentLoaded,
+  // 读盘完成后 store 更新,effect 再次执行填充副本
+  const pickImportedNote = useCallback((id: string) => {
+    pendingImportRef.current = id
+    setImportedNoteId(id)
+    setImportedDoc(null)
+  }, [])
+  useEffect(() => {
+    const id = pendingImportRef.current
+    if (!id) return
+    const note = notes.find((n) => n.id === id)
+    if (!note) {
+      pendingImportRef.current = null
+      setImportedNoteId(null)
+      toast.error('该笔记已不存在,请重新选择')
+      return
+    }
+    if (note.contentLoaded === false) {
+      notebookController.ensureNoteContentLoaded(note.id)
+      return
+    }
+    pendingImportRef.current = null
+    setImportedDoc(note.content)
+  }, [notes, importedNoteId])
+
+  // 导入绑定磁盘文件的笔记时,其 assets/ 相对路径要按它自己的目录解析;
+  // 离开导入预览(切模式/换笔记/卸载)把解析基准还给主界面的活动笔记
+  const importedNotePath = importedNote?.sourcePath
+  useEffect(() => {
+    if (previewMode !== 'imported' || !importedNotePath) return
+    setActiveNoteDir(importedNotePath)
+    return () => {
+      const { activeId: currentId, notes: currentNotes } = notebookController.getSnapshot()
+      setActiveNoteDir(currentNotes.find((n) => n.id === currentId)?.sourcePath)
+    }
+  }, [previewMode, importedNotePath])
+
+  // 回落色预览:从中栏预览实测各颜色项未设置时的实际观感色。
+  // 依赖令牌/元素/明暗编辑态/预览内容,变化后重测(浏览器渲染完成后测量,保证拿到的是最新样式)
+  const previewHostRef = useRef<HTMLDivElement | null>(null)
   const [fallbackColors, setFallbackColors] = useState<Record<string, string | undefined>>({})
+  const [fallbackFonts, setFallbackFonts] = useState<Record<string, string | undefined>>({})
   const colorKeys = useMemo(
     () => element.fields.filter((f) => f.type === 'color').map((f) => f.key),
+    [element],
+  )
+  const fontKeys = useMemo(
+    () => element.fields.filter((f) => f.type === 'font-family').map((f) => f.key),
     [element],
   )
   useEffect(() => {
@@ -131,7 +197,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     let raf2 = 0
     const timer = setTimeout(() => {
       raf2 = requestAnimationFrame(() => {
-        const root = miniPreviewRef.current?.querySelector('.themd-prose')
+        const root = previewHostRef.current?.querySelector('.themd-prose')
         if (!root) return
         const measured = resolveFallbackColors(
           root as HTMLElement,
@@ -144,18 +210,27 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
             colorKeys.every((k) => prev[k] === measured[k])
           return same ? prev : measured
         })
+        const fontMeasured = resolveFallbackFonts(
+          root as HTMLElement,
+          fontKeys as never,
+        ) as Record<string, string | undefined>
+        setFallbackFonts((prev) => {
+          const same =
+            Object.keys(prev).length === Object.keys(fontMeasured).length &&
+            fontKeys.every((k) => prev[k] === fontMeasured[k])
+          return same ? prev : fontMeasured
+        })
       })
     }, 150)
     return () => {
       clearTimeout(timer)
       cancelAnimationFrame(raf2)
     }
-  }, [colorKeys, editing, editDark, isDark])
+  }, [colorKeys, fontKeys, editing, isDark, selectedElement, previewMode, importedDoc])
 
-  // 拖动取色器的「绝对流畅」路径:令牌键 → CSS 变量名,直写两处预览容器的 style,
+  // 拖动取色器的「绝对流畅」路径:令牌键 → CSS 变量名,直写预览容器的 style,
   // 不经过 React 渲染;松手 200ms 后 commit 走正常 store 提交(持久化+状态归位)。
   // 两个回调用 useCallback 永久稳定(内部经 implRef 间接调用最新实现),不破坏子组件 memo。
-  const centerPreviewRef = useRef<HTMLDivElement | null>(null)
   const livePreviewImplRef = useRef<(field: FieldDef, v: string) => void>(() => {})
   const commitImplRef = useRef<(field: FieldDef, v: string) => void>(() => {})
   const livePreviewColor = useCallback(
@@ -168,15 +243,6 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   )
 
   const setToken = (key: TokenKey, value: string | undefined) => {
-    if (editDark) {
-      // 暗色套:写在 theme.dark
-      const next: ThemeTokens = { ...(editing.dark ?? {}) }
-      if (value === undefined) delete next[key]
-      else next[key] = value
-      const realId = updateTokensDark(editing.id, next)
-      if (realId !== editing.id) setEditId(realId)
-      return
-    }
     const next: ThemeTokens = { ...editing.tokens }
     if (value === undefined) delete next[key]
     else next[key] = value
@@ -196,23 +262,15 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     livePreviewImplRef.current = (field, v) => {
       const varName = TOKEN_VAR[field.key as TokenKey]
       if (!varName) return
-      for (const el of [
-        centerPreviewRef.current?.querySelector('.themd-prose'),
-        miniPreviewRef.current?.querySelector('.themd-prose'),
-      ]) {
-        ;(el as HTMLElement | null)?.style.setProperty(varName, v)
-      }
+      ;(previewHostRef.current?.querySelector('.themd-prose') as HTMLElement | null)?.style.setProperty(
+        varName,
+        v,
+      )
     }
     commitImplRef.current = (field, v) => setTokenRef.current(field.key as TokenKey, v)
   })
 
   const resetElement = () => {
-    if (editDark) {
-      const next: ThemeTokens = { ...(editing.dark ?? {}) }
-      for (const k of elementTokenKeys(element.id)) delete next[k]
-      updateTokensDark(editing.id, next)
-      return
-    }
     const next: ThemeTokens = { ...editing.tokens }
     for (const k of elementTokenKeys(element.id)) delete next[k]
     updateTokens(editing.id, next)
@@ -277,7 +335,22 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     setActive(id)
   }
 
+  // 中栏预览文稿:专注样例跟随左侧选中元素,全内容样例固定,导入模式用编辑副本
+  const previewDoc =
+    previewMode === 'focused'
+      ? (FOCUSED_SAMPLES[selectedElement] ?? element.label)
+      : previewMode === 'full'
+        ? SAMPLE_DOC
+        : importedDoc
+
+  const handleInspect = (id: string) => {
+    setSelectedElement(id)
+    setInspectMode(false)
+    toast(`已定位到「${ELEMENTS.find((e) => e.id === id)?.label ?? id}」`)
+  }
+
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="flex h-full w-full flex-1 flex-col">
       {/* 顶栏 */}
       <header
@@ -285,18 +358,27 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
         className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4"
       >
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onBack}>
+          <Button variant="ghost" size="sm" className="font-normal" onClick={onBack}>
             <ArrowLeft /> 返回
           </Button>
           <span data-tauri-drag-region className="text-sm font-semibold">
             主题工场
           </span>
-          <span className="text-xs text-muted-foreground">正在编辑：{editing.name}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={() => jsonInputRef.current?.click()}>
-            <Upload /> 导入
-          </Button>
+        {/* 右上角与主页同款:ghost 图标按钮 + 悬停提示 */}
+        <div className="flex items-center gap-2">
+          <IconTip label="导入主题包(.themd.json)或 CSS 文件">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => jsonInputRef.current?.click()}
+              aria-label="导入"
+            >
+              {/* FileInput:箭头指入文件=收进来,与主页/侧栏导入语言一致 */}
+              <FileInput />
+            </Button>
+          </IconTip>
           <input
             ref={jsonInputRef}
             type="file"
@@ -309,20 +391,28 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
             }}
           />
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Download /> 导出
-                <ChevronDown />
-              </Button>
-            </DropdownMenuTrigger>
+            {/* IconTip 必须包在 DropdownMenu 内、套住 Trigger:DropdownMenu Root 是
+                纯 Context 不渲染 DOM,包在外面 TooltipTrigger 的 asChild 会静默失效 */}
+            <IconTip label="导出主题包 / CSS / Typora 主题">
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8" aria-label="导出">
+                  {/* FileSymlink:主页导出笔记同款(箭头穿出文件),与 FileInput 构成一对 */}
+                  <FileSymlink />
+                </Button>
+              </DropdownMenuTrigger>
+            </IconTip>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleExportJson}>
+                <FileJson />
                 主题包(.themd.json)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleExportCss(false)}>
+                <FileCode2 />
                 样式表(.css)
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleExportCss(true)}>
+                <Paintbrush />
                 Typora 主题(#write)
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -377,148 +467,125 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
 
         <ResizableHandle withHandle />
 
-        {/* 中栏：实时预览 */}
+        {/* 中栏：预览(专注样例 / 全内容样例 / 导入笔记) */}
         <ResizablePanel defaultSize="48%" minSize="25%">
           <div className="flex h-full flex-col">
-            <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b px-3">
-              <div className="flex items-center gap-1">
-                {(
-                  [
-                    ['sample', '样例'],
-                    ['note', activeNote ? `笔记:${activeNote.title.slice(0, 8)}` : '笔记(空)'],
-                    ['custom', customDoc ? '我的文档' : '导入 md'],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    disabled={key === 'note' && !activeNote}
-                    onClick={() => {
-                      if (key === 'custom' && !customDoc) {
-                        mdInputRef.current?.click()
-                        return
-                      }
-                      setPreviewSource(key)
-                    }}
-                    className={cn(
-                      'rounded-md px-2 py-1 text-xs transition-colors hover:bg-accent',
-                      previewSource === key && 'bg-accent font-medium',
-                      key === 'note' && !activeNote && 'opacity-50',
-                    )}
-                  >
-                    {key === 'custom' && !customDoc && <FileUp className="mr-1 inline size-3" />}
-                    {label}
-                  </button>
-                ))}
-                <input
-                  ref={mdInputRef}
-                  type="file"
-                  accept=".md,.markdown,.txt"
-                  hidden
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0]
-                    if (f) {
-                      setCustomDoc(await f.text())
-                      setPreviewSource('custom')
-                      toast.success(`已载入「${f.name}」`)
-                    }
-                    e.target.value = ''
-                  }}
-                />
+            <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <Tabs value={previewMode} onValueChange={(v) => setPreviewMode(v as PreviewMode)}>
+                  {/* shadcn Tabs 默认尺寸偏大,按工具栏场景收一档;基类 h-9 带
+                      group-data-horizontal 变体前缀,必须用同前缀才能覆盖掉 */}
+                  <TabsList className="group-data-horizontal/tabs:h-8">
+                    <TabsTrigger value="focused" className="px-2.5 text-xs font-normal">
+                      <Focus className="size-3.5" />
+                      专注样例
+                    </TabsTrigger>
+                    <TabsTrigger value="full" className="px-2.5 text-xs font-normal">
+                      <FileText className="size-3.5" />
+                      全内容样例
+                    </TabsTrigger>
+                    <TabsTrigger value="imported" className="px-2.5 text-xs font-normal">
+                      <FileInput className="size-3.5" />
+                      导入笔记
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                {previewMode === 'imported' && notes.length > 0 && (
+                  <NotePicker
+                    notes={notes}
+                    selectedId={importedNoteId}
+                    open={pickerOpen}
+                    onOpenChange={setPickerOpen}
+                    onPick={pickImportedNote}
+                  />
+                )}
               </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setInspectMode((v) => !v)}
-                  className={cn(
-                    'rounded-md px-2 py-1 text-xs transition-colors hover:bg-accent',
-                    inspectMode && 'bg-primary text-primary-foreground font-medium',
-                  )}
-                  title="点击预览中的元素,直接跳到它的设置"
+              <div className="flex shrink-0 items-center gap-1">
+                {/* 与顶栏一致的图标按钮密度;开关语义用 shadcn Toggle,
+                    按下态由 aria-pressed 驱动(muted 底 + primary 图标);
+                    导入模式是渲染态编辑,元素拾取不适用,置灰 */}
+                <IconTip
+                  label={
+                    previewMode === 'imported'
+                      ? '导入模式下文稿已实时渲染,直接在文中编辑即可'
+                      : '点击预览中的元素,直接跳到它的设置'
+                  }
                 >
-                  <Crosshair className="mr-1 inline size-3" />
-                  选择元素
-                </button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setActive(editing.id)
-                    toast.success(`已应用「${editing.name}」到笔记预览`)
-                  }}
-                >
-                  <Check /> 应用此主题
-                </Button>
+                  <Toggle
+                    size="sm"
+                    disabled={previewMode === 'imported'}
+                    pressed={inspectMode}
+                    onPressedChange={setInspectMode}
+                    className="size-8 px-0 aria-pressed:text-primary"
+                    aria-label="选择元素"
+                  >
+                    <Crosshair className="size-4" />
+                  </Toggle>
+                </IconTip>
+                <IconTip label={`应用「${editing.name}」到笔记预览`}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => {
+                      setActive(editing.id)
+                      toast.success(`已应用「${editing.name}」到笔记预览`)
+                    }}
+                    aria-label="应用此主题"
+                  >
+                    <Check className="size-4" />
+                  </Button>
+                </IconTip>
               </div>
             </div>
-            {/* 预览直接消费「正在编辑」的主题令牌,编辑暗色套时强制按暗色编译 */}
-            <StudioPreview
-              theme={editing}
-              content={previewDoc}
-              forceDark={editDark}
-              containerRef={centerPreviewRef}
-              inspect={inspectMode}
-              onInspect={(id) => {
-                setSelectedElement(id)
-                setInspectMode(false)
-                toast(`已定位到「${ELEMENTS.find((e) => e.id === id)?.label ?? id}」`)
-              }}
-            />
+            {previewMode === 'imported' ? (
+              importedNoteId === null ? (
+                <ImportEmptyState
+                  hasNotes={notes.length > 0}
+                  onOpenPicker={() => setPickerOpen(true)}
+                />
+              ) : importedDoc === null ? (
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+                  <Spinner className="size-6 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">正在读取笔记…</p>
+                </div>
+              ) : (
+                /* 实时预览编辑(TipTap 渲染态,Typora 式单栏):编辑即所见,
+                    消费「正在编辑」的主题令牌,右侧调样式此处实时生效;
+                    文稿是本地副本,不写回源文件。key=换笔记重建编辑器 */
+                <div className="min-h-0 flex-1" ref={previewHostRef}>
+                  <LiveEditorPane
+                    key={importedNoteId}
+                    value={importedDoc}
+                    onChange={setImportedDoc}
+                    noteThemeId={editing.id}
+                  />
+                </div>
+              )
+            ) : (
+              /* 预览直接消费「正在编辑」的主题令牌,应用处于暗色时按暗色编译 */
+              <StudioPreview
+                theme={editing}
+                content={previewDoc ?? ''}
+                containerRef={previewHostRef}
+                inspect={inspectMode}
+                onInspect={handleInspect}
+              />
+            )}
           </div>
         </ResizablePanel>
 
         <ResizableHandle withHandle />
 
-        {/* 右栏：属性面板 + 元素效果小预览 */}
+        {/* 右栏：属性面板(只放调样式的控件) */}
         <ResizablePanel defaultSize="30%" minSize="20%" maxSize="45%">
           <div className="flex h-full flex-col overflow-y-auto">
-            <div className="flex items-center justify-between border-b px-4 py-3">
+            {/* h-14 与中栏头部严格等高 */}
+            <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-background px-4">
               <h2 className="text-sm font-semibold">{element.label}</h2>
-              <div className="flex items-center gap-1">
-                {/* 明/暗令牌套切换 */}
-                <div className="flex overflow-hidden rounded-md border text-xs">
-                  <button
-                    type="button"
-                    className={cn('px-2 py-1', !editDark && 'bg-accent font-medium')}
-                    onClick={() => setEditDark(false)}
-                  >
-                    亮
-                  </button>
-                  <button
-                    type="button"
-                    className={cn('px-2 py-1', editDark && 'bg-accent font-medium')}
-                    onClick={() => setEditDark(true)}
-                  >
-                    暗
-                  </button>
-                </div>
-                <Button variant="ghost" size="sm" onClick={resetElement}>
-                  <RotateCcw /> 恢复默认
-                </Button>
-              </div>
-            </div>
-            {editDark && (
-              <p className="border-b bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
-                正在编辑暗色令牌套:仅在应用切换到暗色模式时生效,适合为同一主题定义明暗两副面孔。
-              </p>
-            )}
-            {editingIsBuiltin && (
-              <p className="border-b bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
-                内置主题为只读展示，改动任意一项时会自动创建「{editing.name} 副本」并继续编辑。
-              </p>
-            )}
-            {/* 元素效果：当前元素的专属参照物，与控件直接对照；也是回落色的测量源 */}
-            <div className="border-b px-4 py-3">
-              <p className="pb-1.5 text-xs font-medium text-muted-foreground">元素效果</p>
-              <div className="rounded-lg border bg-background p-3">
-                <div ref={miniPreviewRef} data-mini-preview={element.id}>
-                  <ThemeScopedPreview
-                    theme={editing}
-                    content={ELEMENT_SAMPLES[element.id] ?? element.label}
-                    compact
-                  />
-                </div>
-              </div>
+              <Button variant="ghost" size="xs" onClick={resetElement} className="font-normal">
+                <RotateCcw /> 恢复默认
+              </Button>
             </div>
             <div className="px-4 py-2">
               {element.fields.map((f) =>
@@ -537,20 +604,10 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     key={f.key}
                     field={f}
                     value={activeTokens[f.key]}
+                    fallbackFont={fallbackFonts[f.key]}
                     onChange={(v) => setTokenStable(f.key, v)}
                   />
                 ),
-              )}
-              {element.fields.some((f) => f.hint) && (
-                <div className="mt-3 space-y-1 border-t pt-3">
-                  {element.fields
-                    .filter((f) => f.hint)
-                    .map((f) => (
-                      <p key={f.key} className="text-xs text-muted-foreground">
-                        {f.label}：{f.hint}
-                      </p>
-                    ))}
-                </div>
               )}
             </div>
 
@@ -586,6 +643,37 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
 
       <Toaster />
     </div>
+    </TooltipProvider>
+  )
+}
+
+/** 导入模式的空态:引导从工作区选一篇笔记作为预览文稿 */
+function ImportEmptyState({
+  hasNotes,
+  onOpenPicker,
+}: {
+  hasNotes: boolean
+  onOpenPicker: () => void
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
+      <FileText className="size-8 text-muted-foreground/50" />
+      <div className="space-y-1">
+        <p className="text-sm text-muted-foreground">
+          {hasNotes ? '从工作区选一篇 Markdown 笔记作为预览文稿' : '当前没有笔记——先在主界面打开一个目录工作区'}
+        </p>
+        {hasNotes && (
+          <p className="text-xs text-muted-foreground/70">
+            文稿会复制为编辑副本,可边改内容边调样式,不会写回源文件
+          </p>
+        )}
+      </div>
+      {hasNotes && (
+        <Button variant="outline" size="sm" onClick={onOpenPicker}>
+          <FolderOpen /> 选择笔记
+        </Button>
+      )}
+    </div>
   )
 }
 
@@ -593,17 +681,15 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
 function StudioPreview({
   theme,
   content,
-  forceDark = false,
   inspect = false,
   onInspect,
   containerRef,
 }: {
   theme: ThemeFile
   content: string
-  forceDark?: boolean
   inspect?: boolean
   onInspect?: (elementId: string) => void
-  /** 外部直写 CSS 变量的挂载点(取色器拖动实时预览用) */
+  /** 外部直写 CSS 变量与回落色测量的挂载点(取色器拖动实时预览用) */
   containerRef?: React.RefObject<HTMLDivElement | null>
 }) {
   return (
@@ -611,7 +697,6 @@ function StudioPreview({
       <ThemeScopedPreview
         theme={theme}
         content={content}
-        forceDark={forceDark}
         inspect={inspect}
         onInspect={onInspect}
       />
@@ -622,17 +707,11 @@ function StudioPreview({
 const ThemeScopedPreview = memo(function ThemeScopedPreview({
   theme,
   content,
-  compact = false,
-  forceDark = false,
   inspect = false,
   onInspect,
 }: {
   theme: ThemeFile
   content: string
-  /** 迷你模式：右栏「元素效果」卡片用，去掉限宽与大留白 */
-  compact?: boolean
-  /** 工场编辑暗色令牌套时强制按暗色编译 */
-  forceDark?: boolean
   /** inspect 模式:点击元素回调(配合中栏的「选择元素」开关) */
   inspect?: boolean
   onInspect?: (elementId: string) => void
@@ -640,15 +719,15 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
   const html = useMemo(() => renderMarkdown(content).html, [content])
   const isDark = useAppearance((s) => s.isDark)
   const cssVars = useMemo(
-    () => compileTokens(theme.tokens, theme.dark, forceDark || isDark),
-    [theme, forceDark, isDark],
+    () => compileTokens(theme.tokens, theme.dark, isDark),
+    [theme, isDark],
   )
   useExtraCss(theme.id, theme.extraCss)
 
-  // 图片灯箱:仅完整预览开启;inspect(选择元素)模式下点击仍走元素拾取。
-  // 一次收集预览全部图片,可在灯箱里左右切换
+  // 图片灯箱:一次收集预览全部图片,可在灯箱里左右切换;
+  // inspect(选择元素)模式下点击仍走元素拾取
   const [lightbox, setLightbox] = useState<{ slides: LightboxSlide[]; index: number } | null>(null)
-  const lightboxEnabled = !compact && !inspect
+  const lightboxEnabled = !inspect
   const handleImageClick = (e: React.MouseEvent) => {
     const state = collectLightboxState(e.currentTarget, e.target)
     if (!state) return
@@ -669,13 +748,15 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
   return (
     <div
       className={cn(
-        compact ? 'max-h-52 overflow-y-auto' : 'h-full overflow-y-auto',
+        'h-full overflow-y-auto',
         inspect && 'cursor-crosshair [&_*:hover]:outline [&_*:hover]:outline-1 [&_*:hover]:outline-primary/50',
       )}
+      // 画布背景铺在滚动容器(正文纸张之外);纸张颜色仍在 article 上
+      style={{ background: cssVars['--t-app-bg'] }}
       onClick={handleClick}
     >
       <article
-        className={cn('themd-prose', compact ? 'px-0 py-1 text-sm' : 'mx-auto px-6 py-8')}
+        className="themd-prose mx-auto px-6 py-8"
         style={cssVars as React.CSSProperties}
         dangerouslySetInnerHTML={{ __html: html }}
       />
@@ -710,9 +791,12 @@ function ThemeLibrary(props: {
     <div className="border-b p-2">
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="text-xs font-medium text-muted-foreground">主题库</span>
-        <Button variant="ghost" size="xs" onClick={props.onCreate}>
-          <FilePlus2 /> 新建
-        </Button>
+        <IconTip label="新建主题">
+          <Button variant="ghost" size="icon-xs" onClick={props.onCreate} aria-label="新建主题">
+            {/* Plus:应用内「新建」的统一语言(主页新建笔记同款) */}
+            <Plus />
+          </Button>
+        </IconTip>
       </div>
       <div className="space-y-0.5">
         {themes.map((t) => (
@@ -739,13 +823,14 @@ function ThemeLibrary(props: {
               <Button
                 variant="ghost"
                 size="xs"
-                className="shrink-0"
+                className="shrink-0 font-normal"
                 onClick={() => props.onSelectPreview(t.id)}
               >
                 使用
               </Button>
             )}
             <ThemeItemMenu
+              canRename={!t.builtin}
               canDelete={!t.builtin}
               duplicating={false}
               onDuplicate={() => props.onDuplicate(t.id)}
@@ -789,6 +874,7 @@ function ThemeLibrary(props: {
 }
 
 function ThemeItemMenu(props: {
+  canRename: boolean
   canDelete: boolean
   duplicating: boolean
   onDuplicate: () => void
@@ -803,9 +889,13 @@ function ThemeItemMenu(props: {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={props.onRename}>
-          <Pencil /> 重命名
-        </DropdownMenuItem>
+        {/* 重命名只对用户主题有意义:内置主题在 BUILTIN_THEMES 静态表里,
+            renameTheme 只改 state.themes,对内置点了也是静默无效 */}
+        {props.canRename && (
+          <DropdownMenuItem onClick={props.onRename}>
+            <Pencil /> 重命名
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={props.onDuplicate}>
           <Copy /> 创建副本
         </DropdownMenuItem>
@@ -858,7 +948,7 @@ function ElementNav({
                     onClick={() => onSelect(e.id)}
                     className={cn(
                       'block w-full rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-accent',
-                      selected === e.id && 'bg-accent font-medium',
+                      selected === e.id && 'bg-accent',
                     )}
                   >
                     {e.label}

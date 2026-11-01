@@ -25,23 +25,29 @@ export const TOKEN_VAR = {
   'heading.marginTop': '--t-heading-margin-top',
   'heading.marginBottom': '--t-heading-margin-bottom',
   // 各级标题
+  'h1.font': '--t-h1-font',
   'h1.size': '--t-h1-size',
   'h1.color': '--t-h1-color',
   'h1.borderWidth': '--t-h1-border-width',
   'h1.borderColor': '--t-h1-border-color',
   'h1.paddingBottom': '--t-h1-padding-bottom',
   'h2.size': '--t-h2-size',
+  'h2.font': '--t-h2-font',
   'h2.color': '--t-h2-color',
   'h2.borderWidth': '--t-h2-border-width',
   'h2.borderColor': '--t-h2-border-color',
   'h2.paddingBottom': '--t-h2-padding-bottom',
   'h3.size': '--t-h3-size',
+  'h3.font': '--t-h3-font',
   'h3.color': '--t-h3-color',
   'h4.size': '--t-h4-size',
+  'h4.font': '--t-h4-font',
   'h4.color': '--t-h4-color',
   'h5.size': '--t-h5-size',
+  'h5.font': '--t-h5-font',
   'h5.color': '--t-h5-color',
   'h6.size': '--t-h6-size',
+  'h6.font': '--t-h6-font',
   'h6.color': '--t-h6-color',
   // 行内元素
   'strong.weight': '--t-strong-weight',
@@ -106,6 +112,9 @@ export const TOKEN_VAR = {
   'img.borderWidth': '--t-img-border-width',
   'img.borderColor': '--t-img-border-color',
   'img.shadow': '--t-img-shadow',
+  // 画布背景:预览区整体(正文那张「纸」之外)。值为完整 CSS background
+  // (颜色/渐变/url(...) center / cover no-repeat),消费点是预览滚动容器
+  'app.bg': '--t-app-bg',
 } as const
 
 export type TokenKey = keyof typeof TOKEN_VAR

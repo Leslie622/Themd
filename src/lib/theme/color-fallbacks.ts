@@ -7,7 +7,9 @@ import type { TokenKey } from './tokens'
  */
 const COLOR_FALLBACK_TARGETS: Partial<Record<TokenKey, { selector: string; prop: string }>> = {
   'root.color': { selector: ':scope', prop: 'color' },
-  'heading.color': { selector: 'h1', prop: 'color' },
+  // 共用标题令牌从正文根实测:未设置时标题 inherit 正文色;
+  // 若测 h1,计算值会被 h1.color 等各级覆盖污染(共用的回落 ≠ 某一级的实际值)
+  'heading.color': { selector: ':scope', prop: 'color' },
   'h1.color': { selector: 'h1', prop: 'color' },
   'h2.color': { selector: 'h2', prop: 'color' },
   'h3.color': { selector: 'h3', prop: 'color' },
@@ -69,6 +71,46 @@ export function resolveFallbackColors(
       }
     }
     if (value) result[key] = value
+  }
+  return result
+}
+
+/** 字体令牌 → 预览里的目标元素(回落字体从哪个元素实测)。
+ *  共用 heading.font 同理从正文根实测:未设置时标题 inherit 正文字体,
+ *  测 h1 会被 h1.font 等各级设置污染。 */
+const FONT_FALLBACK_TARGETS: Partial<Record<TokenKey, string>> = {
+  'root.font': ':scope',
+  'heading.font': ':scope',
+  'h1.font': 'h1',
+  'h2.font': 'h2',
+  'h3.font': 'h3',
+  'h4.font': 'h4',
+  'h5.font': 'h5',
+  'h6.font': 'h6',
+  'inlineCode.font': ':scope p code, :scope li code',
+  'codeBlock.font': 'pre',
+}
+
+/**
+ * 在预览根元素上测量一组字体令牌的回落字体:computed font-family 的
+ * 第一个族名(去引号)。未设置时标题继承正文、正文回落基础样式表,
+ * 测出来的就是「实际生效」的那个字体。找不到目标元素/族名的项不出现在结果里。
+ */
+export function resolveFallbackFonts(
+  previewRoot: HTMLElement,
+  keys: TokenKey[],
+): Partial<Record<TokenKey, string>> {
+  const result: Partial<Record<TokenKey, string>> = {}
+  for (const key of keys) {
+    const selector = FONT_FALLBACK_TARGETS[key]
+    if (!selector) continue
+    const el = selector === ':scope' ? previewRoot : previewRoot.querySelector(selector)
+    if (!el) continue
+    const family = getComputedStyle(el)
+      .fontFamily.split(',')[0]
+      ?.trim()
+      .replace(/^['"]|['"]$/g, '')
+    if (family) result[key] = family
   }
   return result
 }

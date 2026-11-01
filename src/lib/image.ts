@@ -16,6 +16,32 @@ const MAX_INPUT_BYTES = 20 * 1024 * 1024
 const isGif = (file: File) => file.type === 'image/gif'
 const isSvg = (file: File) => file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
 
+const EXT_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  bmp: 'image/bmp',
+  avif: 'image/avif',
+  svg: 'image/svg+xml',
+}
+
+/** 图片判定:MIME 优先,扩展名兜底——对话框选图经字节重建 File 时类型可能为空 */
+const isImageFile = (file: File) =>
+  file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp|avif|svg)$/i.test(file.name)
+
+/**
+ * 由文件字节构造 File:按扩展名补齐 MIME(isGif 等判定依赖 type;
+ * 裸 new File 的 type 是空串,会被图片守卫误拒)。
+ * 内部做 slice() 复制以满足 BlobPart 的 ArrayBuffer 背书。
+ */
+export function fileFromBytes(bytes: Uint8Array, name: string): File {
+  const dot = name.lastIndexOf('.')
+  const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : ''
+  return new File([bytes.slice()], name, { type: EXT_MIME[ext] ?? '' })
+}
+
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -34,16 +60,17 @@ async function rawBlob(file: File): Promise<Blob> {
 const fallbackExt = (file: File) => (/\.(\w+)$/.exec(file.name)?.[1] ?? 'png').toLowerCase()
 
 /**
- * 内嵌模式的压缩管线:位图解码 → 等比缩放(长边 1600)→ WebP(0.82)。
+ * 内嵌模式的压缩管线:位图解码 → 等比缩放(长边默认 1600)→ WebP(0.82)。
  * 内嵌把图片塞进正文,体积即笔记本体,必须压缩;GIF/SVG 原样(动画/矢量
  * 不能重编码)。本地 assets 模式不走这里——原文件字节直接落盘,保真优先。
+ * maxEdge 可调:主题画布背景等大图用 2560 保证壁纸画质。
  */
-async function compressToBlob(file: File): Promise<{ blob: Blob; ext: string }> {
+async function compressToBlob(file: File, maxEdge = MAX_EDGE): Promise<{ blob: Blob; ext: string }> {
   if (isGif(file) || isSvg(file)) return { blob: await rawBlob(file), ext: isSvg(file) ? 'svg' : 'gif' }
   if (file.size > MAX_INPUT_BYTES) throw new Error('图片超过 20MB')
   const bitmap = await createImageBitmap(file)
   try {
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height))
     const w = Math.max(1, Math.round(bitmap.width * scale))
     const h = Math.max(1, Math.round(bitmap.height * scale))
     const canvas = document.createElement('canvas')
@@ -64,11 +91,40 @@ async function compressToBlob(file: File): Promise<{ blob: Blob; ext: string }> 
 
 /** 处理单个图片文件为内嵌 data URL(内嵌模式);用户可感知的错误抛出,由调用方 toast */
 export async function fileToEmbeddedImage(file: File): Promise<string> {
-  if (!file.type.startsWith('image/')) {
+  if (!isImageFile(file)) {
     throw new Error(`「${file.name}」不是图片`)
   }
   const { blob } = await compressToBlob(file)
   return blobToDataUrl(blob)
+}
+
+/** 画布背景的平铺阈值:长边小于它的图按纹理语义平铺,不小于则当壁纸 cover 铺满 */
+const BG_TILE_MAX_EDGE = 512
+
+/**
+ * 处理单个图片文件为画布背景的完整 CSS background 值。与内嵌同管线,
+ * 长边 2560 保证壁纸画质;主题需要可分享可导出,图片必须内嵌而不是
+ * 引用本机路径。GIF 过 canvas 会丢动画(静帧),可接受。
+ * 尺寸判定:大图 cover 铺满;小图(纹理/图案)按原始尺寸平铺铺满——
+ * 平铺语义下小图才是「能铺满」的。测不出尺寸(SVG 无内在尺寸等)按大图处理。
+ */
+export async function fileToBackgroundValue(file: File): Promise<string> {
+  if (!isImageFile(file)) {
+    throw new Error(`「${file.name}」不是图片`)
+  }
+  const { blob } = await compressToBlob(file, 2560)
+  const dataUrl = await blobToDataUrl(blob)
+  let tile = false
+  try {
+    const bitmap = await createImageBitmap(blob)
+    tile = Math.max(bitmap.width, bitmap.height) < BG_TILE_MAX_EDGE
+    bitmap.close()
+  } catch {
+    // 解码失败(如无内在尺寸的 SVG)按壁纸处理
+  }
+  return tile
+    ? `url("${dataUrl}") repeat`
+    : `url("${dataUrl}") center / cover no-repeat`
 }
 
 /**
@@ -82,7 +138,7 @@ export async function fileToAssetImage(
   root: string,
   write: (path: string, bytes: Uint8Array) => Promise<void>,
 ): Promise<{ relativePath: string; absolutePath: string }> {
-  if (!file.type.startsWith('image/')) {
+  if (!isImageFile(file)) {
     throw new Error(`「${file.name}」不是图片`)
   }
   if (file.size > MAX_INPUT_BYTES) throw new Error('图片超过 20MB')
@@ -105,7 +161,7 @@ export async function fileToUploadedImage(
   file: File,
   upload: (bytes: Uint8Array, filename: string) => Promise<{ url: string }>,
 ): Promise<string> {
-  if (!file.type.startsWith('image/')) {
+  if (!isImageFile(file)) {
     throw new Error(`「${file.name}」不是图片`)
   }
   const { blob, ext } = await compressToBlob(file)

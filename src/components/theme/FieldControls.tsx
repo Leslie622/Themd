@@ -1,12 +1,10 @@
-import { RotateCcw } from 'lucide-react'
+import { ImagePlus, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { memo, useEffect, useRef, useState } from 'react'
-import {
-  detectInstalledFonts,
-  getCachedFullFontList,
-  isLocalFontAccessSupported,
-  requestAllFonts,
-} from '@/lib/theme/font-list'
+import { FontField } from '@/components/settings/FontField'
+import { useLocalFontList } from '@/components/settings/use-local-font-list'
+import { platformServices } from '@/app/platform'
+import { fileFromBytes, fileToBackgroundValue } from '@/lib/image'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,10 +20,13 @@ import { cn } from '@/lib/utils'
 export const FieldRow = memo(function FieldRow({
   field,
   value,
+  fallbackFont,
   onChange,
 }: {
   field: FieldDef
   value: string | undefined
+  /** 字体令牌的回落字体(实测);其他类型忽略 */
+  fallbackFont?: string
   onChange: (v: string | undefined) => void
 }) {
   const set = (v: string) => onChange(v === '' ? undefined : v)
@@ -35,7 +36,7 @@ export const FieldRow = memo(function FieldRow({
     <div className="flex items-center gap-2 py-1.5">
       <Label className="w-24 shrink-0 text-xs text-muted-foreground">{field.label}</Label>
       <div className="min-w-0 flex-1">
-        <FieldControl field={field} value={value} onChange={set} />
+        <FieldControl field={field} value={value} fallbackFont={fallbackFont} onChange={set} />
       </div>
       <Button
         variant="ghost"
@@ -54,15 +55,19 @@ export const FieldRow = memo(function FieldRow({
 function FieldControl({
   field,
   value,
+  fallbackFont,
   onChange,
 }: {
   field: FieldDef
   value: string | undefined
+  fallbackFont?: string
   onChange: (v: string) => void
 }) {
   switch (field.type) {
     case 'color':
       return <ColorInput field={field} value={value} onChange={onChange} />
+    case 'background':
+      return <BackgroundInput value={value} onChange={onChange} />
     case 'size':
       return <SizeInput value={value} onChange={onChange} unit={field.unit} placeholder={field.placeholder} />
     case 'number':
@@ -96,7 +101,7 @@ function FieldControl({
         </Select>
       )
     case 'font-family':
-      return <FontFamilyInput value={value} onChange={onChange} />
+      return <FontFamilyInput field={field} value={value} fallbackFamily={fallbackFont} onChange={onChange} />
     case 'select':
       return (
         <Select value={value ?? ''} onValueChange={onChange}>
@@ -279,15 +284,16 @@ function ColorInput({
     }
   }, [safe])
 
-  // 色块显示:已设置→该色;未设置→回落色(若可测),否则棋盘格
+  // 色块显示:已设置→该色;未设置→回落色(若可测),否则透明棋盘格
   const swatchStyle: React.CSSProperties = value
     ? { background: value }
     : fallbackColor
       ? { background: fallbackColor }
-      : {
-          background:
-            'linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%), linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%) 4px 4px / 8px 8px, white',
-        }
+      : { background: TRANSPARENT_SWATCH }
+
+  // 未设置但测到回落色:输入框直接回显当前生效的色值(灰斜体 = 继承,非自设),
+  // 输入/取色即覆盖,清空回到回显——比「未设置 · 当前 …」占位符直观
+  const echoed = !value && fallbackColor ? fallbackColor : undefined
 
   return (
     <div className="flex items-center gap-1.5">
@@ -310,11 +316,86 @@ function ColorInput({
         />
       </label>
       <Input
-        value={value ?? ''}
+        value={value ?? echoed ?? ''}
         placeholder={fallbackColor ? `未设置 · 当前 ${fallbackColor}` : '未设置'}
         onChange={(e) => onChange(e.target.value)}
-        className="h-8 font-mono text-xs"
+        className={cn('h-8 font-mono text-xs', echoed && 'text-muted-foreground italic')}
+        title={echoed ? '未设置,显示当前生效的回落色;输入或取色即可覆盖' : undefined}
       />
+    </div>
+  )
+}
+
+/** 未设置色板的「透明」标识:标准 crisp 棋盘格(国际通用的透明符号) */
+const TRANSPARENT_SWATCH = 'repeating-conic-gradient(#dcdcdc 0% 25%, #ffffff 0% 50%) 0 0 / 8px 8px'
+
+/**
+ * 画布背景控件:值 = 完整 CSS background(颜色/渐变/图片),由预览滚动容器
+ * 以 background 原样消费。色块 + hex 覆盖最常用的纯色;「图片…」把本机图片
+ * 压成 data URL 内嵌进主题值(主题要可分享可导出,不能引用本机路径);
+ * 自由文本承接渐变、多背景等高级写法。
+ */
+function BackgroundInput({ value, onChange }: { value: string | undefined; onChange: (v: string) => void }) {
+  const [picking, setPicking] = useState(false)
+  const hasImage = value?.includes('url(') ?? false
+  // 色块即预览:颜色/图片都是 background 值,直接渲染到色块上;未设置 = 透明棋盘格
+  const swatchStyle: React.CSSProperties = value ? { background: value } : { background: TRANSPARENT_SWATCH }
+  // 非受控取色器:只在纯色/未设置态显示,外部重置时同步回显
+  const colorInputRef = useRef<HTMLInputElement>(null)
+  const safe = value && /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : '#ffffff'
+  useEffect(() => {
+    if (colorInputRef.current && !hasImage) colorInputRef.current.value = safe
+  }, [safe, hasImage])
+
+  const pickImage = async () => {
+    setPicking(true)
+    try {
+      const picked = await platformServices.files.pickImageFile()
+      if (!picked) return
+      const bytes = await platformServices.files.readBinaryFile(picked.path)
+      // fileFromBytes 按扩展名补 MIME(裸 File 的 type 为空会被图片守卫误拒);
+      // fileToBackgroundValue 自动判定:大图 cover、小图平铺
+      onChange(await fileToBackgroundValue(fileFromBytes(bytes, picked.name)))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '读取图片失败')
+    } finally {
+      setPicking(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <label className="relative size-8 shrink-0 overflow-hidden rounded-md border">
+        <span className="absolute inset-0" style={swatchStyle} />
+        {/* 图片态不叠取色器:点色块换色会静默丢掉图片,换色走清空后重设 */}
+        {!hasImage && (
+          <input
+            ref={colorInputRef}
+            type="color"
+            defaultValue={safe}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+            aria-label="画布背景取色器"
+          />
+        )}
+      </label>
+      <Input
+        value={value ?? ''}
+        placeholder="未设置"
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 min-w-0 flex-1"
+      />
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-8 shrink-0"
+        disabled={picking}
+        onClick={() => void pickImage()}
+        title="插入背景图片"
+        aria-label="插入背景图片"
+      >
+        <ImagePlus className="size-4" />
+      </Button>
     </div>
   )
 }
@@ -363,113 +444,42 @@ function SizeInput({
   )
 }
 
-const FONT_PRESETS = [
-  { label: 'Geist（默认无衬线）', value: "'Geist Variable', sans-serif" },
-  { label: '系统界面字体', value: 'system-ui, sans-serif' },
-  { label: '宋体（衬线）', value: "'Songti SC', 'SimSun', serif" },
-  { label: '楷体', value: "'Kaiti SC', 'KaiTi', serif" },
-  { label: '黑体', value: "'PingFang SC', 'Microsoft YaHei', sans-serif" },
-  { label: '等宽', value: "ui-monospace, Consolas, monospace" },
-]
-
 /**
- * 字体选择:预设下拉 + 本机字体(挂载时自动用 canvas 测量法探测,约 70ms,结果缓存)
- * + 任意值自定义输入。浏览器安全模型不允许静默枚举全部已装字体,
- * 测量法覆盖常见中西文与编程字体;字体列表逐项用自身字体渲染预览。
+ * 字体选择:直接复用设置模块的 FontField(逻辑与设置抽屉一致)——
+ * 触发器回显当前值,点击打开完整本机字体弹窗(搜索/逐行复制/底部自由输入,
+ * 支持逗号分隔多族名的 font-family 语义),不再是下拉框。
+ * 代码类令牌(inlineCode/codeBlock)用等宽语境预览字体。
  */
-function FontFamilyInput({ value, onChange }: { value: string | undefined; onChange: (v: string) => void }) {
-  const isPreset = FONT_PRESETS.some((f) => f.value === value)
-  // 字体来源优先级:上次授权的完整列表(Local Font Access)> canvas 测量法(常见字体探测)
-  const [localFonts, setLocalFonts] = useState<string[] | null>(null)
-  const [accessSupported, setAccessSupported] = useState(false)
-  const [requesting, setRequesting] = useState(false)
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      setLocalFonts(getCachedFullFontList() ?? detectInstalledFonts())
-      setAccessSupported(isLocalFontAccessSupported())
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  const requestFullList = async () => {
-    setRequesting(true)
-    const result = await requestAllFonts()
-    setRequesting(false)
-    if (result.ok) {
-      setLocalFonts(result.fonts)
-    } else if (result.reason === 'denied') {
-      toast.error('字体访问权限被拒绝', {
-        description:
-          '请点地址栏左侧的图标 → 权限 → 字体,改为「允许」后重试。',
-        duration: 10000,
-      })
-    } else {
-      toast.error('读取字体列表失败，请重试')
-    }
-  }
-
+function FontFamilyInput({
+  field,
+  value,
+  fallbackFamily,
+  onChange,
+}: {
+  field: FieldDef
+  value: string | undefined
+  /** 未设置时实际生效的字体族(从预览实测);标题继承正文、正文回落基础样式 */
+  fallbackFamily?: string
+  onChange: (v: string) => void
+}) {
+  const { fonts } = useLocalFontList()
+  const mono = field.key === 'inlineCode.font' || field.key === 'codeBlock.font'
+  // 回显语义:标题各级跟「标题（共用）」走,共用跟正文走,其余跟随基础样式表默认
+  const followPrefix = /^h[1-6]\.font$/.test(field.key)
+    ? '跟随标题'
+    : field.key === 'heading.font'
+      ? '跟随正文'
+      : '跟随默认'
+  const echo = !value && fallbackFamily ? `${followPrefix} · ${fallbackFamily}` : undefined
   return (
-    <div className="flex items-center gap-1">
-      <Select
-        value={
-          isPreset || !value
-            ? (value ?? 'custom')
-            : localFonts?.some((f) => value.includes(`'${f}'`))
-              ? value
-              : 'custom'
-        }
-        onValueChange={(v) => {
-          if (v !== 'custom') onChange(v)
-        }}
-      >
-        <SelectTrigger size="sm" className="w-32 shrink-0">
-          <SelectValue placeholder="自定义" />
-        </SelectTrigger>
-        <SelectContent className="max-h-72">
-          <SelectGroup>
-          <div className="px-2 py-1 text-xs font-medium text-muted-foreground">预设组合</div>
-          {FONT_PRESETS.map((f) => (
-              <SelectItem key={f.value} value={f.value}>
-              {f.label}
-            </SelectItem>
-          ))}
-          {localFonts && localFonts.length > 0 && (
-            <>
-              <div className="flex items-center justify-between gap-1 border-t px-2 py-1">
-                <span className="text-xs font-medium text-muted-foreground">
-                  本机字体（{localFonts.length}）
-                </span>
-                {accessSupported && (
-                  <button
-                    type="button"
-                    disabled={requesting}
-                    onClick={() => void requestFullList()}
-                    className="text-xs text-primary hover:underline disabled:opacity-50"
-                    title="通过浏览器授权读取全部已安装字体(含你自行安装的)"
-                  >
-                    {requesting ? '读取中…' : '获取完整列表'}
-                  </button>
-                )}
-              </div>
-              {localFonts.map((f) => (
-                  <SelectItem key={f} value={`'${f}'`}>
-                  <span className="truncate" style={{ fontFamily: `'${f}', monospace` }}>
-                    {f}
-                  </span>
-                </SelectItem>
-              ))}
-            </>
-          )}
-            <SelectItem value="custom">自定义…</SelectItem>
-          </SelectGroup>
-          </SelectContent>
-      </Select>
-      <Input
-        value={value ?? ''}
-        placeholder="font-family 值"
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8 min-w-0 flex-1 font-mono text-xs"
-      />
-    </div>
+    <FontField
+      label=""
+      value={value ?? ''}
+      onChange={onChange}
+      placeholder="未设置"
+      mono={mono}
+      fonts={fonts}
+      echo={echo}
+    />
   )
 }

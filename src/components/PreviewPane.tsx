@@ -164,6 +164,8 @@ export const PreviewPane = memo(function PreviewPane({
           <div
             ref={setScrollEl}
             className="h-full min-w-0 overflow-y-auto"
+            // 画布背景铺在滚动容器(正文纸张之外);纸张颜色仍在 article 上
+            style={{ background: cssVars['--t-app-bg'] }}
             onClick={handleClick}
             onScroll={handleScroll}
           >

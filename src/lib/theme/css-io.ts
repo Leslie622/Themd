@@ -10,7 +10,9 @@ import { TOKEN_VAR, type ThemeTokens, type TokenKey } from './tokens'
 
 export type CssScope = '.themd-prose' | '#write'
 
-/** 导出：令牌 → 完整 .css 文本。样式值直接来自令牌（差异集），未设置的项不输出。 */
+/** 导出：令牌 → 完整 .css 文本。样式值直接来自令牌（差异集），未设置的项不输出。
+ *  app.* 画布类令牌(画布背景)分流到 body 块——它们不属于正文选择器,
+ *  Typora 侧即壁纸语义(body 背景)。 */
 export function exportThemeCss(theme: ThemeFile, scope: CssScope = '.themd-prose'): string {
   const lines: string[] = [
     `/* ${theme.name} — 由 Themd 主题工场导出 */`,
@@ -18,10 +20,12 @@ export function exportThemeCss(theme: ThemeFile, scope: CssScope = '.themd-prose
     '',
   ]
   const body: string[] = []
+  const appBody: string[] = []
   for (const [key, varName] of Object.entries(TOKEN_VAR)) {
     const value = theme.tokens[key as TokenKey]
     if (value !== undefined && value !== '') {
-      body.push(`  ${cssPropFor(key as TokenKey)}: ${value}; /* ${varName} */`)
+      const target = key.startsWith('app.') ? appBody : body
+      target.push(`  ${cssPropFor(key as TokenKey)}: ${value}; /* ${varName} */`)
     }
   }
   // a.underline 策略展开
@@ -38,6 +42,11 @@ export function exportThemeCss(theme: ThemeFile, scope: CssScope = '.themd-prose
   lines.push(`${scope} {`)
   lines.push(...body)
   lines.push('}')
+  if (appBody.length > 0) {
+    lines.push('', 'body {')
+    lines.push(...appBody)
+    lines.push('}')
+  }
   if (theme.extraCss?.trim()) {
     lines.push('', '/* ── 附加自定义 CSS ── */', theme.extraCss)
   }
@@ -52,6 +61,7 @@ function cssPropFor(key: TokenKey): string {
     'root.leading': 'line-height',
     'root.color': 'color',
     'root.bg': 'background',
+    'app.bg': 'background',
     'root.width': 'max-width',
     'root.spacing': 'letter-spacing',
     'p.marginBottom': 'margin-bottom',
@@ -63,6 +73,8 @@ function cssPropFor(key: TokenKey): string {
     'heading.leading': 'line-height',
     'heading.marginTop': 'margin-top',
     'heading.marginBottom': 'margin-bottom',
+    'h1.font': 'font-family', 'h2.font': 'font-family', 'h3.font': 'font-family',
+    'h4.font': 'font-family', 'h5.font': 'font-family', 'h6.font': 'font-family',
     'h1.size': 'font-size', 'h2.size': 'font-size', 'h3.size': 'font-size',
     'h4.size': 'font-size', 'h5.size': 'font-size', 'h6.size': 'font-size',
     'h1.color': 'color', 'h2.color': 'color', 'h3.color': 'color',

@@ -63,7 +63,8 @@ export function buildStandaloneHtml(note: Note): string {
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--t-root-bg, ${isDark ? '#0f0f10' : '#ffffff'});
+  /* 画布背景优先(app.bg 铺整页),未设则回落纸张颜色 */
+  background: var(--t-app-bg, var(--t-root-bg, ${isDark ? '#0f0f10' : '#ffffff'}));
   min-height: 100vh;
 }
 

@@ -25,6 +25,15 @@ export function createTauriFileGateway(): FileGateway {
       const dir = await open({ directory: true })
       return typeof dir === 'string' ? dir : null
     },
+    async pickImageFile() {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'] }],
+      })
+      if (typeof selected !== 'string') return null
+      const { basename } = await import('@tauri-apps/api/path')
+      return { path: selected, name: await basename(selected) }
+    },
     async writeBinaryFile(path, bytes) {
       await invoke('write_image_file', { path, bytes: Array.from(bytes) })
     },

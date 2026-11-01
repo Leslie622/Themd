@@ -374,7 +374,7 @@ export const LiveEditorPane = memo(function LiveEditorPane({
         <div
           ref={containerRef}
           className="h-full overflow-y-auto"
-          style={cssVars}
+          style={{ ...cssVars, background: 'var(--t-app-bg, transparent)' }}
           onContextMenu={handleContextMenu}
           onMouseMove={onMouseMove}
           onMouseLeave={(e) => {
