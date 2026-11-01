@@ -45,6 +45,10 @@ export function createTauriFileGateway(): FileGateway {
       const { openPath } = await import('@tauri-apps/plugin-opener')
       await openPath(path)
     },
+    async openUrl(url) {
+      const { openUrl } = await import('@tauri-apps/plugin-opener')
+      await openUrl(url)
+    },
     async revealItemInDir(path) {
       const { revealItemInDir } = await import('@tauri-apps/plugin-opener')
       await revealItemInDir(path)

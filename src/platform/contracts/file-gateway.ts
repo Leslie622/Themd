@@ -18,6 +18,8 @@ export interface FileGateway {
   defaultAssetsRoot(): Promise<string>
   /** 用系统默认方式打开文件/目录(资源管理器、图片查看器等) */
   openPath(path: string): Promise<void>
+  /** 用系统默认浏览器打开 URL(笔记里的外部链接) */
+  openUrl(url: string): Promise<void>
   /** 在文件管理器中定位文件(父目录打开并选中该项) */
   revealItemInDir(path: string): Promise<void>
 }

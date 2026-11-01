@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
-import { TextSelection } from '@tiptap/pm/state'
+import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { FolderOpen } from 'lucide-react'
 import {
   Bold,
@@ -44,6 +44,7 @@ import { LiveEditorController } from '@/modules/live-editor/application/live-edi
 import {
   copyAsHtml,
   copyAsMarkdown,
+  copyNodeAsMarkdown,
   copySelection,
   copySimplified,
   currentHeadingLevel,
@@ -59,6 +60,7 @@ import {
   insertTable,
   pasteAsPlainText,
   pasteClipboard,
+  removeLink,
   selectionEmpty,
   setHeading,
   toggleBold,
@@ -106,6 +108,36 @@ function openAsset(absolute: string): void {
   platformServices.files.revealItemInDir(absolute).catch(() =>
     platformServices.files.openPath(absolute).catch(() => toast.error('打开图片失败')),
   )
+}
+
+/**
+ * 右键图片 → 把 PM 选区设到该图片节点(Typora 同款:右键即选中目标,
+ * 剪切/复制/删除随之作用于图)。找的是 DOM 祖先链上的 image 节点,
+ * NodeView 外壳(span)不影响定位。
+ */
+function selectNodeAtImage(editor: NonNullable<ReturnType<typeof useEditor>>, img: HTMLImageElement): boolean {
+  const { view } = editor
+  let pos: number
+  try {
+    pos = view.posAtDOM(img, 0)
+  } catch {
+    return false
+  }
+  const $pos = view.state.doc.resolve(pos)
+  for (let d = $pos.depth; d >= 1; d--) {
+    if ($pos.node(d).type.name === 'image') {
+      view.dispatch(
+        view.state.tr.setSelection(NodeSelection.create(view.state.doc, $pos.before(d))),
+      )
+      return true
+    }
+  }
+  const at = view.state.doc.nodeAt(pos)
+  if (at?.type.name === 'image') {
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)))
+    return true
+  }
+  return false
 }
 
 /**
@@ -290,11 +322,48 @@ export const LiveEditorPane = memo(function LiveEditorPane({
 
   // ── 右键菜单状态:打开瞬间取选择区快照(与 EditorPane 的 menuTick 同法) ──
   const [menuTick, setMenuTick] = useState(0)
+  /** 右键目标上下文:图片(markdown 原始 src,已在 PM 中选中)或链接 href */
+  const [ctxImage, setCtxImage] = useState<string | null>(null)
+  const [ctxLink, setCtxLink] = useState<string | null>(null)
   const ed = editor
   const selEmpty = menuTick >= 0 && (!ed || selectionEmpty(ed))
+  // 节点选区(右键图片等):行内 mark/标题类命令不适用,格式按钮禁用
+  const nodeSel = menuTick >= 0 && !!ed && ed.state.selection instanceof NodeSelection
   const headingLevel = menuTick >= 0 && ed ? currentHeadingLevel(ed) : 0
   const runEditor = (fn: (target: NonNullable<typeof ed>) => void) => {
     if (ed) fn(ed)
+  }
+  /** 右键即上下文化(Typora 同款):图片→选中节点并记 src;链接→记 href;否则普通文本菜单 */
+  const handleContextMenu = (e: React.MouseEvent) => {
+    setMenuTick((t) => t + 1)
+    const target = e.target as HTMLElement
+    const targetEd = editorRef.current
+    const img = target.closest('img')
+    if (img instanceof HTMLImageElement && targetEd && selectNodeAtImage(targetEd, img)) {
+      setCtxImage(rawSrcOf(img) ?? img.getAttribute('src') ?? '')
+      setCtxLink(null)
+      return
+    }
+    // 文本/链接:落点不在当前选区内时把光标挪过去(否则剪切作用于旧选区)
+    if (targetEd) {
+      const view = targetEd.view
+      const at = view.posAtCoords({ left: e.clientX, top: e.clientY })
+      if (at) {
+        const { from, to, empty } = view.state.selection
+        if (empty || at.pos < from || at.pos > to) {
+          view.dispatch(
+            view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(at.pos))),
+          )
+        }
+      }
+    }
+    setCtxImage(null)
+    const anchor = target.closest('a')
+    setCtxLink(anchor instanceof HTMLAnchorElement ? anchor.getAttribute('href') : null)
+  }
+  /** 右键打开外部链接:系统默认浏览器 */
+  const openExternalLink = (href: string) => {
+    platformServices.files.openUrl(href).catch(() => toast.error('打开链接失败'))
   }
 
   return (
@@ -304,7 +373,7 @@ export const LiveEditorPane = memo(function LiveEditorPane({
           ref={containerRef}
           className="h-full overflow-y-auto"
           style={cssVars}
-          onContextMenu={() => setMenuTick((t) => t + 1)}
+          onContextMenu={handleContextMenu}
           onMouseMove={onMouseMove}
           onMouseLeave={hideHover}
         >
@@ -338,6 +407,39 @@ export const LiveEditorPane = memo(function LiveEditorPane({
             onSelect={() => runEditor(deleteSelection)}
           />
         </div>
+        {/* 右键目标上下文:图片 → 打开位置/复制 markdown(剪切/删除走上方网格) */}
+        {ctxImage && (
+          <>
+            <ContextMenuSeparator />
+            {assetsPathToAbsolute(ctxImage) && (
+              <ContextMenuItem
+                onSelect={() => {
+                  const absolute = assetsPathToAbsolute(ctxImage)
+                  if (absolute) openAsset(absolute)
+                }}
+              >
+                <FolderOpen className="size-4" />
+                打开图片位置
+              </ContextMenuItem>
+            )}
+            <ContextMenuItem onSelect={() => runEditor((t) => void copyNodeAsMarkdown(t))}>
+              复制为 Markdown
+            </ContextMenuItem>
+          </>
+        )}
+        {/* 右键链接:打开/复制地址/移除 */}
+        {ctxLink && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => openExternalLink(ctxLink)}>打开链接</ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => void navigator.clipboard.writeText(ctxLink).catch(() => toast.error('复制失败'))}
+            >
+              复制链接地址
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => runEditor(removeLink)}>移除链接</ContextMenuItem>
+          </>
+        )}
         <ContextMenuSub>
           <ContextMenuSubTrigger className="gap-2">复制 / 粘贴为…</ContextMenuSubTrigger>
           <ContextMenuSubContent className="min-w-56">
@@ -359,20 +461,20 @@ export const LiveEditorPane = memo(function LiveEditorPane({
             </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
-        {/* 格式图标网格:行内 + 块级 */}
+        {/* 格式图标网格:行内 + 块级(节点选区如图片不适用,禁用) */}
         <div className="grid grid-cols-4 gap-1 px-1.5 py-1.5">
-          <MenuIconBtn icon={Bold} title="加粗" onSelect={() => runEditor(toggleBold)} />
-          <MenuIconBtn icon={Italic} title="斜体" onSelect={() => runEditor(toggleItalic)} />
-          <MenuIconBtn icon={Code} title="行内代码" onSelect={() => runEditor(toggleInlineCode)} />
-          <MenuIconBtn icon={Link2} title="链接" onSelect={() => runEditor(insertLink)} />
-          <MenuIconBtn icon={TextQuote} title="引用" onSelect={() => runEditor(toggleQuote)} />
-          <MenuIconBtn icon={ListOrdered} title="有序列表" onSelect={() => runEditor(toggleOrderedList)} />
-          <MenuIconBtn icon={List} title="无序列表" onSelect={() => runEditor(toggleBulletList)} />
-          <MenuIconBtn icon={ListTodo} title="任务列表" onSelect={() => runEditor(toggleTaskList)} />
+          <MenuIconBtn icon={Bold} title="加粗" disabled={nodeSel} onSelect={() => runEditor(toggleBold)} />
+          <MenuIconBtn icon={Italic} title="斜体" disabled={nodeSel} onSelect={() => runEditor(toggleItalic)} />
+          <MenuIconBtn icon={Code} title="行内代码" disabled={nodeSel} onSelect={() => runEditor(toggleInlineCode)} />
+          <MenuIconBtn icon={Link2} title="链接" disabled={nodeSel} onSelect={() => runEditor(insertLink)} />
+          <MenuIconBtn icon={TextQuote} title="引用" disabled={nodeSel} onSelect={() => runEditor(toggleQuote)} />
+          <MenuIconBtn icon={ListOrdered} title="有序列表" disabled={nodeSel} onSelect={() => runEditor(toggleOrderedList)} />
+          <MenuIconBtn icon={List} title="无序列表" disabled={nodeSel} onSelect={() => runEditor(toggleBulletList)} />
+          <MenuIconBtn icon={ListTodo} title="任务列表" disabled={nodeSel} onSelect={() => runEditor(toggleTaskList)} />
         </div>
         {/* 段落:标题层级,当前层级打勾 */}
         <ContextMenuSub>
-          <ContextMenuSubTrigger className="gap-2">段落</ContextMenuSubTrigger>
+          <ContextMenuSubTrigger className="gap-2" disabled={nodeSel}>段落</ContextMenuSubTrigger>
           <ContextMenuSubContent className="min-w-44">
             {([1, 2, 3, 4, 5, 6] as const).map((level) => (
               <ContextMenuItem key={level} onSelect={() => runEditor((t) => setHeading(t, level))}>

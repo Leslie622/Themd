@@ -9,7 +9,7 @@
  *   脚注节点),先不提供——强插纯文本会被序列化器转义,破坏源码形状
  */
 import type { Editor } from '@tiptap/core'
-import { TextSelection } from '@tiptap/pm/state'
+import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 
 import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
 import { simplifyMarkdown } from '@/lib/markdown-commands'
@@ -150,8 +150,26 @@ function selectedText(editor: Editor): string {
   return editor.state.doc.textBetween(from, to, '\n\n')
 }
 
+/**
+ * 选区序列化为 markdown 源码(剪贴板主通道,Typora 同款:text/plain 放的是
+ * markdown 源码,粘到别处保持形状)。此前用 textBetween 取纯文本——图片等
+ * 原子节点取出来是空串,复制/剪切直接静默失效。
+ * 用 doc.cut 而非 doc.slice:部分块选区的 slice 是开放切片(块结构丢失,
+ * 段落会拆成多块),cut 把边界闭合回所属块,序列化与原文块形一致。
+ */
+export function selectionToMarkdown(doc: Editor['state']['doc'], from: number, to: number): string {
+  if (from === to) return ''
+  return getMarkdownManager().serialize(doc.cut(from, to).toJSON() as never)
+}
+
+/** 选区 markdown;空序列化回落纯文本(保险,正常选区两者非空) */
+function selectionPayload(editor: Editor): string {
+  const { from, to } = editor.state.selection
+  return selectionToMarkdown(editor.state.doc, from, to) || selectedText(editor)
+}
+
 export function copySelection(editor: Editor): Promise<void> {
-  const text = selectedText(editor)
+  const text = selectionPayload(editor)
   if (!text) return Promise.resolve()
   return navigator.clipboard.writeText(text).catch(() => {
     toastCopyError()
@@ -159,7 +177,7 @@ export function copySelection(editor: Editor): Promise<void> {
 }
 
 export function cutSelection(editor: Editor): Promise<void> {
-  const text = selectedText(editor)
+  const text = selectionPayload(editor)
   if (!text) return Promise.resolve()
   return navigator.clipboard
     .writeText(text)
@@ -201,13 +219,31 @@ export function deleteSelection(editor: Editor): void {
   editor.chain().focus().deleteSelection().run()
 }
 
+/** 节点选区(如右键选中的图片)序列化为 markdown;非节点选区返回 null */
+export function nodeSelectionMarkdown(editor: Editor): string | null {
+  const sel = editor.state.selection
+  if (!(sel instanceof NodeSelection) || sel.from !== sel.to - (sel.node?.nodeSize ?? 1)) return null
+  if (!sel.node) return null
+  return getMarkdownManager().serialize({ type: 'doc', content: [sel.node.toJSON()] })
+}
+
+/** 复制右键选中的图片为 markdown(尺寸后缀一并保留) */
+export function copyNodeAsMarkdown(editor: Editor): Promise<void> {
+  const md = nodeSelectionMarkdown(editor)
+  if (!md) return Promise.resolve()
+  return navigator.clipboard.writeText(md).catch(() => toastCopyError())
+}
+
+/** 光标所在链接解除(右键链接菜单「移除链接」) */
+export function removeLink(editor: Editor): void {
+  editor.chain().focus().extendMarkRange('link').unsetLink().run()
+}
+
 /** 选区序列化为 markdown 源码 */
 export function copyAsMarkdown(editor: Editor): Promise<void> {
   const { from, to } = editor.state.selection
-  if (from === to) return Promise.resolve()
-  const slice = editor.state.doc.slice(from, to)
-  const json = slice.toJSON()
-  const md = getMarkdownManager().serialize({ type: 'doc', content: json.content ?? [] })
+  const md = selectionToMarkdown(editor.state.doc, from, to)
+  if (!md) return Promise.resolve()
   return navigator.clipboard.writeText(md).catch(() => toastCopyError())
 }
 
