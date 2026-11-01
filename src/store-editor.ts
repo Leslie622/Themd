@@ -127,8 +127,8 @@ const applyFonts = (s: Pick<EditorPrefsState, 'uiFontWestern' | 'uiFontCjk' | 'e
 
 const DEFAULTS = {
   viewMode: 'split' as EditorViewMode,
-  /** P1-P3 过渡期默认 v1 装饰层;红线全过(P3 末)切 prosemirror */
-  liveEngine: 'codemirror' as 'prosemirror' | 'codemirror',
+  /** P3 起默认 TipTap 渲染态编辑(红线已过);v1 装饰层保留为开关后备 */
+  liveEngine: 'prosemirror' as 'prosemirror' | 'codemirror',
   fontSize: 13.5,
   /** 空 = 西文不单独指定,由中文字体/通用族承担(中文字体通常自带拉丁字形) */
   uiFontWestern: '',
@@ -178,7 +178,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
     }),
     {
       name: 'themd/ui-preferences/v1',
-      version: 8,
+      version: 9,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<EditorPrefsState>
         const next = { ...DEFAULTS, ...state }
@@ -197,6 +197,11 @@ export const useEditorPrefs = create<EditorPrefsState>()(
           if (next.liveEngine !== 'prosemirror' && next.liveEngine !== 'codemirror') {
             next.liveEngine = 'codemirror'
           }
+        }
+        // v9 红线通过,默认引擎切 TipTap:存量 codemirror 一并翻转(此前的
+        // 值均来自默认而非显式选择);设置开关可再切回且选择被尊重
+        if (version < 9) {
+          if (next.liveEngine === 'codemirror') next.liveEngine = 'prosemirror'
         }
         if (version < 2) {
           if (!next.editorFontWestern?.trim()) next.editorFontWestern = 'JetBrains Mono'

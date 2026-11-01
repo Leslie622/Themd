@@ -4,6 +4,8 @@
  */
 import { Extension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import Bold from '@tiptap/extension-bold'
+import Italic from '@tiptap/extension-italic'
 import Image from '@tiptap/extension-image'
 import {
   Table,
@@ -17,6 +19,7 @@ import TaskItem from '@tiptap/extension-task-item'
 import type { JSONContent } from '@tiptap/core'
 
 import { resolveImageSrcSync } from '@/lib/image-src'
+import { currentProfile } from './serialize-profile-state'
 
 /** MarkdownManager 渲染辅助器的最小面(官方 h 的子集,够表格用) */
 export interface RenderHelper {
@@ -106,10 +109,30 @@ const BaseShortcuts = Extension.create({
   },
 })
 
+/**
+ * 风格档案感知的强调序列化:输出标记跟随当前文档(全文 `__x__` 则编辑过
+ * 的块也写 `__x__`,P3 方案 §4.4)。schema 与官方 Bold/Italic 完全一致,
+ * 仅覆盖 renderMarkdown。
+ */
+const ProfileBold = Bold.extend({
+  renderMarkdown(node, h) {
+    return `${currentProfile().strong}${h.renderChildren(node)}${currentProfile().strong}`
+  },
+})
+
+const ProfileItalic = Italic.extend({
+  renderMarkdown(node, h) {
+    return `${currentProfile().em}${h.renderChildren(node)}${currentProfile().em}`
+  },
+})
+
 /** 实时编辑扩展集:编辑器 schema 与 markdown 解析/序列化的唯一装配点 */
 export function liveExtensions() {
   return [
-    StarterKit,
+    // bold/italic 换成档案感知版(schema 同型);其余走 StarterKit 默认
+    StarterKit.configure({ bold: false, italic: false }),
+    ProfileBold,
+    ProfileItalic,
     LiveImage,
     Table.extend({ renderMarkdown: renderLeanTable }),
     TableRow,

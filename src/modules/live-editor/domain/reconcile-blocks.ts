@@ -38,6 +38,15 @@ export interface ReconcileResult {
   owners: number[]
 }
 
+/** 重对账的可选输入(P3 收紧:拆分归并与合成块行尾) */
+export interface ReconcileOptions {
+  /** 合成块(用户新造的块)的行尾风格,默认 '\n' */
+  eol?: string
+  /** 空段落判定(Enter 在块首拆出的空 P 归下一块,其余新节点归前一节点
+   * 的块——把「段中拆分」关进同一个块,不再外溢标脏相邻块) */
+  isEmptyParagraph?: (node: unknown) => boolean
+}
+
 /** 块尾终止符(与原文保持同型:\r\n / \n / 无) */
 export function terminatorOf(text: string): string {
   if (text.endsWith('\r\n')) return '\r\n'
@@ -59,7 +68,10 @@ export function reconcileBlocks(
   oldNodes: readonly unknown[],
   newNodes: readonly unknown[],
   serialize: (nodes: unknown[]) => string,
+  opts: ReconcileOptions = {},
 ): ReconcileResult {
+  const eol = opts.eol ?? '\n'
+  const isEmptyParagraph = opts.isEmptyParagraph ?? (() => false)
   // ── 第一遍:逐节点归属(带 matched 标记) ─────────────────────────
   const rawOwners: number[] = []
   const matched: boolean[] = []
@@ -72,13 +84,17 @@ export function reconcileBlocks(
       oi++
       continue
     }
-    // 插入:new[ni] 是 old[oi] 之前多出来的节点 → 保守归入 old[oi] 的块
+    // 插入:new[ni] 是 old[oi] 之前多出来的节点。归属细分(P3):
+    // - 空段落 → Enter 打在块首,归下一块(它才是被拆的对象)
+    // - 非空(段中拆分的后半等) → 归前一节点的块,把拆分关进同一个块
     if (
       oi < oldNodes.length &&
       ni + 1 < newNodes.length &&
       newNodes[ni + 1] === oldNodes[oi]
     ) {
-      rawOwners[ni] = owners[oi]
+      rawOwners[ni] = isEmptyParagraph(cur)
+        ? owners[oi]
+        : (ni > 0 ? rawOwners[ni - 1] : owners[oi])
       matched[ni] = false
       continue
     }
@@ -140,10 +156,10 @@ export function reconcileBlocks(
     const anyUnmatched = rs.some((r) => r.anyUnmatched)
     outIndexOf.set(owner, outBlocks.length)
     if (owner === -1) {
-      // 无主新节点:用户造出的新块(空文档起笔等)
+      // 无主新节点:用户造出的新块(空文档起笔等);行尾/空行跟随档案
       outBlocks.push({
-        text: `${serialize(nodes)}\n`,
-        separator: '\n',
+        text: `${serialize(nodes)}${eol}`,
+        separator: eol,
         dirty: true,
         nodeCount: total,
         pseudo: false,
@@ -167,7 +183,7 @@ export function reconcileBlocks(
     if (!outBlocks[i].synthetic) continue
     const prev = outBlocks[i - 1]
     if (prev && prev.separator === '') {
-      prev.separator = prev.text.endsWith('\n') ? '\n' : '\n\n'
+      prev.separator = prev.text.endsWith('\n') ? eol : `${eol}${eol}`
     }
   }
   // 合成块在队尾时不应拖尾空行

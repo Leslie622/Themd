@@ -16,8 +16,15 @@ import type { Node as PMNode } from '@tiptap/pm/model'
 
 import { splitBlocks } from '../domain/block-source-map'
 import { reconcileBlocks, type BlockRuntime } from '../domain/reconcile-blocks'
+import {
+  applyBulletStyle,
+  applyEol,
+  buildProfile,
+  type SerializeProfile,
+} from '../domain/serialize-profile'
 import { liveExtensions } from '../infrastructure/tiptap-setup'
 import { getMarkdownManager, parseBlockMarkdown, serializeLiveBlocks } from '../infrastructure/markdown-engine'
+import { setActiveProfile } from '../infrastructure/serialize-profile-state'
 
 /** 编辑器 schema:liveExtensions 唯一装配(与 markdown 引擎同源) */
 export const liveSchema = getSchema([...liveExtensions()])
@@ -34,6 +41,8 @@ export class LiveEditorController {
   private owners: number[] = []
   private lastNodes: readonly PMNode[] = []
   private lastContent: string
+  /** 本篇风格档案:dirty 块序列化输出跟随全文风格(列表/强调/行尾) */
+  private profile: SerializeProfile = buildProfile('')
 
   constructor(content: string) {
     this.lastContent = content
@@ -83,6 +92,13 @@ export class LiveEditorController {
       this.lastNodes,
       newNodes,
       serialize,
+      {
+        eol: this.profile.eol,
+        isEmptyParagraph: (n) => {
+          const node = n as PMNode
+          return node.type?.name === 'paragraph' && node.childCount === 0
+        },
+      },
     )
     this.blocks = blocks
     this.owners = owners
@@ -93,15 +109,21 @@ export class LiveEditorController {
     return content
   }
 
+  /** 序列化节点组并应用风格档案(列表标记 + 行尾;强调在扩展层跟随) */
   private serializeNodes(nodes: unknown[]): string {
     const manager = getMarkdownManager()
-    return manager.serialize({
+    const raw = manager.serialize({
       type: 'doc',
       content: nodes.map((n) => (n as PMNode).toJSON()),
     })
+    return applyEol(applyBulletStyle(raw, this.profile.bullet), this.profile.eol)
   }
 
   private rebuild(content: string): void {
+    // 档案先于 parse 落位:Bold/Italic 覆盖在序列化期读取(Bold 渲染时),
+    // manager 单例跨笔记共享,必须每篇重设
+    this.profile = buildProfile(content)
+    setActiveProfile(this.profile)
     const records = splitBlocks(content)
     this.blocks = records.map((r) => ({
       text: r.text,

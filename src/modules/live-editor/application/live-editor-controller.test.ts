@@ -61,6 +61,17 @@ function findBlock(state: EditorState, predicate: (node: PMNode) => boolean, nth
   throw new Error('block not found')
 }
 
+/** 找到精确文本的区间 [from, to](doc 坐标) */
+function findText(state: EditorState, text: string): { from: number; to: number } {
+  let hit: { from: number; to: number } | null = null
+  state.doc.descendants((node, pos) => {
+    if (!hit && node.isText && node.text === text) hit = { from: pos, to: pos + node.nodeSize }
+    return true
+  })
+  if (!hit) throw new Error(`text not found: ${text}`)
+  return hit
+}
+
 describe('LiveEditorController 同步边界', () => {
   it('零编辑:序列化输出与原文逐字节相等(初始接线)', () => {
     const { state, controller } = setup()
@@ -128,5 +139,46 @@ describe('LiveEditorController 同步边界', () => {
       state.tr.insertText('!', para.from + 1 + '全新正文'.length, para.from + 1 + '全新正文'.length),
     )
     expect(content).toBe('# 新笔记\n\n全新正文!。\n')
+  })
+
+  it('风格档案:编辑过的列表块仍写 * 标记,新增粗体写 __', () => {
+    const content = '* 列表一\n* 列表二\n\n段落里有粗体文字。\n'
+    const { controller, state } = setup(content)
+    // 1) 列表项追加 → 序列化应保持 '*'(档案 bullet)
+    const at = findText(state, '列表一')
+    const first = apply(controller, state, state.tr.insertText('!', at.to, at.to))
+    expect(first.content).toContain('* 列表一!\n* 列表二')
+    // 2) 给未加粗的词打 bold → 档案 strong 是 __,整块重序列化都用 __
+    const content2 = '* 甲\n* 乙\n\n已有 __粗体__ 的段落。\n'
+    const c2 = new LiveEditorController(content2)
+    const doc2 = PMNode.fromJSON(liveSchema, c2.buildDocJson())
+    const state2 = EditorState.create({ schema: liveSchema, doc: doc2 })
+    c2.seed(state2.doc)
+    const range = findText(state2, ' 的段落。')
+    // 给其中的「的段落」三字打 bold(避开前导空格与句号)
+    const tr = state2.tr.addMark(range.from + 1, range.to - 1, liveSchema.marks.bold.create())
+    const second = apply(c2, state2, tr)
+    // 档案 strong=__:新旧两个粗体都用 __ 序列化,相邻不合并
+    expect(second.content).toBe('* 甲\n* 乙\n\n已有 __粗体__ __的段落__。\n')
+  })
+
+  it('CRLF 文档:编辑块保持 CRLF 行尾,其余块原样', () => {
+    const content = '# 标题\r\n\r\n第一段\r\n\r\n第二段\r\n'
+    const { controller, state } = setup(content)
+    const at = findText(state, '第一段')
+    const { content: out } = apply(controller, state, state.tr.insertText('!', at.to, at.to))
+    expect(out).toBe('# 标题\r\n\r\n第一段!\r\n\r\n第二段\r\n')
+  })
+
+  it('段中拆分只标脏所在块,相邻块不被外溢(P3 收紧)', () => {
+    const content = '# 标题\n\n第一段\n\nSetext 标题\n===\n'
+    const { controller, state } = setup(content)
+    const mid = findText(state, '第一段')
+    // 在第一段中间 split
+    const { content: out } = apply(controller, state, state.tr.split(mid.from + 1))
+    // Setext 块(紧邻其后)必须未被标脏:仍保留 === 原文
+    expect(out).toContain('Setext 标题\n===')
+    // 拆出的两半都在
+    expect(out).toContain('第')
   })
 })
