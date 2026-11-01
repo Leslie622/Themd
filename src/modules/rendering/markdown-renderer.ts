@@ -110,6 +110,18 @@ md.renderer.rules.heading_open = (tokens, idx, options, _env, self) => {
 //   return `<div class="code-card" data-lang="${lang}"><pre><code>${md.utils.escapeHtml(token.content)}</code></pre></div>`
 // }
 
+// mermaid fence → 占位容器(渲染期同步输出源码兜底,PreviewPane 挂载后
+// 异步渲染 SVG 并替换;实时编辑侧经 codeblock-cm 的图表视图走同一渲染模块)
+const defaultFence = md.renderer.rules.fence
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  if (token.info.trim().toLowerCase() === 'mermaid') {
+    const code = md.utils.escapeHtml(token.content)
+    return `<div class="themd-mermaid" data-src="${encodeURIComponent(token.content)}">${code}</div>`
+  }
+  return defaultFence ? defaultFence(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)
+}
+
 // 图片:懒加载 + 异步解码(内嵌 base64 的截图可能很大,预览首屏别被拖住)。
 // assets/ 相对路径在渲染时同步改写为可加载的真实地址(桌面端 asset:// 协议,
 // 见 lib/image-src.ts)——解析依赖已注入的根目录与 convertFileSrc,

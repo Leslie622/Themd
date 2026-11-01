@@ -118,6 +118,31 @@ export const PreviewPane = memo(function PreviewPane({
     }
   }, [updateActiveHeading, content])
 
+  // mermaid 占位容器 → 异步渲染 SVG(缓存命中零成本;失败保留源码文本兜底)
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container) return
+    const holders = [...container.querySelectorAll<HTMLElement>('.themd-mermaid')]
+    if (holders.length === 0) return
+    let cancelled = false
+    void (async () => {
+      const { renderMermaidSvg } = await import('@/modules/live-editor/infrastructure/mermaid-render')
+      if (cancelled) return
+      for (const el of holders) {
+        const src = decodeURIComponent(el.dataset.src ?? '')
+        if (!src) continue
+        try {
+          el.innerHTML = await renderMermaidSvg(src, isDark)
+        } catch {
+          el.classList.add('themd-mermaid-fallback') // 保留源码文本
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [html, isDark])
+
   const jumpTo = useCallback((id: string) => {
     const container = scrollRef.current
     const el = container?.querySelector<HTMLElement>(`#${CSS.escape(id)}`)

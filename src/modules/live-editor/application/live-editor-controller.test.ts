@@ -170,6 +170,16 @@ describe('LiveEditorController 同步边界', () => {
     expect(out).toBe('# 标题\r\n\r\n第一段!\r\n\r\n第二段\r\n')
   })
 
+  it('front matter 编辑保形:改 title 不产生空行破坏 YAML 头(P4c 修复)', () => {
+    const content = '---\ntitle: 笔记\ndate: 2026-11-01\n---\n\n正文开始。\n'
+    const { controller, state } = setup(content)
+    // FM 是单一 code 文本节点;插在「笔记」之后、换行之前
+    const at = findText(state, 'title: 笔记\ndate: 2026-11-01')
+    const insertAt = at.from + 'title: 笔记'.length
+    const { content: out } = apply(controller, state, state.tr.insertText('!', insertAt, insertAt))
+    expect(out).toBe('---\ntitle: 笔记!\ndate: 2026-11-01\n---\n\n正文开始。\n')
+  })
+
   it('段中拆分只标脏所在块,相邻块不被外溢(P3 收紧)', () => {
     const content = '# 标题\n\n第一段\n\nSetext 标题\n===\n'
     const { controller, state } = setup(content)

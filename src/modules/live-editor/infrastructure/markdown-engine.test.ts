@@ -37,6 +37,9 @@ const STABLE_BLOCKS: string[] = [
   '$$\n\\frac{\\partial u}{\\partial t}\n$$',
   '行内 $a+b$ 与 $x_i^2$ 公式',
   '价格 $5 和 6 美元不是公式',
+  '---\ntitle: 笔记\ndate: 2026-11-01\n---',
+  '---\n含空行\n\n的 front matter\n---',
+  '```mermaid\ngraph TD; A-->B\n```',
 ]
 
 describe('markdown-engine 字节保真协议', () => {

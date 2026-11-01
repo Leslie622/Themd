@@ -500,3 +500,55 @@ pre::-webkit-scrollbar,
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* ── 实时编辑器·front matter 折叠块 / mermaid 图表(P4c) ─────────────── */
+.live-frontmatter {
+  border: 1px dashed color-mix(in oklch, var(--border) 80%, transparent);
+  border-radius: 6px;
+  padding: 4px 10px;
+  margin: 0.5em 0;
+}
+.live-frontmatter-label {
+  font-size: 0.8em;
+  color: var(--muted-foreground);
+  user-select: none;
+}
+.live-frontmatter .live-frontmatter-src {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  margin-top: 4px;
+}
+.live-frontmatter.editing .live-frontmatter-label {
+  display: none;
+}
+.live-frontmatter.editing .live-frontmatter-src {
+  display: block;
+}
+.live-mermaid {
+  text-align: center;
+  padding: 8px 0;
+}
+.live-mermaid .live-mermaid-src {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  text-align: left;
+}
+.live-mermaid.editing .live-mermaid-src {
+  display: block;
+}
+.live-mermaid.editing .live-mermaid-svg {
+  display: none;
+}
+.live-mermaid-error {
+  color: var(--destructive);
+}
+.themd-mermaid {
+  text-align: center;
+}
+.themd-mermaid svg {
+  max-width: 100%;
+}

@@ -12,12 +12,15 @@
 import CodeBlock from '@tiptap/extension-code-block'
 import type { NodeViewRendererProps } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
-import type { EditorView as PMEditorView } from '@tiptap/pm/view'
+import type { EditorView as PMEditorView, ViewMutationRecord } from '@tiptap/pm/view'
 import { EditorState, Compartment, type Extension } from '@codemirror/state'
 import { EditorView as CMEditorView, keymap } from '@codemirror/view'
 import { history, defaultKeymap, historyKeymap } from '@codemirror/commands'
 import { LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
+
+import { useAppearance } from '@/store-appearance'
+import { renderMermaidSvg } from './mermaid-render'
 
 /** 语言高亮 compartment(异步 load 完成后 reconfigure) */
 const languageComp = new Compartment()
@@ -104,6 +107,8 @@ class CodeMirrorNodeView {
 
   update(node: PMNode): boolean {
     if (node.type !== this.node.type) return false
+    // 语言切到 mermaid → 返回 false 让 PM 重建为图表视图
+    if ((node.attrs.language as string)?.toLowerCase() === 'mermaid') return false
     this.node = node
     const text = node.textContent
     if (text !== this.cm.state.doc.toString()) {
@@ -139,8 +144,77 @@ class CodeMirrorNodeView {
   }
 }
 
+/** mermaid 图表视图:非选中渲染 SVG,选中显源码(原生 contentDOM 编辑,PM 直管文本) */
+class MermaidNodeView {
+  dom: HTMLElement
+  contentDOM: HTMLElement
+  private svgHost: HTMLElement
+  private node: PMNode
+  private selected = false
+  private lastText = ''
+
+  constructor(node: PMNode) {
+    this.node = node
+    this.dom = document.createElement('div')
+    this.dom.className = 'live-mermaid'
+    this.svgHost = document.createElement('div')
+    this.svgHost.className = 'live-mermaid-svg'
+    this.contentDOM = document.createElement('div')
+    this.contentDOM.className = 'live-mermaid-src'
+    this.contentDOM.spellcheck = false
+    this.dom.append(this.svgHost, this.contentDOM)
+    this.refresh()
+  }
+
+  private refresh(): void {
+    const text = this.node.textContent
+    if (this.selected || text === this.lastText) return
+    this.lastText = text
+    renderMermaidSvg(text, useAppearance.getState().isDark)
+      .then((svg) => {
+        if (!this.selected) this.svgHost.innerHTML = svg
+      })
+      .catch(() => {
+        this.svgHost.textContent = text
+        this.svgHost.classList.add('live-mermaid-error')
+      })
+  }
+
+  update(node: PMNode): boolean {
+    if (node.type !== this.node.type) return false
+    if ((node.attrs.language as string)?.toLowerCase() !== 'mermaid') return false
+    this.node = node
+    this.refresh()
+    return true
+  }
+
+  selectNode(): void {
+    this.selected = true
+    this.dom.classList.add('live-mermaid-editing')
+  }
+
+  deselectNode(): void {
+    this.selected = false
+    this.dom.classList.remove('live-mermaid-editing')
+    this.lastText = '' // 强制重渲染(源码可能已改)
+    this.refresh()
+  }
+
+  ignoreMutation(mutation: ViewMutationRecord): boolean {
+    if (mutation.type === 'selection') return true
+    if (this.contentDOM.contains(mutation.target as HTMLElement)) return false
+    return true
+  }
+}
+
 export const CodeBlockCm = CodeBlock.extend({
   addNodeView() {
-    return (props: NodeViewRendererProps) => new CodeMirrorNodeView(props)
+    return (props: NodeViewRendererProps) => {
+      // mermaid fence → 图表视图;其余语言 → CM 视图
+      if ((props.node.attrs.language as string)?.toLowerCase() === 'mermaid') {
+        return new MermaidNodeView(props.node)
+      }
+      return new CodeMirrorNodeView(props)
+    }
   },
 })

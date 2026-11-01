@@ -21,6 +21,7 @@ import type { JSONContent } from '@tiptap/core'
 import { resolveImageSrcSync } from '@/lib/image-src'
 import { currentProfile } from './serialize-profile-state'
 import { MathBlock, MathInline } from './math-node'
+import { FrontMatter } from './frontmatter-node'
 import { CodeBlockCm } from './codeblock-cm'
 
 /** MarkdownManager 渲染辅助器的最小面(官方 h 的子集,够表格用) */
@@ -138,6 +139,7 @@ export function liveExtensions() {
     LiveImage,
     MathBlock,
     MathInline,
+    FrontMatter,
     CodeBlockCm,
     Table.extend({ renderMarkdown: renderLeanTable }),
     TableRow,
