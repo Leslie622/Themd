@@ -420,11 +420,12 @@ pre::-webkit-scrollbar,
 }
 .live-editor-shell .ProseMirror {
   min-height: 100%;
-  max-width: 46rem;
+  /* 正文宽度吃主题令牌(此前硬编码 46rem 且优先级高于 .themd-prose,令牌失效) */
+  max-width: var(--t-root-width, 48rem);
   margin: 0 auto;
   padding: 2rem 1.5rem 40vh;
   outline: none;
-  caret-color: var(--t-strong, var(--primary));
+  caret-color: var(--t-strong-color, var(--primary));
 }
 .live-editor-shell ul[data-type='taskList'] {
   list-style: none;
@@ -442,7 +443,8 @@ pre::-webkit-scrollbar,
   user-select: none;
 }
 .live-editor-shell ul[data-type='taskList'] li > label input {
-  accent-color: var(--t-strong, var(--primary));
+  /* 勾选框吃 task.accent 令牌(此前用的 --t-strong 不是令牌,永远回落 primary) */
+  accent-color: var(--t-task-accent, oklch(0.55 0 0));
 }
 .live-editor-shell ul[data-type='taskList'] li[data-checked='false'] > div > p {
   color: inherit;
@@ -590,9 +592,9 @@ pre::-webkit-scrollbar,
   display: inline-block;
   max-width: 100%;
 }
-.live-image img {
-  max-width: 100%;
-  border-radius: 6px;
+/* 图片尺寸/圆角/边框交给 theme-base 的 --t-img-* 令牌(此前硬编码 6px 抢了优先级) */
+.live-editor-shell .live-image img {
+  cursor: default; /* 编辑态:点击选中/拖宽,不是预览的灯箱 zoom-in */
 }
 .live-image-handle {
   position: absolute;

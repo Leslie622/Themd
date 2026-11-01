@@ -16,7 +16,8 @@ import type { EditorView as PMEditorView, ViewMutationRecord } from '@tiptap/pm/
 import { EditorState, Compartment, type Extension } from '@codemirror/state'
 import { EditorView as CMEditorView, keymap } from '@codemirror/view'
 import { history, defaultKeymap, historyKeymap } from '@codemirror/commands'
-import { LanguageDescription } from '@codemirror/language'
+import { HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
+import { tags as t } from '@lezer/highlight'
 import { languages } from '@codemirror/language-data'
 
 import { useAppearance } from '@/store-appearance'
@@ -25,19 +26,36 @@ import { renderMermaidSvg } from './mermaid-render'
 /** 语言高亮 compartment(异步 load 完成后 reconfigure) */
 const languageComp = new Compartment()
 
+/**
+ * 字体/字号/行高吃主题令牌,与 theme-base 的 pre code 同一套 --t-code-*:
+ * 令牌在滚动容器上注入,CM 生成的是普通 class,运行期照常从级联解析。
+ */
 const cmTheme = CMEditorView.theme({
-  '&': { fontSize: '0.92em' },
+  '&': { fontSize: 'var(--t-code-size, 0.875em)' },
   '.cm-scroller': {
-    fontFamily: 'var(--font-mono)',
-    lineHeight: '1.6',
+    fontFamily:
+      "var(--t-code-font, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace)",
+    lineHeight: 'var(--t-code-leading, 1.6)',
   },
   '.cm-content': {
     padding: '2px 0',
-    caretColor: 'var(--t-strong, var(--primary))',
+    caretColor: 'var(--t-strong-color, var(--primary))',
   },
   '.cm-gutters': { display: 'none' },
   '.cm-activeLine': { background: 'transparent' },
 })
+
+/** 代码高亮色板:对齐预览侧 highlight.js 的 github.css(亮色;预览不随暗色切换,live 保持同观感) */
+const githubHighlight = HighlightStyle.define([
+  { tag: [t.definition(t.variableName), t.function(t.variableName)], color: '#8250df' },
+  { tag: [t.comment, t.meta, t.processingInstruction], color: '#6e7781' },
+  { tag: [t.keyword, t.controlKeyword, t.operatorKeyword, t.moduleKeyword], color: '#cf222e' },
+  { tag: [t.string, t.special(t.string), t.regexp], color: '#0a3069' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: '#0550ae' },
+  { tag: [t.className, t.typeName], color: '#953800' },
+  { tag: [t.propertyName, t.attributeName], color: '#0550ae' },
+  { tag: t.tagName, color: '#116329' },
+])
 
 /** 按语言名(含别名)异步装载 CM 语法 */
 function loadLanguage(name: string, cb: (ext: Extension) => void): void {
@@ -71,6 +89,7 @@ class CodeMirrorNodeView {
           history(),
           CMEditorView.lineWrapping,
           cmTheme,
+          syntaxHighlighting(githubHighlight),
           languageComp.of([]),
           CMEditorView.updateListener.of((update) => {
             if (!update.docChanged) return

@@ -214,6 +214,20 @@
 .themd-prose tbody tr:nth-child(2n) {
   background: var(--t-table-stripe, transparent);
 }
+/* 实时编辑(TipTap)的表格没有 thead:表头行 = tbody 首行 th。下面是同一组令牌
+   对两种 DOM 的等价选择器;预览/导出(markdown-it 产出 thead)不会命中。 */
+.themd-prose tbody > tr:first-child > th {
+  background: var(--t-th-bg, transparent);
+  font-weight: var(--t-th-weight, 600);
+  border-top: none;
+}
+/* 表头行计入 tbody 后 nth-child(2n) 整体错一行:跳过表头行,与预览条纹对齐 */
+.themd-prose tbody:has(> tr:first-child > th) tr:nth-child(2n) {
+  background: transparent;
+}
+.themd-prose tbody:has(> tr:first-child > th) tr:nth-child(2n + 3) {
+  background: var(--t-table-stripe, transparent);
+}
 
 /* ---------- 分割线 / 图片 ---------- */
 
