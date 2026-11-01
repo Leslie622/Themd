@@ -552,3 +552,66 @@ pre::-webkit-scrollbar,
 .themd-mermaid svg {
   max-width: 100%;
 }
+
+/* ── 实时编辑器·表格工具条 / 图片调宽(P4d) ─────────────────────────── */
+.live-table-menu {
+  position: fixed;
+  z-index: 50;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+.live-table-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border-radius: 5px;
+  color: var(--muted-foreground);
+  transition: background-color 0.12s, color 0.12s;
+}
+.live-table-menu-btn:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.live-table-menu-btn.danger:hover {
+  background: color-mix(in oklch, var(--destructive) 14%, transparent);
+  color: var(--destructive);
+}
+.live-image {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.live-image img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+.live-image-handle {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 2px solid var(--background);
+  background: var(--primary);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.live-image:hover .live-image-handle,
+.live-image-selected .live-image-handle {
+  opacity: 1;
+}
+.live-image-selected img {
+  outline: 2px solid color-mix(in oklch, var(--primary) 45%, transparent);
+  outline-offset: 2px;
+}

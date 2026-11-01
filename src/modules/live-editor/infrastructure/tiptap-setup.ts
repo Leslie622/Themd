@@ -6,7 +6,6 @@ import { Extension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Bold from '@tiptap/extension-bold'
 import Italic from '@tiptap/extension-italic'
-import Image from '@tiptap/extension-image'
 import {
   Table,
   TableCell,
@@ -18,11 +17,12 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import type { JSONContent } from '@tiptap/core'
 
-import { resolveImageSrcSync } from '@/lib/image-src'
 import { currentProfile } from './serialize-profile-state'
 import { MathBlock, MathInline } from './math-node'
 import { FrontMatter } from './frontmatter-node'
 import { CodeBlockCm } from './codeblock-cm'
+import { LiveImage } from './live-image'
+import { LiveTableMenu } from './live-table-menu'
 
 /** MarkdownManager 渲染辅助器的最小面(官方 h 的子集,够表格用) */
 export interface RenderHelper {
@@ -78,18 +78,9 @@ function renderLeanTable(node: JSONContent, h: RenderHelper): string {
 }
 
 /**
- * 图片节点:attrs 保持 markdown 原始 src(序列化零失真),渲染期经
- * resolveImageSrcSync 解析为可加载地址(asset:///data:/https,与预览同源)
+ * 图片节点:见 live-image.ts——attrs 原始 src + 尺寸(WxH),渲染期解析地址,
+ * 拖拽调宽写回尺寸后缀。
  */
-const LiveImage = Image.extend({
-  renderHTML({ HTMLAttributes }) {
-    const { src, ...rest } = HTMLAttributes
-    return [
-      'img',
-      { ...rest, src: typeof src === 'string' ? resolveImageSrcSync(src) : src },
-    ]
-  },
-})
 
 /** 基础快捷键(纯 TipTap 命令,与 CM keymap 对齐;插入类在 live-shortcuts) */
 const BaseShortcuts = Extension.create({
@@ -147,6 +138,7 @@ export function liveExtensions() {
     TableHeader,
     TaskList,
     TaskItem,
+    LiveTableMenu,
     BaseShortcuts,
   ] as const
 }

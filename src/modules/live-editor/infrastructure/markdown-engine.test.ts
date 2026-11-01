@@ -40,6 +40,9 @@ const STABLE_BLOCKS: string[] = [
   '---\ntitle: 笔记\ndate: 2026-11-01\n---',
   '---\n含空行\n\n的 front matter\n---',
   '```mermaid\ngraph TD; A-->B\n```',
+  '![截图](a.png =300x)',
+  '![截图](b.png =300x200)',
+  '![截图](c.png =x200)',
 ]
 
 describe('markdown-engine 字节保真协议', () => {
