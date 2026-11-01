@@ -2,6 +2,7 @@
  * 实时编辑引擎装配(infrastructure 层):MarkdownManager 与 TipTap 编辑器
  * 共用同一份扩展——解析/序列化规则与编辑器 schema 严格同源,禁止两处各配。
  */
+import { Extension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import {
@@ -14,6 +15,8 @@ import {
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import type { JSONContent } from '@tiptap/core'
+
+import { resolveImageSrcSync } from '@/lib/image-src'
 
 /** MarkdownManager 渲染辅助器的最小面(官方 h 的子集,够表格用) */
 export interface RenderHelper {
@@ -68,16 +71,52 @@ function renderLeanTable(node: JSONContent, h: RenderHelper): string {
   return lines.join('\n')
 }
 
+/**
+ * 图片节点:attrs 保持 markdown 原始 src(序列化零失真),渲染期经
+ * resolveImageSrcSync 解析为可加载地址(asset:///data:/https,与预览同源)
+ */
+const LiveImage = Image.extend({
+  renderHTML({ HTMLAttributes }) {
+    const { src, ...rest } = HTMLAttributes
+    return [
+      'img',
+      { ...rest, src: typeof src === 'string' ? resolveImageSrcSync(src) : src },
+    ]
+  },
+})
+
+/** 基础快捷键(纯 TipTap 命令,与 CM keymap 对齐;插入类在 live-shortcuts) */
+const BaseShortcuts = Extension.create({
+  name: 'liveBaseShortcuts',
+  addKeyboardShortcuts() {
+    const editor = this.editor
+    return {
+      'Mod-1': () => (editor.chain().focus().toggleHeading({ level: 1 }).run(), true),
+      'Mod-2': () => (editor.chain().focus().toggleHeading({ level: 2 }).run(), true),
+      'Mod-3': () => (editor.chain().focus().toggleHeading({ level: 3 }).run(), true),
+      'Mod-4': () => (editor.chain().focus().toggleHeading({ level: 4 }).run(), true),
+      'Mod-5': () => (editor.chain().focus().toggleHeading({ level: 5 }).run(), true),
+      'Mod-6': () => (editor.chain().focus().toggleHeading({ level: 6 }).run(), true),
+      'Mod-0': () => (editor.chain().focus().setParagraph().run(), true),
+      'Mod-t': () => (
+        editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), true
+      ),
+      'Mod-Shift-k': () => (editor.chain().focus().setCodeBlock().run(), true),
+    }
+  },
+})
+
 /** 实时编辑扩展集:编辑器 schema 与 markdown 解析/序列化的唯一装配点 */
 export function liveExtensions() {
   return [
     StarterKit,
-    Image,
+    LiveImage,
     Table.extend({ renderMarkdown: renderLeanTable }),
     TableRow,
     TableCell,
     TableHeader,
     TaskList,
     TaskItem,
+    BaseShortcuts,
   ] as const
 }

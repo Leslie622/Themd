@@ -347,6 +347,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     value={active.content}
                     onChange={(v) => updateNote(active.id, v)}
                     noteThemeId={active.themeId}
+                    noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
                   />
                 </div>
               ) : (
