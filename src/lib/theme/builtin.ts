@@ -19,10 +19,11 @@ const MINIMAL: ThemeFile = {
 /**
  * GitHub：值逐项转写自 github-markdown-css v5.9.0（从 github.com 真实
  * .markdown-body 样式生成的包），亮/暗两面对照其 light/dark 两个 css 文件。
- * 表达不了的项在此注明：表格单元格全网格线（源为 th/td 四边 1px，本表只有
- * 外框+行线）、li 内段落收口、kbd 键帽样式。root.width 源文件未定（容器级），
- * 取 GitHub 阅读容器 ~1012px 的近似 64rem。表头无底色、复选框不设 accent
- * ——均与源一致（有意不设，勿"补"）。
+ * 表达不了的项在此注明：li 内段落收口、kbd 键帽样式。单元格全网格线已由
+ * cell.border 令牌表达（源 th/td 四边 1px;行分隔线的 b3 透明度并入了网格线
+ * 同色,视觉无差）。root.width 源文件未定（容器级），取 GitHub 阅读容器
+ * ~1012px 的近似 64rem。表头无底色、复选框不设 accent——均与源一致
+ * （有意不设，勿"补"）。
  */
 const GITHUB: ThemeFile = {
   version: 1,
@@ -84,8 +85,9 @@ const GITHUB: ThemeFile = {
     'quote.borderColor': '#d1d9e0',
     'quote.color': '#59636e',
     'quote.padding': '0 1em',
-    // 表格(单元格线 #d1d9e0;斑马纹 #f6f8fa;表头无底色仅 600;cell 6px 13px)
+    // 表格(单元格四边全网格 #d1d9e0;斑马纹 #f6f8fa;表头无底色仅 600;cell 6px 13px)
     'table.borderColor': '#d1d9e0',
+    'cell.border': '1px solid #d1d9e0',
     'table.stripeBg': '#f6f8fa',
     'th.weight': '600',
     'cell.padding': '6px 13px',
@@ -145,6 +147,7 @@ const GITHUB: ThemeFile = {
     'quote.color': '#9198a1',
     'quote.padding': '0 1em',
     'table.borderColor': '#3d444d',
+    'cell.border': '1px solid #3d444d',
     'table.stripeBg': '#151b23',
     'th.weight': '600',
     'cell.padding': '6px 13px',

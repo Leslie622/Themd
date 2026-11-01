@@ -194,17 +194,25 @@
 
 .themd-prose table {
   width: 100%;
-  border-collapse: collapse;
+  /* collapse(默认)下圆角不生效;要圆角/单元格间隙需 separate + 圆角令牌 */
+  border-collapse: var(--t-table-collapse, collapse);
+  border-spacing: 0;
   border: 1px solid var(--t-table-border-color, oklch(0.9 0 0));
+  border-radius: var(--t-table-radius, 0);
   margin-bottom: 1.5em;
   display: table;
   font-size: 0.95em;
 }
 .themd-prose th,
 .themd-prose td {
+  /* 单元格四边框(竖线/全网格):默认 none = 只有行横线;全网格主题设 1px solid 色 */
+  border: var(--t-cell-border, none);
   border-top: 1px solid var(--t-table-border-color, oklch(0.9 0 0));
   padding: var(--t-cell-padding, 0.5em 0.85em);
   text-align: left;
+}
+.themd-prose tbody tr:hover {
+  background: var(--t-row-hover, transparent);
 }
 .themd-prose thead th {
   background: var(--t-th-bg, transparent);

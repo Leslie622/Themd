@@ -254,10 +254,14 @@ export const ELEMENTS: ElementDef[] = [
     sampleHint: '表格',
     fields: [
       { key: 'table.borderColor', label: '边框颜色', type: 'color' },
+      { key: 'cell.border', label: '单元格边框', type: 'text', placeholder: 'none', hint: '四边框（竖线/全网格），如 1px solid #d1d9e0；不设置=只有行横线' },
       { key: 'th.bg', label: '表头背景', type: 'color' },
       { key: 'th.weight', label: '表头字重', type: 'font-weight' },
       { key: 'cell.padding', label: '单元格内边距', type: 'text', placeholder: '0.5em 0.85em' },
       { key: 'table.stripeBg', label: '斑马纹背景', type: 'color', hint: '偶数行底色，不设置即无斑马纹' },
+      { key: 'row.hoverBg', label: '行悬停背景', type: 'color', hint: '鼠标悬停行底色，不设置即无' },
+      { key: 'table.radius', label: '表格圆角', type: 'size', unit: 'px', placeholder: '0', hint: '需配合边框合并=separate 才生效' },
+      { key: 'table.collapse', label: '边框合并', type: 'select', options: [{ value: 'collapse', label: '合并（collapse）' }, { value: 'separate', label: '分离（separate）' }], hint: 'separate 才能显示圆角与单元格间隙' },
     ],
   },
   {

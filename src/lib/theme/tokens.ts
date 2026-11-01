@@ -90,9 +90,13 @@ export const TOKEN_VAR = {
   // 表格
   'table.borderColor': '--t-table-border-color',
   'table.stripeBg': '--t-table-stripe',
+  'table.radius': '--t-table-radius',
+  'table.collapse': '--t-table-collapse',
   'th.bg': '--t-th-bg',
   'th.weight': '--t-th-weight',
   'cell.padding': '--t-cell-padding',
+  'cell.border': '--t-cell-border',
+  'row.hoverBg': '--t-row-hover',
   // 分割线
   'hr.color': '--t-hr-color',
   'hr.thickness': '--t-hr-thickness',

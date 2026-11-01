@@ -37,6 +37,8 @@ describe('内置主题', () => {
     expectToken('codeBlock.bg', '#f6f8fa')
     expectToken('codeBlock.padding', '1rem')
     expectToken('hr.thickness', '.25em')
+    // 表格全网格(源 th/td 四边 1px)
+    expectToken('cell.border', '1px solid #d1d9e0')
     // 有意不设:表头无底色(仅 600)、复选框不设 accent、引用底色透明
     expectToken('th.bg', undefined)
     expectToken('task.accent', undefined)
@@ -60,6 +62,7 @@ describe('内置主题', () => {
     expect(d!['inlineCode.bg']).toBe('#656c7633')
     expect(d!['codeBlock.bg']).toBe('#151b23')
     expect(d!['table.stripeBg']).toBe('#151b23')
+    expect(d!['cell.border']).toBe('1px solid #3d444d')
     expect(d!['h1.borderColor']).toBe('#3d444db3')
     expect(d!['h6.color']).toBe('#9198a1')
     expect(d!['hr.color']).toBe('#3d444d')
