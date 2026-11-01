@@ -8,7 +8,7 @@
 .themd-prose {
   font-family: var(--t-root-font, 'Geist Variable', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif);
   font-size: var(--t-root-size, 16px);
-  line-height: var(--t-root-leading, 1.75);
+  line-height: var(--t-root-leading, 1.7);
   letter-spacing: var(--t-root-spacing, normal);
   color: var(--t-root-color, var(--foreground));
   background: var(--t-root-bg, transparent);
@@ -16,7 +16,7 @@
 }
 
 .themd-prose p {
-  margin-bottom: var(--t-p-margin-bottom, 1.25em);
+  margin-bottom: var(--t-p-margin-bottom, 1em);
   text-align: var(--t-p-align, start);
   text-indent: var(--t-p-indent, 0);
 }
