@@ -447,3 +447,30 @@ pre::-webkit-scrollbar,
 .live-editor-shell ul[data-type='taskList'] li[data-checked='false'] > div > p {
   color: inherit;
 }
+
+/* ── 实时编辑器·公式节点(P4) ──────────────────────────────────────────
+ * 非选中态显示 KaTeX 渲染;选中态(点击进入)露 TeX 源码可编辑 */
+.live-math .live-math-src {
+  display: none;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+}
+.live-math.editing .live-math-src {
+  display: block;
+  min-width: 1px;
+}
+.live-math.editing .live-math-render {
+  display: none;
+}
+.live-math-inline {
+  display: inline;
+}
+.live-math-inline .live-math-src {
+  display: none;
+}
+.live-math-inline.editing .live-math-src {
+  display: inline;
+}
+.live-math-error {
+  color: var(--destructive);
+}

@@ -1,4 +1,5 @@
 import hljsThemeCss from 'highlight.js/styles/github.css?raw'
+import katexCss from 'katex/dist/katex.min.css?raw'
 import themeBaseCss from '@/styles/theme-base.css?raw'
 
 import { md } from './markdown-renderer'
@@ -78,6 +79,9 @@ ${themeBaseCss}
 </style>
 <style>
 ${hljsThemeCss}
+</style>
+<style>
+${katexCss}
 </style>
 ${extraCss ? `<style>\n${extraCss}\n</style>` : ''}
 </head>

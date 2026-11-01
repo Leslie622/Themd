@@ -33,6 +33,10 @@ const STABLE_BLOCKS: string[] = [
   '| a | b |\n| --- | ---: |\n| 1 | 2 |',
   '| 左 | 中 | 右 |\n| :--- | :---: | ---: |\n| 1 | 2 | 3 |',
   '---',
+  '$$\nE = mc^2\n$$',
+  '$$\n\\frac{\\partial u}{\\partial t}\n$$',
+  '行内 $a+b$ 与 $x_i^2$ 公式',
+  '价格 $5 和 6 美元不是公式',
 ]
 
 describe('markdown-engine 字节保真协议', () => {

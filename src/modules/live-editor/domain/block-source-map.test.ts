@@ -30,6 +30,10 @@ const CORPUS: string[] = [
   '    缩进代码块\n    第二行\n\n后文',
   '```js\r\nconst a = 1\r\n```\r\n\r\nCRLF 围栏\r\n',
   '行内 `code` 与 **粗体** 混排\n\n第二段',
+  '$$\nE = mc^2\n$$\n\n公式后正文',
+  '$$\n\\begin{aligned}\na &= 1\n\nb &= 2\n\\end{aligned}\n$$\n\n后文',
+  '$$单行自闭合$$\n\n后文',
+  '价格 $5 与 $6 的行,以及 $a+b$ 行内公式\n\n后文',
 ]
 
 describe('splitBlocks / joinBlocks', () => {
@@ -66,8 +70,13 @@ describe('splitBlocks / joinBlocks', () => {
     }
   })
 
-  it('markDirty 命中区间内的块', () => {
-    const blocks = splitBlocks('# a\n\n正文一\n\n正文二\n')
+  it('公式围栏内的空行不切分(整块吞入)', () => {
+    const blocks = splitBlocks('$$\na = 1\n\nb = 2\n$$\n\n后文')
+    expect(blocks).toHaveLength(2)
+    expect(blocks[0].text).toBe('$$\na = 1\n\nb = 2\n$$\n')
+  })
+
+  it('markDirty 命中区间内的块', () => {    const blocks = splitBlocks('# a\n\n正文一\n\n正文二\n')
     const dirty = markDirty(blocks, 5, 8) // 命中「正文一」
     expect(dirty.map((b) => b.dirty)).toEqual([false, true, false])
     const none = markDirty(blocks, 0, 0)

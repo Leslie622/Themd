@@ -27,8 +27,9 @@ export interface BlockRecord {
   dirty: boolean
 }
 
-/** 围栏开启信息:char(` 或 ~)与长度(闭合需同字符且不少于该长度) */
+/** 围栏开启信息:代码围栏(char/length 对)或公式围栏($$ 对) */
 interface FenceState {
+  kind: 'code' | 'math'
   char: '`' | '~'
   length: number
 }
@@ -46,18 +47,25 @@ function readLine(content: string, pos: number): { text: string; term: string; n
 
 const FRONT_MATTER_LINE = /^---[ \t]*$/
 
-/** 行首围栏检测(≤3 空格缩进;反引号围栏的 info 串不得含反引号) */
+/** 行首围栏检测(≤3 空格缩进;反引号围栏的 info 串不得含反引号;$$ 公式围栏) */
 function fenceOpen(text: string): FenceState | null {
+  // 公式围栏:行首 $$(单行自闭合形式 $$x$$ 由闭合检测的「非开启行」规则兜住)
+  if (/^ {0,3}\$\$/.test(text)) return { kind: 'math', char: '~', length: 0 }
   const m = /^ {0,3}(`{3,}|~{3,})/.exec(text)
   if (!m) return null
   const mark = m[1]
   const char = mark[0] as '`' | '~'
   if (char === '`' && text.includes('`', m[0].length)) return null
-  return { char, length: mark.length }
+  return { kind: 'code', char, length: mark.length }
 }
 
-/** 行首围栏闭合检测(同字符、长度 ≥ 开启长度、整行仅此) */
-function fenceClose(text: string, fence: FenceState): boolean {
+/** 围栏闭合:代码围栏同字符整行(开启行自身永不闭合);公式围栏行尾 $$,开启行仅单行自闭合 */
+function fenceClose(text: string, fence: FenceState, isOpenLine: boolean): boolean {
+  if (fence.kind === 'math') {
+    if (isOpenLine) return /^ {0,3}\$\$.+\$\$\s*$/.test(text) // 单行自闭合
+    return text.trimEnd().endsWith('$$')
+  }
+  if (isOpenLine) return false
   const m = new RegExp(`^ {0,3}\\${fence.char}{${fence.length},}[ \\t]*$`).exec(text)
   return m !== null
 }
@@ -104,7 +112,8 @@ export function splitBlocks(content: string): BlockRecord[] {
     }
     if (fence) {
       // 围栏内一切行(含空行)都属当前块;闭合行属块尾
-      if (fenceClose(text, fence)) fence = null
+      // (能进到这里说明开启行已被消化,当前行不是开启行)
+      if (fenceClose(text, fence, false)) fence = null
       blockTo = next
       i = next
       sawContent = true
@@ -121,10 +130,15 @@ export function splitBlocks(content: string): BlockRecord[] {
       // 围栏打断段落:当前块在上一行尾闭合(to = 本行起点),围栏开新块
       closeBlock(i)
       fence = open
+      // 单行自闭合($$x$$):开启即闭合,不再延续围栏
+      if (fenceClose(text, open, true)) fence = null
       blockFrom = i
       blockTo = next
     } else {
-      if (open) fence = open
+      if (open) {
+        fence = open
+        if (fenceClose(text, open, true)) fence = null
+      }
       if (blockFrom === -1) blockFrom = i
       blockTo = next
     }
