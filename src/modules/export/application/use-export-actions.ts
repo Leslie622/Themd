@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
 import { exportNoteHtml, exportNoteMarkdown } from './export-note'
 import { platformServices } from '@/app/platform'
 import type { Note } from '@/modules/notebook/domain/note'
 
-export type ExportViewMode = 'edit' | 'split' | 'preview'
+/** 与 AppShell 的 ViewMode / store-editor 的 EditorViewMode 对齐(四值联合) */
+export type ExportViewMode = 'edit' | 'split' | 'live' | 'preview'
 
 interface ExportActionsInput {
   active: Note | null
   view: ExportViewMode
-  setView: Dispatch<SetStateAction<ExportViewMode>>
+  setView: (view: ExportViewMode) => void
 }
 
 export function useExportActions({ active, view, setView }: ExportActionsInput) {

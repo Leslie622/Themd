@@ -32,8 +32,8 @@ class FakeFileLink implements FileLinkGateway {
     this.files.set(path, contents)
   }
 
-  /** 模拟 Rust read_folder_notes:递归返回 fake 磁盘上 root 之下的笔记文件 */
-  async readFolderNotes(root: string) {
+  /** 模拟 Rust read_folder_notes:递归返回 fake 磁盘上 root 之下的笔记文件;withContent=false 只回元数据 */
+  async readFolderNotes(root: string, withContent = true) {
     const out: Array<{ folderPath: string; title: string; content: string; filePath: string }> = []
     for (const [path, content] of this.files) {
       if (!path.startsWith(`${root}\\`)) continue
@@ -41,7 +41,7 @@ class FakeFileLink implements FileLinkGateway {
       out.push({
         folderPath: '',
         title: (path.split('\\').pop() ?? '').replace(/\.(md|markdown|txt)$/i, ''),
-        content,
+        content: withContent ? content : '',
         filePath: path,
       })
     }
@@ -241,6 +241,82 @@ describe('NotebookController', () => {
       controller.setActive('a')
       const folder = controller.getSnapshot().folders.find((f) => f.path === 'C:\\deep\\nested\\dir')
       expect(folder?.name).toBe('dir')
+    })
+
+    it('openWorkspace scans metadata only (lazy) and completes ancestor dirs of the tree', async () => {
+      const fileLink = new FakeFileLink()
+      // deep/nested 无直接笔记,只作为中间目录存在:祖先链补齐后才可见。
+      // b 非激活笔记(notes[0] 是 a,openWorkspace 自动加载它),保持未加载态
+      fileLink.files.set('C:\\ws\\deep\\nested\\a.md', '# a')
+      fileLink.files.set('C:\\ws\\b.md', '# b')
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      await controller.openWorkspace('C:\\ws')
+      const state = controller.getSnapshot()
+      const b = state.notes.find((n) => n.title === 'b')!
+      // 懒加载:仅元数据,正文为空待激活读取
+      expect(b.contentLoaded).toBe(false)
+      expect(b.content).toBe('')
+      // 中间目录 deep 无直接笔记也在文件夹实体里(链补齐到根)
+      expect(state.folders.map((f) => f.name).sort()).toEqual(['deep', 'nested', 'ws'])
+    })
+
+    it('activating a lazy note loads its content from disk on demand', async () => {
+      const fileLink = new FakeFileLink()
+      // z 排在前面充当激活笔记;a 保持未加载
+      fileLink.files.set('C:\\ws\\z.md', '# active')
+      fileLink.files.set('C:\\ws\\a.md', '# disk content')
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      await controller.openWorkspace('C:\\ws')
+      const a = controller.getSnapshot().notes.find((n) => n.title === 'a')!
+      expect(a.contentLoaded).toBe(false)
+      controller.setActive(a.id)
+      await flushAsync()
+      const loaded = controller.getSnapshot().notes.find((n) => n.id === a.id)!
+      expect(loaded.contentLoaded).toBe(true)
+      expect(loaded.content).toBe('# disk content')
+      // 已加载后编辑照常写回(写回有 500ms 防抖,flushNote 立即落盘)
+      controller.updateNote(a.id, '# disk content\n\nedited')
+      controller.flushNote(a.id)
+      await flushAsync()
+      expect(fileLink.files.get('C:\\ws\\a.md')).toContain('edited')
+    })
+
+    it('external modification of an unloaded note stays unloaded and loads fresh content on activate', async () => {
+      const fileLink = new FakeFileLink()
+      fileLink.files.set('C:\\ws\\z.md', '# active')
+      fileLink.files.set('C:\\ws\\a.md', '# v1')
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      await controller.openWorkspace('C:\\ws')
+      const a = controller.getSnapshot().notes.find((n) => n.title === 'a')!
+      // 外部改动未加载的笔记:不读盘比对,保持未加载态
+      fileLink.files.set('C:\\ws\\a.md', '# v2 by external editor')
+      fileLink.emit([{ kind: 'modified', path: 'C:\\ws\\a.md' }])
+      await flushAsync()
+      const lazy = controller.getSnapshot().notes.find((n) => n.id === a.id)!
+      expect(lazy.contentLoaded).toBe(false)
+      // 激活时读到的是外部最新版,而不是过期缓存
+      controller.setActive(a.id)
+      await flushAsync()
+      expect(controller.getSnapshot().notes.find((n) => n.id === a.id)?.content).toBe('# v2 by external editor')
+    })
+
+    it('updateNote on an unloaded note is ignored (no empty overwrite of the disk file)', async () => {
+      const fileLink = new FakeFileLink()
+      fileLink.files.set('C:\\ws\\z.md', '# active')
+      fileLink.files.set('C:\\ws\\a.md', '# precious')
+      const controller = new NotebookController(new MemoryRepository(), fileLink)
+      await controller.hydrate()
+      await controller.openWorkspace('C:\\ws')
+      const a = controller.getSnapshot().notes.find((n) => n.title === 'a')!
+      controller.updateNote(a.id, 'oops typed into empty buffer')
+      controller.flushNote(a.id)
+      await flushAsync()
+      // 磁盘原文件安然无恙,笔记仍是未加载态
+      expect(fileLink.files.get('C:\\ws\\a.md')).toBe('# precious')
+      expect(controller.getSnapshot().notes.find((n) => n.id === a.id)?.contentLoaded).toBe(false)
     })
   })
 

@@ -27,8 +27,29 @@ fn read_note_lossy(path: &Path) -> (String, bool) {
 /// 桌面端原生导入文件夹:递归读全部 .md/.markdown/.txt。
 /// folderPath = 相对根的父目录路径且含根目录名本身(如 rootName/sub),分隔符统一 '/';
 /// 非 UTF-8 内容按 lossy 解码,与网页 file.text() 行为一致。上限 5000 文件防呆。
+/// async + spawn_blocking:遍历大目录(如整个桌面)不能占主线程,否则 UI 卡死。
+/// with_content=false 为懒加载扫描:只回文件名元数据不读正文(Typora 语义,
+/// 打开工作区秒开,点开笔记才读内容)。
 #[tauri::command]
-pub(crate) fn read_folder_notes(root: String) -> Result<Vec<ImportedNoteFile>, String> {
+pub(crate) async fn read_folder_notes(
+    root: String,
+    with_content: Option<bool>,
+) -> Result<Vec<ImportedNoteFile>, String> {
+    let with_content = with_content.unwrap_or(true);
+    tauri::async_runtime::spawn_blocking(move || scan_folder_notes(root, with_content))
+        .await
+        .map_err(|e| format!("扫描目录失败: {e}"))?
+}
+
+/// 跳过无需导入的目录:隐藏目录(.git/.obsidian…)与依赖/构建产物目录,
+/// 防止扫描量爆炸(如 Rust 项目的 target/ 动辄数万文件)
+fn should_skip_dir(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    name.starts_with('.')
+        || matches!(lower.as_str(), "node_modules" | "target" | "dist" | "build" | "out")
+}
+
+fn scan_folder_notes(root: String, with_content: bool) -> Result<Vec<ImportedNoteFile>, String> {
     let root_path = PathBuf::from(&root);
     if !root_path.is_dir() {
         return Err(format!("目录不存在: {}", root));
@@ -50,6 +71,10 @@ pub(crate) fn read_folder_notes(root: String) -> Result<Vec<ImportedNoteFile>, S
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
+                // 目录级剪枝:垃圾目录整棵跳过,不进栈
+                if entry.file_name().to_str().map(should_skip_dir).unwrap_or(true) {
+                    continue;
+                }
                 stack.push(path);
                 continue;
             }
@@ -78,7 +103,12 @@ pub(crate) fn read_folder_notes(root: String) -> Result<Vec<ImportedNoteFile>, S
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
-            let (content, is_utf8) = read_note_lossy(&path);
+            let (content, is_utf8) = if with_content {
+                read_note_lossy(&path)
+            } else {
+                // 元数据模式:不读正文,视为可绑定(绑定后按需读取时才校验编码)
+                (String::new(), true)
+            };
             out.push(ImportedNoteFile {
                 folder_path,
                 title,
@@ -90,9 +120,15 @@ pub(crate) fn read_folder_notes(root: String) -> Result<Vec<ImportedNoteFile>, S
     Ok(out)
 }
 
-/// 桌面端原生导入多个文本文件。
+/// 桌面端原生导入多个文本文件。async + spawn_blocking:批量读文件不占主线程。
 #[tauri::command]
-pub(crate) fn read_text_files(paths: Vec<String>) -> Result<Vec<ImportedNoteFile>, String> {
+pub(crate) async fn read_text_files(paths: Vec<String>) -> Result<Vec<ImportedNoteFile>, String> {
+    tauri::async_runtime::spawn_blocking(move || read_many_text_files(paths))
+        .await
+        .map_err(|e| format!("读取文件失败: {e}"))?
+}
+
+fn read_many_text_files(paths: Vec<String>) -> Result<Vec<ImportedNoteFile>, String> {
     let mut out = Vec::new();
     for raw_path in paths.into_iter().take(5000) {
         let path = PathBuf::from(&raw_path);

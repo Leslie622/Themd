@@ -31,7 +31,14 @@ export function buildFontStack(western: string, cjk: string, fallback: string): 
   return parts.join(', ')
 }
 
+/** 主工作区视图模式:纯编辑 / 分屏 / 实时预览(Typora 式) / 纯预览 */
+export type EditorViewMode = 'edit' | 'split' | 'live' | 'preview'
+
+const VIEW_MODES: readonly EditorViewMode[] = ['edit', 'split', 'live', 'preview']
+
 interface EditorPrefsState {
+  /** 主工作区视图模式(顶栏视图组,重启记住上次选择) */
+  viewMode: EditorViewMode
   /** CodeMirror 字号(px) */
   fontSize: number
   /** 界面西文字体:空 = Geist Variable(打包默认) */
@@ -70,6 +77,7 @@ interface EditorPrefsState {
   githubToken: string
   /** PicGo Server 上传接口地址(端口可在 PicGo 里改) */
   picgoUrl: string
+  setViewMode: (mode: EditorViewMode) => void
   setFontSize: (px: number) => void
   setUiFont: (western: string, cjk: string) => void
   setEditorFont: (western: string, cjk: string) => void
@@ -111,6 +119,7 @@ const applyFonts = (s: Pick<EditorPrefsState, 'uiFontWestern' | 'uiFontCjk' | 'e
 }
 
 const DEFAULTS = {
+  viewMode: 'split' as EditorViewMode,
   fontSize: 13.5,
   /** 空 = 西文不单独指定,由中文字体/通用族承担(中文字体通常自带拉丁字形) */
   uiFontWestern: '',
@@ -148,6 +157,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         applyFonts({ ...useEditorPrefs.getState(), editorFontWestern: western, editorFontCjk: cjk })
         set({ editorFontWestern: western, editorFontCjk: cjk })
       },
+      setViewMode: (mode) => set({ viewMode: mode }),
       setFoldEnabled: (v) => set({ foldEnabled: v }),
       setSyncScrollEnabled: (v) => set({ syncScrollEnabled: v }),
       setLineWrapEnabled: (v) => set({ lineWrapEnabled: v }),
@@ -158,7 +168,7 @@ export const useEditorPrefs = create<EditorPrefsState>()(
     }),
     {
       name: 'themd/ui-preferences/v1',
-      version: 6,
+      version: 7,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<EditorPrefsState>
         const next = { ...DEFAULTS, ...state }
@@ -168,6 +178,10 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         // 正文不受影响,只是新插入的图片开始走本地文件夹)
         // v5 图床模式登场:imageMode 补 'remote' 合法值,上传配置落默认
         // v6 移除 SM.MS/s.ee 路线:存量 provider(含 smms)回落 github
+        // v7 实时预览视图登场:viewMode 记住顶栏视图组的选择,非法值落 split
+        if (version < 7) {
+          if (!VIEW_MODES.includes(next.viewMode)) next.viewMode = 'split'
+        }
         if (version < 2) {
           if (!next.editorFontWestern?.trim()) next.editorFontWestern = 'JetBrains Mono'
           if (!next.editorFontCjk?.trim()) next.editorFontCjk = 'HarmonyOS Sans SC'

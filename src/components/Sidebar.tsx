@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
   ChevronRight,
+  Copy,
   FileText,
   Folder,
   FolderInput,
@@ -53,6 +54,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -67,7 +69,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { platformServices } from '@/app/platform'
-import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useNotebook } from '@/store'
@@ -96,9 +97,9 @@ export function Sidebar() {
   const closeWorkspace = useNotebook((s) => s.closeWorkspace)
 
   const [keyword, setKeyword] = useState('')
-  // 文件夹展开状态受控:搜索时强制全开(命中笔记所在的文件夹必须可见),
-  // 清空搜索后回到用户手动控制的展开/收起
-  const [closedFolders, setClosedFolders] = useState<Set<string>>(new Set())
+  // 文件夹展开状态受控,默认全部折叠(对齐 Typora,点开才展开);
+  // 搜索时强制全开(命中笔记所在的文件夹必须可见),清空搜索后回到手动状态
+  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set())
   const [renaming, setRenaming] = useState<
     { kind: 'note' | 'folder'; id: string; value: string } | null
   >(null)
@@ -108,13 +109,12 @@ export function Sidebar() {
   const [deletingNote, setDeletingNote] = useState<{ id: string; title: string } | null>(null)
 
   const kw = keyword.trim().toLowerCase()
+  // 搜索只匹配标题(=文件名):正文懒加载后未打开的笔记内存里没有全文,
+  // 标题搜索零开销且覆盖全部笔记
   const filtered = useMemo(
     () =>
       notes.filter(
-        (n) =>
-          !kw ||
-          n.title.toLowerCase().includes(kw) ||
-          n.content.toLowerCase().includes(kw),
+        (n) => !kw || n.title.toLowerCase().includes(kw),
       ),
     [notes, kw],
   )
@@ -123,9 +123,11 @@ export function Sidebar() {
     (n: Note): string => {
       const dir = noteDirOf(n.sourcePath)
       if (!dir) return ''
+      // 工作区根不是树里的可折叠节点,根目录笔记归入顶层
+      if (isSamePath(dir, workspaceRoot)) return ''
       return folders.find((f) => f.path && isSamePath(f.path, dir))?.id ?? ''
     },
-    [folders],
+    [folders, workspaceRoot],
   )
   const byFolder = useMemo(() => {
     const map = new Map<string, Note[]>()
@@ -137,26 +139,37 @@ export function Sidebar() {
     return map
   }, [filtered, folderIdOfNote])
   /**
-   * 目录树展平:按路径排序保证父文件夹在子文件夹前,depth = 祖先目录数(缩进用)。
-   * 文件夹与磁盘目录一一对应,只显示出现过的目录。
+   * 目录树:按父目录分组的子目录索引(同层按名称排序),渲染时递归嵌套——
+   * 子文件夹真正渲染进父文件夹的 CollapsibleContent,折叠父级时子树整体收起。
+   * 只取工作区内的目录;根自身是静态标题行,不作为树节点。
    */
-  const folderNodes = useMemo(() => {
-    const depthOf = (f: FolderEntity): number => {
-      let depth = 0
-      let parent = noteDirOf(f.path)
-      while (parent) {
-        const dir = parent
-        const pf = folders.find((x) => isSamePath(x.path, dir))
-        if (!pf) break
-        depth++
-        parent = noteDirOf(pf.path)
-      }
-      return depth
+  const childFolders = useMemo(() => {
+    const map = new Map<string, FolderEntity[]>()
+    if (!workspaceRoot) return map
+    for (const folder of folders) {
+      if (isSamePath(folder.path, workspaceRoot)) continue
+      if (!isPathUnder(folder.path, workspaceRoot)) continue
+      const key = normalizePath(noteDirOf(folder.path) ?? '')
+      const bucket = map.get(key)
+      if (bucket) bucket.push(folder)
+      else map.set(key, [folder])
     }
-    return [...folders]
-      .sort((a, b) => normalizePath(a.path).localeCompare(normalizePath(b.path)))
-      .map((folder) => ({ folder, depth: depthOf(folder) }))
-  }, [folders])
+    for (const bucket of map.values()) bucket.sort((a, b) => a.name.localeCompare(b.name))
+    return map
+  }, [folders, workspaceRoot])
+
+  /** 目录树展平(DFS 序,depth 来自树的层数);「移动到文件夹」菜单缩进用 */
+  const folderNodes = useMemo(() => {
+    const nodes: { folder: FolderEntity; depth: number }[] = []
+    const walk = (dir: string, depth: number) => {
+      for (const folder of childFolders.get(normalizePath(dir)) ?? []) {
+        nodes.push({ folder, depth })
+        walk(folder.path, depth + 1)
+      }
+    }
+    if (workspaceRoot) walk(workspaceRoot, 0)
+    return nodes
+  }, [childFolders, workspaceRoot])
 
   /** 工作区记忆(prefs 持久化);控制器只管打开,记忆归 UI 层 */
   const recents = useWorkspacePrefs((s) => s.recents)
@@ -194,6 +207,25 @@ export function Sidebar() {
     const dir = await platformServices.files.pickDirectory()
     if (!dir) return
     createFolder(dir)
+  }
+
+  /** 空白区右键:复制工作区根路径 */
+  const copyRootPath = () => {
+    const root = workspaceRoot
+    if (!root) return
+    void navigator.clipboard
+      .writeText(root)
+      .then(() => toast.success('已复制文件路径'))
+      .catch(() => toast.error('复制文件路径失败'))
+  }
+
+  /** 空白区右键:在文件管理器中定位工作区根目录 */
+  const revealRoot = () => {
+    const root = workspaceRoot
+    if (!root) return
+    platformServices.files.revealItemInDir(root).catch((error: unknown) => {
+      toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
+    })
   }
 
   const commitRename = () => {
@@ -269,10 +301,87 @@ export function Sidebar() {
     />
   )
 
+  /**
+   * 递归渲染目录树:每个文件夹的子文件夹与笔记都在其 CollapsibleContent 内,
+   * 折叠父级 = 整棵子树收起;缩进由每层的参考线容器逐级累加。
+   * 搜索态:子树无任何命中笔记的文件夹整棵隐藏,命中则强制全开。
+   */
+  const renderFolderRows = (parentPath: string, depth: number): React.ReactNode[] =>
+    (childFolders.get(normalizePath(parentPath)) ?? []).flatMap((f) => {
+      const items = byFolder.get(f.id) ?? []
+      const childRows = renderFolderRows(f.path, depth + 1)
+      if (kw && items.length === 0 && childRows.length === 0) return []
+      const open = kw ? true : openFolders.has(f.id)
+      const noteCount = notes.filter((n) => isPathUnder(n.sourcePath, f.path)).length
+      return [
+        <Collapsible
+          key={f.id}
+          open={open}
+          onOpenChange={(v) =>
+            setOpenFolders((prev) => {
+              const next = new Set(prev)
+              if (v) next.add(f.id)
+              else next.delete(f.id)
+              return next
+            })
+          }
+        >
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <div className="group/row flex items-center rounded-lg transition-colors hover:bg-sidebar-accent">
+                <CollapsibleTrigger className="group/chev flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium">
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
+                    <Folder className="size-3" />
+                  </span>
+                  <span className="truncate" title={f.path}>{f.name}</span>
+                </CollapsibleTrigger>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
+                      aria-label={`文件夹 ${f.name} 操作`}
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-40">
+                    <FolderMenuItems
+                      parts={{ Item: DropdownMenuItem, Separator: DropdownMenuSeparator }}
+                      {...folderActions(f, noteCount)}
+                    />
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </ContextMenuTrigger>
+            {/* 右键文件夹行:与「⋯」完全同一套操作 */}
+            <ContextMenuContent className="min-w-40">
+              <FolderMenuItems
+                parts={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }}
+                {...folderActions(f, noteCount)}
+              />
+            </ContextMenuContent>
+          </ContextMenu>
+          <CollapsibleContent>
+            {/* 子文件夹与笔记缩进并加参考线,每层容器逐级累加缩进 */}
+            <div className="ml-4 border-l border-sidebar-border/70 pl-1.5">
+              {childRows}
+              {items.map(renderNoteItem)}
+              {items.length === 0 && childRows.length === 0 && (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">空文件夹</p>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>,
+      ]
+    })
+
   return (
     <TooltipProvider delayDuration={300}>
       <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
-      <div className="flex flex-col gap-3.5 px-4 pb-3.5 pt-3">
+      <div className="flex flex-col gap-3.5 px-4 pb-1.5 pt-3">
         <div
           data-tauri-drag-region
           className="flex h-10 items-center justify-between text-foreground"
@@ -301,77 +410,39 @@ export function Sidebar() {
             </Tooltip>
           </div>
         </div>
-        {/* 新建降为次级操作(ghost,不占整行):folder-first 下磁盘才是主角 */}
-        <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                disabled={!workspaceRoot}
-                onClick={handleCreateNote}
-              >
-                <Plus /> 新建
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>在工作区根新建笔记</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground"
-                disabled={!workspaceRoot}
-                onClick={() => void handleCreateFolder()}
-                aria-label="新建文件夹"
-              >
-                <FolderPlus />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>新建文件夹:选择(或新建)磁盘目录</TooltipContent>
-          </Tooltip>
-        </div>
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            placeholder="搜索笔记..."
+            placeholder="搜索笔记"
             className="rounded-full pl-8"
           />
         </div>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
+      <nav className="flex flex-1 flex-col space-y-0.5 overflow-y-auto p-2">
         {/* 无工作区:引导打开目录(folder-first 的起点) */}
         {!workspaceRoot && (
-          <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
             <FolderOpen className="size-8 text-muted-foreground/50" />
-            <p className="text-xs text-muted-foreground">打开一个目录作为工作区,目录即笔记本</p>
+            <p className="text-xs text-muted-foreground">打开一个目录作为工作区</p>
             <Button onClick={pickAndOpenDir}>
               <FolderOpen /> 打开目录
             </Button>
-            {recents.length > 0 && (
-              <div className="w-full space-y-1 pt-2">
-                <p className="text-xs text-muted-foreground">最近</p>
-                {recents.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    className="block w-full truncate rounded-md px-2 py-1 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                    title={r}
-                    onClick={() => openDir(r)}
-                  >
-                    {r.split(/[\\/]/).filter(Boolean).pop()}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
-        {workspaceRoot && (byFolder.get('') ?? []).map(renderNoteItem)}
+        {/* 工作区根:静态标题行(不可折叠、无操作),层级从根的子目录起算——对齐 Typora */}
+        {workspaceRoot && (
+          <div className="flex items-center gap-1.5 px-2 py-1.5 text-sm font-medium">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
+              <Folder className="size-3" />
+            </span>
+            <span className="truncate" title={workspaceRoot}>
+              {workspaceRoot.split(/[\\/]/).filter(Boolean).pop()}
+            </span>
+          </div>
+        )}
 
         {workspaceRoot && notes.length > 0 && filtered.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-muted-foreground">
@@ -386,106 +457,75 @@ export function Sidebar() {
             </p>
           </div>
         )}
-        {workspaceRoot && folderNodes.map(({ folder: f, depth }) => {
-          const items = byFolder.get(f.id) ?? []
-          // 搜索态:没有命中笔记的文件夹整个隐藏,连"空文件夹"占位一起
-          if (kw && items.length === 0) return null
-          // 搜索时强制展开(忽略手动收起),无搜索时按用户手动状态
-          const open = kw ? true : !closedFolders.has(f.id)
-          const noteCount = notes.filter((n) => isPathUnder(n.sourcePath, f.path)).length
-          return (
-            <Collapsible
-              key={f.id}
-              open={open}
-              onOpenChange={(v) =>
-                setClosedFolders((prev) => {
-                  const next = new Set(prev)
-                  if (v) next.delete(f.id)
-                  else next.add(f.id)
-                  return next
-                })
-              }
-            >
-              <ContextMenu>
-                <ContextMenuTrigger asChild>
-                  <div className="group/row flex items-center rounded-lg transition-colors hover:bg-sidebar-accent" style={{ marginLeft: depth * 14 }}>
-                    <CollapsibleTrigger className="group/chev flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium">
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
-                      <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
-                        <Folder className="size-3" />
-                      </span>
-                      <span className="truncate" title={f.path}>{f.name}</span>
-                      <span className="text-xs text-muted-foreground">{items.length}</span>
-                    </CollapsibleTrigger>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
-                          aria-label={`文件夹 ${f.name} 操作`}
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-40">
-                        <FolderMenuItems
-                          parts={{ Item: DropdownMenuItem, Separator: DropdownMenuSeparator }}
-                          {...folderActions(f, noteCount)}
-                        />
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </ContextMenuTrigger>
-                {/* 右键文件夹行:与「⋯」完全同一套操作 */}
-                <ContextMenuContent className="min-w-40">
-                  <FolderMenuItems
-                    parts={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }}
-                    {...folderActions(f, noteCount)}
-                  />
-                </ContextMenuContent>
-              </ContextMenu>
-            <CollapsibleContent>
-                {/* 文件夹内笔记缩进并加参考线,和根目录笔记拉开层级 */}
-                <div className="ml-4 border-l border-sidebar-border/70 pl-1.5" style={{ marginLeft: depth * 14 + 16 }}>
-                  {items.map(renderNoteItem)}
-                  {items.length === 0 && (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">空文件夹</p>
-                  )}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          )
-        })}
+        {workspaceRoot && renderFolderRows(workspaceRoot, 0)}
 
-        {(byFolder.get('') ?? []).map(renderNoteItem)}
+        {/* 根目录笔记:和顶级文件夹同一层级,参考线对齐文件夹内容——层级全部从根标题起算 */}
+        {workspaceRoot ? (
+          <div className="ml-4 border-l border-sidebar-border/70 pl-1.5" style={{ marginLeft: 16 }}>
+            {(byFolder.get('') ?? []).map(renderNoteItem)}
+          </div>
+        ) : (
+          (byFolder.get('') ?? []).map(renderNoteItem)
+        )}
 
         {notes.length > 0 && filtered.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-muted-foreground">
             没有匹配的笔记
           </p>
         )}
-        {notes.length === 0 && (
-          <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
-            <FileText className="size-8 text-muted-foreground/50" />
-            <p className="text-xs text-muted-foreground">
-              还没有笔记，点「新建」或「导入」开始
-            </p>
-          </div>
+
+        {/* 列表空白区右键:工作区级操作(Typora 同款);只挂在列表下方的空白填充上,不与行菜单冲突 */}
+        {workspaceRoot && (
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <div className="min-h-24 flex-1" />
+            </ContextMenuTrigger>
+            <ContextMenuContent className="min-w-40">
+              <ContextMenuItem onClick={handleCreateNote}>
+                <Plus /> 新建文件
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => void handleCreateFolder()}>
+                <FolderPlus /> 新建文件夹
+              </ContextMenuItem>
+              <ContextMenuItem onClick={copyRootPath}>
+                <Copy /> 复制文件路径
+              </ContextMenuItem>
+              <ContextMenuItem onClick={revealRoot}>
+                <FolderOpen /> 打开文件位置
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         )}
       </nav>
 
-      {/* 工作区胶囊固定侧栏底部:目录是全局上下文,不是头部操作 */}
-      <div className="p-2">
-        <WorkspacePill
-          workspaceRoot={workspaceRoot}
-          recents={recents}
-          onOpenDir={openDir}
-          onPickDir={pickAndOpenDir}
-          onClear={() => {
-            void closeWorkspace().then(() => forgetWorkspace())
-          }}
-        />
+      {/* 工作区胶囊固定侧栏底部:目录是全局上下文,不是头部操作;「新建」在其左侧 */}
+      <div className="flex items-center gap-1 p-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0 text-muted-foreground"
+              disabled={!workspaceRoot}
+              onClick={handleCreateNote}
+              aria-label="新建笔记"
+            >
+              <Plus />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>在工作区根新建笔记</TooltipContent>
+        </Tooltip>
+        <div className="min-w-0 flex-1">
+          <WorkspacePill
+            workspaceRoot={workspaceRoot}
+            recents={recents}
+            onOpenDir={openDir}
+            onPickDir={pickAndOpenDir}
+            onClear={() => {
+              void closeWorkspace().then(() => forgetWorkspace())
+            }}
+          />
+        </div>
       </div>
       </aside>
 
@@ -611,15 +651,16 @@ function WorkspacePill({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start gap-2 bg-muted/40 text-xs text-muted-foreground"
           title={workspaceRoot ?? '未打开工作区'}
         >
           <FolderOpen className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{name ?? '未打开工作区'}</span>
           <ChevronRight className="size-3 shrink-0 rotate-90 opacity-60" />
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-52">
         <DropdownMenuItem onClick={onPickDir}>
@@ -628,18 +669,15 @@ function WorkspacePill({
         {recents.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <FolderInput /> 最近工作区
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="min-w-48">
-                {recents.map((r) => (
-                  <DropdownMenuItem key={r} title={r} onClick={() => onOpenDir(r)}>
-                    {r.split(/[\\/]/).filter(Boolean).pop()}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+            <DropdownMenuLabel>最近工作区</DropdownMenuLabel>
+            {recents.map((r) => (
+              <DropdownMenuItem key={r} title={r} onClick={() => onOpenDir(r)}>
+                <Folder className="text-muted-foreground" />
+                <span className="min-w-0 truncate">
+                  {r.split(/[\\/]/).filter(Boolean).pop()}
+                </span>
+              </DropdownMenuItem>
+            ))}
           </>
         )}
         {workspaceRoot && (
@@ -765,7 +803,8 @@ function NoteMenuItems({
         </Item>
       )}
       <Sub>
-        <SubTrigger>
+        {/* ContextMenuSubTrigger 基类缺 gap-2(与 Dropdown 版不一致),此处覆盖补齐 */}
+        <SubTrigger className="gap-2">
           <FolderInput /> 移动到文件夹
         </SubTrigger>
         {/* 菜单默认宽度跟随触发器,被 min-w-32 兜底;文件夹名长时避免换行 */}
@@ -823,25 +862,22 @@ function NoteItem({
   const icon = (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sky-600 text-white dark:bg-sky-500">
-          <FileText className="size-4" />
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-sky-500/15 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400">
+          <FileText className="size-3" />
         </span>
       </TooltipTrigger>
       <TooltipContent side="right">已绑定 {boundName}</TooltipContent>
     </Tooltip>
   )
+  // 非搜索态单行(对齐 Typora 的文件列表密度);搜索态追加命中摘要行
   const titleArea = (
     <span className="min-w-0 flex-1">
       <span className={cn('block truncate', active && 'font-medium')}>
         <Highlight text={note.title} keyword={keyword} />
       </span>
-      {snippet ? (
+      {snippet && (
         <span className="block truncate text-xs text-muted-foreground">
           <Highlight text={snippet} keyword={keyword} />
-        </span>
-      ) : (
-        <span className="block truncate text-xs text-muted-foreground">
-          {fromNow(note.updatedAt)}
         </span>
       )}
     </span>
@@ -860,7 +896,7 @@ function NoteItem({
           <button
             type="button"
             onClick={onClick}
-            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm"
+            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-sm"
           >
             {icon}
             {titleArea}

@@ -41,8 +41,15 @@ static WATCH: Mutex<Option<WatchState>> = Mutex::new(None);
 
 /// 监听工作区根(递归);root 为 None = 停止监听。
 /// 重复传同一根幂等(不重建 watcher);换根时退订旧根、订阅新根。
+/// async + spawn_blocking:对大目录树建递归 watch 不能占主线程,否则 UI 卡死。
 #[tauri::command]
-pub(crate) fn watch_workspace(app: AppHandle, root: Option<String>) -> Result<(), String> {
+pub(crate) async fn watch_workspace(app: AppHandle, root: Option<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || watch_workspace_blocking(app, root))
+        .await
+        .map_err(|e| format!("启动文件监听失败: {e}"))?
+}
+
+fn watch_workspace_blocking(app: AppHandle, root: Option<String>) -> Result<(), String> {
     let mut guard = WATCH.lock().map_err(|e| e.to_string())?;
     let state = guard.get_or_insert_with(|| WatchState { debouncer: None, watched_root: None });
 

@@ -1,8 +1,9 @@
 import { type ReactElement, type ReactNode, useRef } from 'react'
-import { Columns2, Eye, FileCode2, FileSymlink, FileText, FileWarning, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Save, Settings } from 'lucide-react'
+import { Columns2, Eye, FileCode2, FileSymlink, FileText, FileWarning, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Save, Settings, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Toaster } from '@/components/ui/sonner'
+import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -19,7 +20,8 @@ import { countImages, countWords } from '@/modules/notebook/domain/note'
 import { appEvents } from '@/shared/events/app-events'
 import type { Note } from '@/modules/notebook/domain/note'
 import type { ThemeFile } from '@/lib/theme/schema'
-export type ViewMode = 'edit' | 'split' | 'preview'
+import type { EditorViewMode } from '@/store-editor'
+export type ViewMode = EditorViewMode
 const FOLLOW_GLOBAL = '__follow__'
 function IconTip({ label, children }: { label: string; children: ReactElement }) { return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent side="bottom">{label}</TooltipContent></Tooltip> }
 export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; fileMissing: boolean; onNoteSaveAs: () => void; onNoteDelete: () => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void; children?: ReactNode }
@@ -89,7 +91,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
           <div className="flex shrink-0 items-center gap-2">
             {active && (
               <>
-                {/* —— 视图组(最左):编辑/分屏/预览,纯图标减密度,悬停看含义 —— */}
+                {/* —— 视图组(最左):编辑/分屏/实时/预览,纯图标减密度,悬停看含义 —— */}
                 <ToggleGroup
                   type="single"
                   variant="default"
@@ -108,6 +110,11 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   <IconTip label="分屏视图">
                     <ToggleGroupItem value="split" aria-label="分屏视图">
                       <Columns2 className="size-4" />
+                    </ToggleGroupItem>
+                  </IconTip>
+                  <IconTip label="实时预览">
+                    <ToggleGroupItem value="live" aria-label="实时预览">
+                      <Sparkles className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                   <IconTip label="预览视图">
@@ -292,7 +299,14 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                 </Button>
               </div>
             )}
-            {view === 'split' ? (
+            {/* 懒加载:正文未从磁盘读回前编辑器不挂载——CodeMirror 的 value
+                永远是已加载内容,杜绝「空内容编辑 → 覆盖磁盘文件」 */}
+            {active.contentLoaded === false ? (
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+                <Spinner className="size-6 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">正在读取笔记…</p>
+              </div>
+            ) : view === 'split' ? (
               <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="50%" minSize="20%">
                   <EditorPane
@@ -319,6 +333,16 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   value={active.content}
                   onChange={(v) => updateNote(active.id, v)}
                   noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
+                />
+              </div>
+            ) : view === 'live' ? (
+              <div className="min-h-0 flex-1">
+                <EditorPane
+                  key={active.id}
+                  value={active.content}
+                  onChange={(v) => updateNote(active.id, v)}
+                  noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
+                  livePreview
                 />
               </div>
             ) : (

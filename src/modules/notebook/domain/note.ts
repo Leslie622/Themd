@@ -7,6 +7,12 @@ export interface Note {
   themeId?: string
   /** 磁盘文件绝对路径(folder-first:每个笔记都是工作区内的文件) */
   sourcePath: string
+  /**
+   * 正文是否已从磁盘加载(懒加载):打开工作区只扫文件名元数据(Typora 语义,
+   * 打开秒开),激活笔记时才读全文。undefined/true = 已加载;false = 仅元数据
+   * 且 content 为空串——未加载的笔记不可编辑/写回,防止空内容覆盖磁盘文件。
+   */
+  contentLoaded?: boolean
 }
 
 /**

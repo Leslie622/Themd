@@ -98,7 +98,8 @@ export class NotebookController {
     this.saveTimer = setTimeout(() => {
       const snapshot: NotebookSnapshot = {
         schemaVersion: this.state.schemaVersion,
-        notes: this.state.notes,
+        // 懒加载:未加载正文的笔记快照只存元数据(磁盘才是正文的唯一事实)
+        notes: this.state.notes.map((n) => n.contentLoaded === false ? { ...n, content: '' } : n),
         folders: this.state.folders,
       }
       void this.repository.save(snapshot).catch((error: unknown) => console.error('笔记保存失败:', error))
@@ -138,20 +139,33 @@ export class NotebookController {
     // 去尾分隔符,后续 isPathUnder/前缀比较统一基准
     const normalizedRoot = root.replace(/[\\/]+$/, '')
     this.flushAll()
-    const imported = await this.fileLink.readFolderNotes(normalizedRoot)
+    // 懒加载扫描:只取文件名元数据不读正文(Typora 语义,大目录秒开),
+    // 正文在笔记激活时按需经 ensureNoteContentLoaded 读取
+    const imported = await this.fileLink.readFolderNotes(normalizedRoot, false)
     const existing = new Map(this.state.notes.map((n) => [normalizePath(n.sourcePath), n]))
     const dirs = new Set<string>()
+    // 目录链补齐:笔记所在目录的各级祖先一路补到工作区根,
+    // 保证只有子文件夹、没有直接笔记的中间目录也出现在树里
+    const addDirChain = (start: string | null) => {
+      let dir = start
+      while (dir) {
+        dirs.add(dir)
+        if (isSamePath(dir, normalizedRoot)) break
+        dir = noteDirOf(dir)
+      }
+    }
     const notes: Note[] = []
     for (const file of imported) {
       if (!file.filePath) continue // 非 UTF-8 等不可绑定文件不入库(Rust 侧已过滤,双保险)
-      dirs.add(noteDirOf(file.filePath) ?? '')
+      addDirChain(noteDirOf(file.filePath))
       const prev = existing.get(normalizePath(file.filePath))
       notes.push(prev
-        ? { ...prev, title: file.title, content: file.content }
+        ? { ...prev, title: file.title, content: prev.contentLoaded === false ? '' : prev.content }
         : {
             id: crypto.randomUUID(),
             title: file.title,
-            content: file.content,
+            content: '',
+            contentLoaded: false,
             updatedAt: Date.now(),
             sourcePath: file.filePath,
           })
@@ -164,6 +178,7 @@ export class NotebookController {
       workspaceRoot: normalizedRoot,
       fileMissingIds: new Set(),
     })
+    if (notes[0]) this.ensureNoteContentLoaded(notes[0].id)
     await this.fileLink.watchWorkspace(normalizedRoot)
   }
 
@@ -188,6 +203,8 @@ export class NotebookController {
 
   updateNote(id: string, content: string): void {
     const target = this.state.notes.find((note) => note.id === id)
+    // 未加载正文的笔记不可写:编辑器此时不应挂载,这里兜底防「空内容覆盖磁盘」
+    if (target?.contentLoaded === false) return
     this.publish({
       ...this.state,
       notes: this.state.notes.map((note) => {
@@ -256,6 +273,47 @@ export class NotebookController {
     const previous = this.state.activeId
     if (previous) this.flushNote(previous)
     this.publish({ ...this.state, activeId: id })
+    if (id) this.ensureNoteContentLoaded(id)
+  }
+
+  // ── 懒加载:正文按需读取 ─────────────────────────────────────────────
+
+  /** 正在从磁盘加载正文的笔记 id(并发去重,同一笔记只发一次读取) */
+  private loadingNoteIds = new Set<string>()
+
+  /**
+   * 确保笔记正文已从磁盘加载(contentLoaded=false 时读盘填充)。
+   * 激活笔记与打开工作区时调用;加载期间重复调用是 no-op。
+   * 读取失败标记失联(与 removed 事件同一处置,UI 走横幅自救)。
+   */
+  ensureNoteContentLoaded(id: string): void {
+    if (this.loadingNoteIds.has(id)) return
+    const note = this.state.notes.find((n) => n.id === id)
+    if (!note || note.contentLoaded !== false || !this.fileLink) return
+    const path = note.sourcePath
+    this.loadingNoteIds.add(id)
+    void this.fileLink.readTextFile(path)
+      .then((content) => {
+        // 加载期间笔记可能已被删除/改绑:仅当还绑在同一文件时写入
+        const current = this.state.notes.find((n) => n.id === id)
+        if (!current || current.sourcePath !== path) return
+        const fileMissingIds = new Set(this.state.fileMissingIds)
+        fileMissingIds.delete(id)
+        this.publish({
+          ...this.state,
+          fileMissingIds,
+          notes: this.state.notes.map((n) => n.id === id
+            ? { ...n, content, contentLoaded: true }
+            : n),
+        })
+      })
+      .catch(() => {
+        // 读不到(被外部删除/权限):标记失联,内容保持未加载
+        const fileMissingIds = new Set(this.state.fileMissingIds)
+        fileMissingIds.add(id)
+        this.publish({ ...this.state, fileMissingIds })
+      })
+      .finally(() => this.loadingNoteIds.delete(id))
   }
 
   setNoteTheme(id: string, themeId: string | null): void { this.publish({ ...this.state, notes: this.state.notes.map((n) => n.id === id ? { ...n, themeId: themeId ?? undefined } : n) }) }
@@ -589,6 +647,9 @@ export class NotebookController {
         await this.importExternalCreated(event.path)
         continue
       }
+      // 懒加载:正文未加载的笔记不读盘比对,保持未加载态(下次激活时重读,
+      // 天然拿到外部新内容)
+      if (note.contentLoaded === false && !this.dirtyPaths.has(event.path)) continue
       const disk = await this.fileLink.readTextFile(event.path).catch(() => null)
       if (disk === null) continue
       this.handleDiskContent(event.path, note, disk)
@@ -637,16 +698,25 @@ export class NotebookController {
     return this.state.notes.find((note) => isSamePath(note.sourcePath, path))
   }
 
-  /** 不变式:笔记所在目录缺文件夹时补建(仅叶子目录,层级由路径前缀派生) */
+  /**
+   * 不变式:笔记所在目录及其各级祖先(至工作区根)都有 Folder 实体。
+   * 祖先链补齐保证「只有子文件夹、没有直接笔记」的中间目录也成树节点,
+   * 层级不会断链。无工作区时只补笔记的直接父目录。
+   */
   private ensureFoldersForBoundNotes(state: NotebookState): NotebookState {
     let folders = state.folders
     let changed = false
     for (const note of state.notes) {
-      const dir = noteDirOf(note.sourcePath)
-      if (!dir) continue
-      if (folders.some((f) => isSamePath(f.path, dir))) continue
-      folders = [...folders, { id: crypto.randomUUID(), name: pathBaseName(dir), path: dir, order: folders.length }]
-      changed = true
+      let dir = noteDirOf(note.sourcePath)
+      while (dir) {
+        if (!folders.some((f) => isSamePath(f.path, dir))) {
+          folders = [...folders, { id: crypto.randomUUID(), name: pathBaseName(dir), path: dir, order: folders.length }]
+          changed = true
+        }
+        // 链到工作区根为止(根自身作为静态标题行,不入树);无根不外溢
+        if (!state.workspaceRoot || isSamePath(dir, state.workspaceRoot) || !isPathUnder(dir, state.workspaceRoot)) break
+        dir = noteDirOf(dir)
+      }
     }
     return changed ? { ...state, folders } : state
   }

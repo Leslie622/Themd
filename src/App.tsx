@@ -25,6 +25,7 @@ import { platformServices } from '@/app/platform'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useSyncScroll } from '@/lib/scroll-sync'
 import { setActiveNoteDir } from '@/lib/image-src'
+import { useEditorPrefs } from '@/store-editor'
 import { appEvents } from '@/shared/events/app-events'
 import { AppShell, type ViewMode } from '@/app/AppShell'
 import { clampSidebarWidth, useWorkspacePrefs } from '@/app/workspace-preferences'
@@ -53,7 +54,12 @@ export default function App() {
       : `笔记主题:跟随全局(当前:${globalThemeName})`
     : '笔记主题'
 
-  const [view, setView] = useState<ViewMode>('split')
+  // 视图模式重启记住上次选择:初值取编辑器偏好,切换时写回
+  const [view, setViewState] = useState<ViewMode>(() => useEditorPrefs.getState().viewMode)
+  const setView = useCallback((next: ViewMode) => {
+    useEditorPrefs.getState().setViewMode(next)
+    setViewState(next)
+  }, [])
   const { bindEditorScroller, bindPreviewScroller } = useSyncScroll()
   const [studioOpen, setStudioOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -65,6 +71,7 @@ export default function App() {
   const sidebarWidth = useWorkspacePrefs((state) => state.sidebarWidth)
   const setSidebarWidth = useWorkspacePrefs((state) => state.setSidebarWidth)
   const rememberedWorkspace = useWorkspacePrefs((state) => state.current)
+  const rememberWorkspace = useWorkspacePrefs((state) => state.rememberWorkspace)
   const { exportPdf, exportNoteFile } = useExportActions({ active, view, setView })
 
   // 启动恢复:有工作区记忆就重扫磁盘重建笔记列表(磁盘是唯一事实,
@@ -212,8 +219,18 @@ export default function App() {
       setStudioOpen={setStudioOpen}
       updateNote={handleEditorChangeSync}
       createNote={() => {
-        // folder-first:新建 = 工作区根直接落盘;无工作区时按钮不可见(空态引导)
-        if (!workspaceRoot) return
+        // folder-first:新建 = 工作区根直接落盘;无工作区时先选目录并打开,再在其中新建
+        if (!workspaceRoot) {
+          void platformServices.files.pickDirectory().then((dir) => {
+            if (!dir) return
+            notebookController.openWorkspace(dir)
+              .then(() => rememberWorkspace(dir))
+              .then(() => createNoteInDir(dir))
+              .catch((error: unknown) =>
+                toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`))
+          })
+          return
+        }
         void createNoteInDir(workspaceRoot).catch((error: unknown) =>
           toast.error(`新建笔记失败: ${error instanceof Error ? error.message : String(error)}`))
       }}

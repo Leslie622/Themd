@@ -4,7 +4,7 @@ import { languages } from '@codemirror/language-data'
 import { foldGutter } from '@codemirror/language'
 import { search } from '@codemirror/search'
 import { Compartment } from '@codemirror/state'
-import { EditorView, lineNumbers as cmLineNumbers } from '@codemirror/view'
+import { EditorView, keymap, lineNumbers as cmLineNumbers } from '@codemirror/view'
 import {
   defaultSettingsGithubDark,
   defaultSettingsGithubLight,
@@ -13,7 +13,23 @@ import {
 } from '@uiw/codemirror-theme-github'
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderOpen, ImagePlus } from 'lucide-react'
+import {
+  type LucideIcon,
+  Bold,
+  Check,
+  ClipboardPaste,
+  Code,
+  Copy,
+  FolderOpen,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  ListTodo,
+  Scissors,
+  TextQuote,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -21,15 +37,74 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { imagePlaceholder } from '@/lib/image-decorator'
+import { markdownLivePreview } from '@/lib/markdown-live-preview'
+import {
+  copySelection,
+  currentHeadingLevel,
+  cutSelection,
+  deleteSelection,
+  insertCodeBlock,
+  insertFootnote,
+  insertHorizontalRule,
+  insertLink,
+  insertMathBlock,
+  insertParagraphAbove,
+  insertParagraphBelow,
+  insertRefLink,
+  insertTable,
+  insertToc,
+  insertYamlFrontMatter,
+  pasteClipboard,
+  setHeading,
+  simplifyMarkdown,
+  toggleInline,
+  toggleLinePrefix,
+} from '@/lib/markdown-commands'
+import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
 import { fileToAssetImage, fileToEmbeddedImage, fileToUploadedImage, insertImageMarkdown } from '@/lib/image'
 import { assetsPathToAbsolute } from '@/lib/image-src'
 import { platformServices } from '@/app/platform'
 import { useAppearance } from '@/store-appearance'
 import { appEvents } from '@/shared/events/app-events'
 import { DEFAULT_EDITOR_STACK, buildFontStack, useEditorPrefs } from '@/store-editor'
+
+/** 菜单里的图标按钮(Typora 式网格);普通 Button,点击不关菜单,方便连续操作 */
+function MenuIconBtn({
+  icon: Icon,
+  title,
+  disabled,
+  onSelect,
+}: {
+  icon: LucideIcon
+  title: string
+  disabled?: boolean
+  onSelect: () => void
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className="h-8 w-full text-foreground/80"
+      onClick={(e) => {
+        e.preventDefault()
+        onSelect()
+      }}
+    >
+      <Icon />
+    </Button>
+  )
+}
 
 /** 批量处理图片文件并插入;全部为图片才接管事件,返回是否接管 */
 async function insertImageFiles(
@@ -141,6 +216,7 @@ export function EditorPane({
   onChange,
   bindScroller,
   noteDir,
+  livePreview = false,
 }: {
   value: string
   onChange: (value: string) => void
@@ -148,6 +224,8 @@ export function EditorPane({
   bindScroller?: (el: HTMLElement | null) => void
   /** 活动笔记(绑定磁盘文件时)的所在目录;插图落盘基准 */
   noteDir?: string | null
+  /** 实时预览模式:Typora 式边写边渲染(源码不变,纯显示层装饰) */
+  livePreview?: boolean
 }) {
   const isDark = useAppearance((s) => s.isDark)
   // CodeMirror view 引用:粘贴/拖拽/菜单插图都要在精确光标处 dispatch
@@ -391,6 +469,16 @@ export function EditorPane({
   // 内嵌图片徽章:编辑器里把超长 base64 换成短占位(纯显示层,原文不动)
   const imageChipExt = useMemo(() => imagePlaceholder(), [])
 
+  // 实时渲染装饰层:与内嵌图片徽章二选一(二者都会 replace 图片标记范围,
+  // 叠加冲突);实时模式下图片整段标记由 live 层换成内联 <img>
+  const livePreviewExt = useMemo(() => markdownLivePreview(), [])
+  const liveComp = useMemo(() => new Compartment(), [])
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: liveComp.reconfigure(livePreview ? livePreviewExt : imageChipExt),
+    })
+  }, [livePreview, liveComp, livePreviewExt, imageChipExt])
+
   // 菜单/App 通过事件总线触发文件选择器(光标位置由 view 实时决定)
   useEffect(() => {
     const open = () => fileInputRef.current?.click()
@@ -477,10 +565,53 @@ export function EditorPane({
 
   // 编辑器区域右键走自定义菜单(shadcn ContextMenu),压掉 WebView2 原生菜单;
   // trigger 自带 select-none,这里用 select-text 覆盖回来,保证编辑器可选中
+
+  /** 右键时递增:强制重算菜单内的选择区相关状态(禁用态/段落勾选) */
+  const [menuTick, setMenuTick] = useState(0)
+
+  /** 菜单命令统一入口:拿到当前 EditorView 才执行;编辑器已卸载则忽略 */
+  const runView = (fn: (view: EditorView) => void) => {
+    const view = viewRef.current
+    if (view) fn(view)
+  }
+
+  // 菜单打开瞬间计算的选择区快照:menuTick 变化触发重渲染时取值
+  const view = viewRef.current
+  const selEmpty = menuTick >= 0 && (!view || view.state.selection.main.empty)
+  const headingLevel = menuTick >= 0 && view ? currentHeadingLevel(view) : 0
+
+  const copyAsHtml = (v: EditorView) => {
+    const text = v.state.sliceDoc(
+      v.state.selection.main.from,
+      v.state.selection.main.to,
+    )
+    if (!text) return
+    navigator.clipboard
+      .writeText(renderMarkdown(text).html)
+      .then(() => v.focus())
+      .catch(() => toast.error('复制失败'))
+  }
+
+  const copySimplified = (v: EditorView) => {
+    const text = v.state.sliceDoc(
+      v.state.selection.main.from,
+      v.state.selection.main.to,
+    )
+    if (!text) return
+    navigator.clipboard
+      .writeText(simplifyMarkdown(text))
+      .then(() => v.focus())
+      .catch(() => toast.error('复制失败'))
+  }
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div ref={rootRef} className="h-full overflow-hidden text-sm select-text">
+        <div
+          ref={rootRef}
+          onContextMenu={() => setMenuTick((t) => t + 1)}
+          className="h-full overflow-hidden text-sm select-text"
+        >
           <CodeMirror
         value={value}
         onChange={onChange}
@@ -496,6 +627,20 @@ export function EditorPane({
         basicSetup={{ foldGutter: false, lineNumbers: false }}
         extensions={[
           markdown({ base: markdownLanguage, codeLanguages: languages }),
+          // 右键菜单里标注的快捷键在这里绑定(Ctrl+1..6/0 标题,Ctrl+T 表格等)
+          keymap.of([
+            { key: 'Mod-1', run: (v) => (setHeading(v, 1), true) },
+            { key: 'Mod-2', run: (v) => (setHeading(v, 2), true) },
+            { key: 'Mod-3', run: (v) => (setHeading(v, 3), true) },
+            { key: 'Mod-4', run: (v) => (setHeading(v, 4), true) },
+            { key: 'Mod-5', run: (v) => (setHeading(v, 5), true) },
+            { key: 'Mod-6', run: (v) => (setHeading(v, 6), true) },
+            { key: 'Mod-0', run: (v) => (setHeading(v, 0), true) },
+            { key: 'Mod-t', run: (v) => (insertTable(v), true) },
+            { key: 'Mod-Shift-k', run: (v) => (insertCodeBlock(v), true) },
+            { key: 'Mod-Shift-m', run: (v) => (insertMathBlock(v), true) },
+            { key: 'Mod-Shift-i', run: () => (appEvents.emit('insertImage'), true) },
+          ]),
           themeExt,
           chromeExt,
           // 查找替换面板(Mod-f,basicSetup 的 searchKeymap 提供快捷键):
@@ -506,7 +651,7 @@ export function EditorPane({
           cmLineNumbers(),
           fontExt,
           imageExt,
-          imageChipExt,
+          liveComp.of(livePreview ? livePreviewExt : imageChipExt),
         ]}
       />
       <input
@@ -539,11 +684,124 @@ export function EditorPane({
         )}
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="min-w-40">
-        <ContextMenuItem onSelect={() => appEvents.emit('insertImage')}>
-          <ImagePlus />
-          插入图片
-        </ContextMenuItem>
+      <ContextMenuContent className="min-w-56">
+        {/* 剪贴板图标网格(Typora 同款):无选中时剪切/复制/删除置灰;不加水平 padding,靠均分居中保证左右对称 */}
+        <div className="grid grid-cols-4 gap-1 px-1.5 pt-2">
+          <MenuIconBtn
+            icon={Scissors}
+            title="剪切"
+            disabled={selEmpty}
+            onSelect={() => runView((v) => cutSelection(v).catch(() => toast.error('剪切失败')))}
+          />
+          <MenuIconBtn
+            icon={Copy}
+            title="复制"
+            disabled={selEmpty}
+            onSelect={() => runView((v) => copySelection(v).catch(() => toast.error('复制失败')))}
+          />
+          <MenuIconBtn
+            icon={ClipboardPaste}
+            title="粘贴"
+            onSelect={() => runView((v) => pasteClipboard(v).catch(() => toast.error('粘贴失败')))}
+          />
+          <MenuIconBtn
+            icon={Trash2}
+            title="删除"
+            disabled={selEmpty}
+            onSelect={() => runView(deleteSelection)}
+          />
+        </div>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="gap-2">复制 / 粘贴为…</ContextMenuSubTrigger>
+          <ContextMenuSubContent className="min-w-56">
+            <ContextMenuItem
+              disabled={selEmpty}
+              onSelect={() => runView((v) => copySelection(v).catch(() => toast.error('复制失败')))}
+            >
+              复制为 Markdown
+              <ContextMenuShortcut>Ctrl+Shift+C</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem
+              disabled={selEmpty}
+              onSelect={() => runView(copyAsHtml)}
+            >
+              复制为 HTML 代码
+            </ContextMenuItem>
+            <ContextMenuItem
+              disabled={selEmpty}
+              onSelect={() => runView(copySimplified)}
+            >
+              复制内容并简化格式
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() => runView((v) => pasteClipboard(v).catch(() => toast.error('粘贴失败')))}
+            >
+              粘贴为纯文本
+              <ContextMenuShortcut>Ctrl+Shift+V</ContextMenuShortcut>
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        {/* 格式图标网格:行内(加粗/斜体/行内代码/链接)+ 块级(引用/有序/无序/任务) */}
+        <div className="grid grid-cols-4 gap-1 px-1.5 py-1.5">
+          <MenuIconBtn icon={Bold} title="加粗" onSelect={() => runView((v) => toggleInline(v, '**'))} />
+          <MenuIconBtn icon={Italic} title="斜体" onSelect={() => runView((v) => toggleInline(v, '*'))} />
+          <MenuIconBtn icon={Code} title="行内代码" onSelect={() => runView((v) => toggleInline(v, '`'))} />
+          <MenuIconBtn icon={Link2} title="链接" onSelect={() => runView(insertLink)} />
+          <MenuIconBtn icon={TextQuote} title="引用" onSelect={() => runView((v) => toggleLinePrefix(v, 'quote'))} />
+          <MenuIconBtn icon={ListOrdered} title="有序列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'olist'))} />
+          <MenuIconBtn icon={List} title="无序列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'ulist'))} />
+          <MenuIconBtn icon={ListTodo} title="任务列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'task'))} />
+        </div>
+        {/* 段落/插入:Typora 同款二级结构,转换作用于选中行;当前层级打勾 */}
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="gap-2">段落</ContextMenuSubTrigger>
+          <ContextMenuSubContent className="min-w-44">
+            {([1, 2, 3, 4, 5, 6] as const).map((level) => (
+              <ContextMenuItem key={level} onSelect={() => runView((v) => setHeading(v, level))}>
+                {headingLevel === level && <Check className="size-3.5" />}
+                {level} 级标题
+                <ContextMenuShortcut>Ctrl+{level}</ContextMenuShortcut>
+              </ContextMenuItem>
+            ))}
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => runView((v) => setHeading(v, 0))}>
+              {headingLevel === 0 && <Check className="size-3.5" />}
+              段落
+              <ContextMenuShortcut>Ctrl+0</ContextMenuShortcut>
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="gap-2">插入</ContextMenuSubTrigger>
+          <ContextMenuSubContent className="min-w-44">
+            <ContextMenuItem onSelect={() => appEvents.emit('insertImage')}>
+              图像
+              <ContextMenuShortcut>Ctrl+Shift+I</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => runView(insertFootnote)}>脚注</ContextMenuItem>
+            <ContextMenuItem onSelect={() => runView(insertRefLink)}>链接引用</ContextMenuItem>
+            <ContextMenuItem onSelect={() => runView(insertHorizontalRule)}>水平分割线</ContextMenuItem>
+            <ContextMenuItem onSelect={() => runView(insertTable)}>
+              表格
+              <ContextMenuShortcut>Ctrl+T</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => runView(insertCodeBlock)}>
+              代码块
+              <ContextMenuShortcut>Ctrl+Shift+K</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => runView(insertMathBlock)}>
+              公式块
+              <ContextMenuShortcut>Ctrl+Shift+M</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => runView(insertToc)}>内容目录</ContextMenuItem>
+            <ContextMenuItem onSelect={() => runView(insertYamlFrontMatter)}>YAML Front Matter</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => runView(insertParagraphAbove)}>段落（上方）</ContextMenuItem>
+            <ContextMenuItem onSelect={() => runView(insertParagraphBelow)}>段落（下方）</ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
       </ContextMenuContent>
     </ContextMenu>
   )
