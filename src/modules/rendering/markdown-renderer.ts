@@ -1,6 +1,7 @@
 import MarkdownIt from 'markdown-it'
 import taskLists from 'markdown-it-task-lists'
 import { katex as katexPlugin } from '@mdit/plugin-katex'
+import { gfmAlerts } from './gfm-alerts'
 import { resolveImageSrcSync } from '@/lib/image-src'
 // 只注册常用语言，避免把整个 highlight.js（200+ 语言、2MB+）打进主包
 import hljs from 'highlight.js/lib/core'
@@ -81,7 +82,7 @@ export const md = new MarkdownIt({
     }
     return '' // 空字符串 = 交给 markdown-it 自己转义输出
   },
-}).use(taskLists).use(katexPlugin)
+}).use(taskLists).use(katexPlugin).use(gfmAlerts)
 
 // ============================================================
 // 自定义渲染规则：想把 md 渲染成「自己喜欢的 HTML」，就在这里改。

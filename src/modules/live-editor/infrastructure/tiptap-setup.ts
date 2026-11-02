@@ -23,6 +23,7 @@ import { MathBlock, MathInline } from './math-node'
 import { FrontMatter } from './frontmatter-node'
 import { CodeBlockCm } from './codeblock-cm'
 import { LiveImage } from './live-image'
+import { CalloutBlockquote } from './callout-blockquote'
 import { LiveTableMenu } from './live-table-menu'
 
 /** MarkdownManager 渲染辅助器的最小面(官方 h 的子集,够表格用) */
@@ -124,14 +125,16 @@ const ProfileItalic = Italic.extend({
 /** 实时编辑扩展集:编辑器 schema 与 markdown 解析/序列化的唯一装配点 */
 export function liveExtensions() {
   return [
-    // bold/italic 换档案感知版、codeBlock 换 CM 内嵌版(schema 均同型)
-    StarterKit.configure({ bold: false, italic: false, codeBlock: false, link: false }),
+    // bold/italic 换档案感知版、codeBlock 换 CM 内嵌版、blockquote 换 GFM Alerts
+    // 感知版(schema 均同型)
+    StarterKit.configure({ bold: false, italic: false, codeBlock: false, link: false, blockquote: false }),
     // 链接点击禁止扩展自带的 window.open(Tauri WebView 无弹窗拦截,会把
     // 整个应用页面导航走);交互与 CM 版对齐:普通点击=定位光标,右键菜单打开
     Link.configure({ openOnClick: false }),
     ProfileBold,
     ProfileItalic,
     LiveImage,
+    CalloutBlockquote,
     MathBlock,
     MathInline,
     FrontMatter,
