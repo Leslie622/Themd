@@ -94,6 +94,11 @@ export const MathBlock = Node.create({
   renderMarkdown(node) {
     return `$$\n${texOf(node)}\n$$`
   },
+  // 兜底 DOM 序列化:NodeView 缺席时(如 React 卸载期 setProps 清空
+  // nodeViews 的重建)PM 走 spec.toDOM,缺了会抛 toDOM is not a function
+  renderHTML() {
+    return ['div', { class: 'live-math live-math-block' }, 0]
+  },
   markdownTokenizer: {
     name: 'mathBlock',
     level: 'block',
@@ -127,6 +132,9 @@ export const MathInline = Node.create({
   },
   renderMarkdown(node) {
     return `$${texOf(node)}$`
+  },
+  renderHTML() {
+    return ['span', { class: 'live-math live-math-inline' }, 0]
   },
   markdownTokenizer: {
     name: 'mathInline',

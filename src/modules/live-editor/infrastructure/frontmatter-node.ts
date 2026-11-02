@@ -81,6 +81,10 @@ export const FrontMatter = Node.create({
     const tex = texOf(node).replace(/\n+$/, '')
     return `---\n${tex}\n---`
   },
+  // 兜底 DOM 序列化:同 math-node,卸载期 nodeViews 清空后的重建依赖它
+  renderHTML() {
+    return ['div', { class: 'live-frontmatter' }, 0]
+  },
   markdownTokenizer: {
     name: 'frontMatter',
     level: 'block',
