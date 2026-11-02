@@ -34,9 +34,10 @@ export const FieldRow = memo(function FieldRow({
 
   return (
     <div className="flex items-center gap-2 py-1.5">
-      <Label className="w-24 shrink-0 text-xs text-muted-foreground">{field.label}</Label>
+      <Label className="w-20 shrink-0 text-xs text-muted-foreground">{field.label}</Label>
       <div className="min-w-0 flex-1">
-        <FieldControl field={field} value={value} fallbackFont={fallbackFont} onChange={set} />
+        {/* key 按字段隔离:SizeInput 记单位的 ref 不能跨字段残留 */}
+        <FieldControl key={field.key} field={field} value={value} fallbackFont={fallbackFont} onChange={set} />
       </div>
       <Button
         variant="ghost"
@@ -70,6 +71,8 @@ function FieldControl({
       return <BackgroundInput value={value} onChange={onChange} />
     case 'size':
       return <SizeInput value={value} onChange={onChange} unit={field.unit} placeholder={field.placeholder} />
+    case 'box':
+      return <BoxInput value={value} onChange={onChange} unit={field.unit} placeholder={field.placeholder} />
     case 'number':
       return (
         <Input
@@ -181,7 +184,7 @@ export const ColorFieldRow = memo(function ColorFieldRow({
 
   return (
     <div className="flex items-center gap-2 py-1.5">
-      <Label className="w-24 shrink-0 text-xs text-muted-foreground">{field.label}</Label>
+      <Label className="w-20 shrink-0 text-xs text-muted-foreground">{field.label}</Label>
       <div className="min-w-0 flex-1">
         <ColorInput
           field={field}
@@ -400,6 +403,110 @@ function BackgroundInput({ value, onChange }: { value: string | undefined; onCha
   )
 }
 
+/**
+ * 四边盒值:2×2 网格 + 常显方位小标签(上/左、下/右),不需要 hover 识别;
+ * 共享单位选择器放右侧。存值仍是 CSS 简写字符串('0.2em' / '0.2em 0.35em' /
+ * '1px 2px 3px 4px'),导出/导入/持久化链路无需感知 UI 形态;全边一致时收拢
+ * 为单值,保持令牌最简。手写令牌里的多单位简写(如 '0.2em 4px')也能解析。
+ */
+function BoxInput({
+  value,
+  onChange,
+  unit = 'px',
+  placeholder,
+}: {
+  value: string | undefined
+  onChange: (v: string) => void
+  unit?: string
+  placeholder?: string
+}) {
+  // 简写 → 四边 [数值, 单位]:1 值四边同用;2 值=上下|左右;4 值=上右下左;3 值/含非数字 = 不展示(保持占位)
+  const parse = (v: string | undefined): [string, string][] | null => {
+    const parts = (v ?? '').trim().split(/\s+/).filter(Boolean)
+    if (parts.length === 0) return null
+    if (parts.some((p) => !/^(-?[\d.]+)([a-z%]*)$/i.test(p))) return null
+    const side = (p: string): [string, string] => {
+      const m = p.match(/^(-?[\d.]+)([a-z%]*)$/i)!
+      return [m[1], m[2] || unit]
+    }
+    if (parts.length === 1) { const s = side(parts[0]); return [s, s, s, s] }
+    if (parts.length === 2) { const v = side(parts[0]); const h = side(parts[1]); return [v, h, v, h] }
+    if (parts.length === 4) return parts.map(side)
+    return null
+  }
+  const sides = parse(value)
+  const [lastUnit, setLastUnit] = useState<string | null>(null)
+  // 共享单位:优先取四边中第一个带单位的;无值时用上次选择,再回落字段默认
+  const curUnit = sides?.[0]?.[1] || lastUnit || unit
+  const base = sides ?? Array.from({ length: 4 }, () => ['', curUnit] as [string, string])
+  const emit = (i: number, n: string) => {
+    emitSides(base.map((s, j) => (j === i ? ([n, curUnit] as [string, string]) : s)))
+  }
+  const emitSides = (raw: [string, string][]) => {
+    // 空边回落 0(首次输入时其余三格还是空串);全空 = 删令牌
+    const norm = raw.map((s) => (s[0] === '' ? (['0', curUnit] as [string, string]) : s))
+    if (norm.every((s) => s[0] === '0')) { onChange(''); return }
+    // 四边数值一致(含单位)时收拢单值,否则按 上 右 下 左 简写
+    if (norm.every((s) => s[0] === norm[0][0] && s[1] === norm[0][1])) {
+      setLastUnit(norm[0][1])
+      onChange(`${norm[0][0]}${norm[0][1]}`)
+      return
+    }
+    const [t, r, b, l] = norm
+    // 上下相等且左右相等 → 2 值简写
+    if (t[0] === b[0] && t[1] === b[1] && r[0] === l[0] && r[1] === l[1]) {
+      setLastUnit(t[1])
+      onChange(`${t[0]}${t[1]} ${r[0]}${r[1]}`)
+      return
+    }
+    setLastUnit(t[1])
+    onChange(norm.map((s) => `${s[0]}${s[1]}`).join(' '))
+  }
+  const cell = (i: number) => (
+    <label className="flex min-w-0 flex-1 items-center gap-1">
+      <span className="w-3 shrink-0 text-center text-[10px] text-muted-foreground">{['上', '右', '下', '左'][i]}</span>
+      <Input
+        type="number"
+        inputMode="decimal"
+        value={base[i][0]}
+        placeholder={placeholder}
+        aria-label={['上', '右', '下', '左'][i]}
+        onChange={(e) => emit(i, e.target.value)}
+        className="h-7 min-w-0 flex-1 px-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+    </label>
+  )
+  return (
+    <div className="flex items-center gap-1">
+      {/* 单行四格(上右下左)均分整行宽度:Figma 式 padding 编辑器,不剩右侧空白,
+          与相邻控件保持同一行节奏;10px 常显方位标签免 hover,隐藏 spinner 降视觉噪音 */}
+      {cell(0)}
+      {cell(1)}
+      {cell(2)}
+      {cell(3)}
+      <Select
+        value={curUnit}
+        onValueChange={(u) => {
+          setLastUnit(u)
+          emitSides(base.map((s) => [s[0], u] as [string, string]))
+        }}
+      >
+        <SelectTrigger size="sm" className="w-12 shrink-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {['px', 'em', 'rem', '%'].map((u) => (
+              <SelectItem key={u} value={u}>
+                {u}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
 /** 数字 + 单位。存值约定：带单位字符串（'16px' / '1.25em'），纯数字按默认单位补 */
 function SizeInput({
   value,
@@ -414,8 +521,14 @@ function SizeInput({
 }) {
   const m = value?.match(/^(-?[\d.]+)([a-z%]*)$/i)
   const num = m?.[1] ?? ''
-  const curUnit = m?.[2] || unit
-  const emit = (n: string, u: string) => onChange(n === '' ? '' : `${n}${u}`)
+  // 记住最近一次生效的单位:输入框清空的瞬间令牌被删(value=undefined),
+  // 若直接回落字段默认单位,「选 px 再输入数字」会被吞成默认单位(如 em)
+  const [lastUnit, setLastUnit] = useState<string | null>(null)
+  const curUnit = m?.[2] || lastUnit || unit
+  const emit = (n: string, u: string) => {
+    if (n !== '') setLastUnit(u)
+    onChange(n === '' ? '' : `${n}${u}`)
+  }
   return (
     <div className="flex items-center gap-1">
       <Input
@@ -426,7 +539,10 @@ function SizeInput({
         onChange={(e) => emit(e.target.value, curUnit)}
         className="h-8 min-w-0 flex-1 text-xs"
       />
-      <Select value={curUnit} onValueChange={(u) => emit(num || '0', u)}>
+      <Select
+        value={curUnit}
+        onValueChange={(u) => emit(num || '0', u)}
+      >
         <SelectTrigger size="sm" className="w-16 shrink-0">
           <SelectValue />
         </SelectTrigger>

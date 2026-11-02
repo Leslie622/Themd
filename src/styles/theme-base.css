@@ -66,6 +66,7 @@
   color: var(--t-strong-color, inherit);
   background: var(--t-strong-bg, transparent);
   padding: var(--t-strong-padding, 0);
+  margin: var(--t-strong-margin, 0);
   border-radius: 4px;
 }
 .themd-prose em {

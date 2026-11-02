@@ -54,6 +54,7 @@ export const TOKEN_VAR = {
   'strong.color': '--t-strong-color',
   'strong.bg': '--t-strong-bg',
   'strong.padding': '--t-strong-padding',
+  'strong.margin': '--t-strong-margin',
   'em.style': '--t-em-style',
   'em.color': '--t-em-color',
   'del.color': '--t-del-color',

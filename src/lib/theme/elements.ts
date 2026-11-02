@@ -16,6 +16,7 @@ export type FieldType =
   | 'text-align'   // 对齐分段控件
   | 'text'         // 自由文本（如 box-shadow）
   | 'background'   // 画布背景：完整 CSS background 值（颜色/渐变/图片）
+  | 'box'          // 四边盒值（上/右/下/左 独立数值 + 共享单位），存 CSS 简写字符串
 
 export interface FieldDef {
   /** 令牌键（TOKEN_VAR 的键名） */
@@ -26,7 +27,7 @@ export interface FieldDef {
   hint?: string
   /** select 的选项 */
   options?: { value: string; label: string }[]
-  /** size 的默认单位 */
+  /** size/box 的默认单位 */
   unit?: string
   /** number 的步进/范围 */
   min?: number
@@ -133,7 +134,8 @@ export const ELEMENTS: ElementDef[] = [
       { key: 'strong.weight', label: '字重', type: 'font-weight' },
       { key: 'strong.color', label: '文字颜色', type: 'color' },
       { key: 'strong.bg', label: '背景色', type: 'color', hint: '可做「高亮笔」效果' },
-      { key: 'strong.padding', label: '内边距', type: 'size', unit: 'em', placeholder: '0', hint: '配背景色使用' },
+      { key: 'strong.padding', label: '内边距', type: 'box', unit: 'em', placeholder: '0', hint: '配背景色使用' },
+      { key: 'strong.margin', label: '外边距', type: 'box', unit: 'em', placeholder: '0', hint: '行内元素,水平外边距才会撑开前后文字' },
     ],
   },
   {

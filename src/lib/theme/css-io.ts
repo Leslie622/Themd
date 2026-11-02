@@ -86,6 +86,7 @@ function cssPropFor(key: TokenKey): string {
     'strong.color': 'color',
     'strong.bg': 'background',
     'strong.padding': 'padding',
+    'strong.margin': 'margin',
     'em.style': 'font-style',
     'em.color': 'color',
     'del.color': 'color',
@@ -142,7 +143,7 @@ function cssPropFor(key: TokenKey): string {
 /** 每类元素的候选选择器（末段匹配，忽略复合层级）。按优先级排列。 */
 const SELECTOR_MAP: { keys: TokenKey[]; test: RegExp }[] = [
   // 元素级规则（.themd-prose strong / #write strong / body strong …）
-  { keys: ['strong.weight', 'strong.color', 'strong.bg'], test: /(^|[\s,#.>])strong$/ },
+  { keys: ['strong.weight', 'strong.color', 'strong.bg', 'strong.padding', 'strong.margin'], test: /(^|[\s,#.>])strong$/ },
   { keys: ['em.style', 'em.color'], test: /(^|[\s,#.>])em$/i },
   { keys: ['del.color', 'del.textColor'], test: /(^|[\s,#.>])(del|s)$/ },
   { keys: ['a.color'], test: /(^|[\s,#.>])a$/ },
