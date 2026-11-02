@@ -15,6 +15,7 @@ import {
 } from '@tiptap/extension-table'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
+import Link from '@tiptap/extension-link'
 import type { JSONContent } from '@tiptap/core'
 
 import { currentProfile } from './serialize-profile-state'
@@ -124,7 +125,10 @@ const ProfileItalic = Italic.extend({
 export function liveExtensions() {
   return [
     // bold/italic 换档案感知版、codeBlock 换 CM 内嵌版(schema 均同型)
-    StarterKit.configure({ bold: false, italic: false, codeBlock: false }),
+    StarterKit.configure({ bold: false, italic: false, codeBlock: false, link: false }),
+    // 链接点击禁止扩展自带的 window.open(Tauri WebView 无弹窗拦截,会把
+    // 整个应用页面导航走);交互与 CM 版对齐:普通点击=定位光标,右键菜单打开
+    Link.configure({ openOnClick: false }),
     ProfileBold,
     ProfileItalic,
     LiveImage,

@@ -11,6 +11,8 @@ import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes
 import { useAppearance } from '@/store-appearance'
 import { useEditorPrefs } from '@/store-editor'
 import { useExtraCss } from '@/components/theme/useExtraCss'
+import { platformServices } from '@/app/platform'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { cn } from '@/lib/utils'
@@ -58,7 +60,17 @@ export const PreviewPane = memo(function PreviewPane({
   // 图片灯箱:事件委托监听渲染出来的 <img>,src 已在渲染期解析(asset:///data/https)。
   // 一次收集本篇全部图片,可在灯箱里左右切换
   const [lightbox, setLightbox] = useState<{ slides: LightboxSlide[]; index: number } | null>(null)
+  // 预览里的 <a> 带真实 href,点击的默认行为是 WebView 直接导航,
+  // 会把整个应用页面替换掉——拦截后交系统浏览器打开
   const handleClick = (e: React.MouseEvent) => {
+    const anchor = (e.target as HTMLElement).closest('a[href]')
+    if (anchor) {
+      e.preventDefault()
+      platformServices.files
+        .openUrl(anchor.getAttribute('href') ?? '')
+        .catch(() => toast.error('打开链接失败'))
+      return
+    }
     const state = collectLightboxState(e.currentTarget, e.target)
     if (!state) return
     // 图片可能包在 <a> 里,拦掉导航

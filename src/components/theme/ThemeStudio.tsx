@@ -21,6 +21,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { platformServices } from '@/app/platform'
 
 import { Button } from '@/components/ui/button'
 import { ImageLightbox } from '@/components/ImageLightbox'
@@ -735,15 +736,28 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
     setLightbox(state)
   }
 
+  // 预览里的 <a> 带真实 href,点击的默认行为是 WebView 直接导航,
+  // 会把整个工场页面替换掉——拦截后交系统浏览器打开
+  const handleLinkClick = (e: React.MouseEvent) => {
+    const anchor = (e.target as HTMLElement).closest('a[href]')
+    if (!anchor) return
+    e.preventDefault()
+    platformServices.files
+      .openUrl(anchor.getAttribute('href') ?? '')
+      .catch(() => toast.error('打开链接失败'))
+  }
+
   const handleClick = inspect
     ? (e: React.MouseEvent) => {
         const target = e.target as HTMLElement
         if (!target.closest('.themd-prose')) return
+        handleLinkClick(e)
         onInspect?.(inspectElementId(target))
       }
-    : lightboxEnabled
-      ? handleImageClick
-      : undefined
+    : (e: React.MouseEvent) => {
+        handleLinkClick(e)
+        handleImageClick(e)
+      }
 
   return (
     <div
