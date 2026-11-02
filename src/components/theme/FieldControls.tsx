@@ -1,4 +1,5 @@
 import { ImagePlus, RotateCcw } from 'lucide-react'
+import Sketch from '@uiw/react-color-sketch'
 import { toast } from 'sonner'
 import { memo, useEffect, useRef, useState } from 'react'
 import { FontField } from '@/components/settings/FontField'
@@ -9,6 +10,7 @@ import { fileFromBytes, fileToBackgroundValue } from '@/lib/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { FieldDef } from '@/lib/theme/elements'
 import { placeholderOf } from '@/lib/theme/elements'
@@ -23,12 +25,17 @@ export const FieldRow = memo(function FieldRow({
   value,
   fallbackFont,
   onChange,
+  onLivePreview,
+  onCommit,
 }: {
   field: FieldDef
   value: string | undefined
   /** 字体令牌的回落字体(实测);其他类型忽略 */
   fallbackFont?: string
   onChange: (v: string | undefined) => void
+  /** 拖动实时预览/收口提交:仅 background 类使用(app.bg 直写画布容器) */
+  onLivePreview?: (field: FieldDef, v: string) => void
+  onCommit?: (field: FieldDef, v: string) => void
 }) {
   const set = (v: string) => onChange(v === '' ? undefined : v)
   const unset = () => onChange(undefined)
@@ -38,14 +45,23 @@ export const FieldRow = memo(function FieldRow({
       <Label className="w-20 shrink-0 text-xs text-muted-foreground">{field.label}</Label>
       <div className="min-w-0 flex-1">
         {/* key 按字段隔离:SizeInput 记单位的 ref 不能跨字段残留 */}
-        <FieldControl key={field.key} field={field} value={value} fallbackFont={fallbackFont} onChange={set} />
+        <FieldControl
+          key={field.key}
+          field={field}
+          value={value}
+          fallbackFont={fallbackFont}
+          onChange={set}
+          onLivePreview={onLivePreview}
+          onCommit={onCommit}
+        />
+        <FieldHint hint={field.hint} />
       </div>
       <Button
         variant="ghost"
         size="icon"
         className={cn('size-6 shrink-0', value === undefined && 'invisible')}
         onClick={unset}
-        aria-label={`重置${field.label}`}
+        aria-label={`重置${field.section ?? ""}${field.label}`}
         title="恢复默认"
       >
         <RotateCcw className="size-3.5" />
@@ -59,11 +75,15 @@ function FieldControl({
   value,
   fallbackFont,
   onChange,
+  onLivePreview,
+  onCommit,
 }: {
   field: FieldDef
   value: string | undefined
   fallbackFont?: string
   onChange: (v: string) => void
+  onLivePreview?: (field: FieldDef, v: string) => void
+  onCommit?: (field: FieldDef, v: string) => void
 }) {
   // 占位符 = 令牌在基础样式表的真实回落值,统一从常表查(defaults.ts,
   // 守门测试锁定与 CSS 一致);颜色/字体类查不到,控件内部走运行时实测
@@ -72,7 +92,15 @@ function FieldControl({
     case 'color':
       return <ColorInput field={field} value={value} onChange={onChange} />
     case 'background':
-      return <BackgroundInput value={value} onChange={onChange} />
+      return (
+        <BackgroundInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          onLivePreview={onLivePreview}
+          onCommit={onCommit}
+        />
+      )
     case 'size':
       return <SizeInput value={value} onChange={onChange} unit={field.unit} placeholder={placeholder} />
     case 'box':
@@ -155,7 +183,176 @@ function FieldControl({
           className="h-8 text-xs"
         />
       )
+    case 'marker-text':
+      return <MarkerTextInput value={value} placeholder={placeholder} onChange={onChange} />
+    case 'marker-template':
+      return <MarkerTemplateInput value={value} onChange={onChange} />
+    case 'shadow':
+      return <ShadowInput field={field} value={value} onChange={onChange} />
   }
+}
+
+/**
+ * 盒阴影输入:X/Y 偏移、模糊、扩散四个数值格(2×2,同 BoxInput) + 颜色取色器。
+ * 存值 = 完整 box-shadow 值('4px 4px 8px 0px rgba(0,0,0,0.3)'),导出/导入/持久化
+ * 对控件零感知;四格全空/零 = 删令牌(none)。手写令牌按「长度 长度 长度? 长度?
+ * 颜色」解析,解析不了时不回显(值仍保留,直到用户重新编辑)。
+ */
+function ShadowInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: FieldDef
+  value: string | undefined
+  onChange: (v: string) => void
+}) {
+  // 解析 box-shadow 值 → [x, y, blur, spread, color]:4 长度 + 尾部颜色;
+  // 2~3 个长度(模糊/扩散可省)也接受,缺省位补 0
+  const parse = (v: string | undefined): [string, string, string, string, string] | null => {
+    const s = (v ?? '').trim()
+    if (!s || s === 'none') return null
+    const m = /^(-?[\d.]+[a-z%]*)\s+(-?[\d.]+[a-z%]*)(?:\s+(-?[\d.]+[a-z%]*))?(?:\s+(-?[\d.]+[a-z%]*))?\s+(.+)$/i.exec(s)
+    if (!m) return null
+    const len = (raw: string | undefined, def: string) =>
+      raw === undefined ? def : (raw.match(/^(-?[\d.]+)([a-z%]*)$/i)?.[2] ? raw : `${raw}px`)
+    return [len(m[1], '0px'), len(m[2], '0px'), len(m[3], '0px'), len(m[4], '0px'), m[5].trim()]
+  }
+  const parsed = parse(value)
+  const nums = parsed?.slice(0, 4) ?? ['', '', '', '']
+  const color = parsed?.[4] ?? ''
+  const emit = (nextNums: string[], nextColor: string) => {
+    if (nextNums.every((n) => n === '' || parseFloat(n) === 0)) {
+      onChange('') // 全零/全空 = 无阴影
+      return
+    }
+    const px = (n: string) => (n === '' ? '0px' : /^-?[\d.]+$/.test(n) ? `${n}px` : n)
+    onChange(`${px(nextNums[0])} ${px(nextNums[1])} ${px(nextNums[2])} ${px(nextNums[3])} ${nextColor || 'currentColor'}`)
+  }
+  const cell = (i: number, labelText: string) => (
+    <label className="flex min-w-0 flex-1 items-center gap-1">
+      <span className="w-3 shrink-0 text-center text-[10px] text-muted-foreground">{labelText}</span>
+      <Input
+        type="number"
+        inputMode="decimal"
+        value={nums[i]}
+        placeholder="0"
+        aria-label={['X 偏移', 'Y 偏移', '模糊', '扩散'][i]}
+        onChange={(e) => {
+          const next = [...nums]
+          next[i] = e.target.value
+          emit(next, color)
+        }}
+        className="h-7 min-w-0 flex-1 px-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+    </label>
+  )
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="grid grid-cols-2 gap-1">
+        {cell(0, 'X')}
+        {cell(1, 'Y')}
+        {cell(2, '糊')}
+        {cell(3, '散')}
+      </div>
+      {/* 颜色行复用 ColorInput(与其他颜色字段同款取色器/hex 输入);
+          无回落色实测,未设置时显示棋盘格 + 「未设置」占位 */}
+      <ColorInput
+        field={field}
+        value={color || undefined}
+        onChange={(v) => emit(nums, v)}
+      />
+    </div>
+  )
+}
+
+/**
+ * 列表自定义符号输入:用户输裸符号(▸、★、emoji…),存储层要的是合法 CSS content
+ * 字符串——提交时包引号 + 尾随空格(与正文的间隔),回显时剥掉;空值 = 删令牌回落 normal。
+ * 引号在符号里非法(CSS 字符串定界符),输入时静默剔除。
+ */
+function MarkerTextInput({
+  value,
+  placeholder,
+  onChange,
+}: {
+  value: string | undefined
+  placeholder?: string
+  onChange: (v: string) => void
+}) {
+  const display = (value ?? '').replace(/^"(.*)"$/s, '$1').replace(/ $/, '')
+  const commit = (raw: string) => {
+    const sym = raw.replace(/"/g, '')
+    onChange(sym.trim() ? `"${sym} "` : '')
+  }
+  return (
+    <Input
+      value={display}
+      placeholder={placeholder ?? '未设置'}
+      title={value ? undefined : '未设置,按圆点形状渲染;输入符号即自绘'}
+      onChange={(e) => commit(e.target.value)}
+      className="h-8 text-xs"
+    />
+  )
+}
+
+/**
+ * 有序列表编号模板输入:模板里的 {n} 代表自动编号,提交时编译成合法 CSS content 值存储——
+ * 「第{n}章」→ "第" counter(list-item, var(--t-ol-marker-style, decimal)) "章 "。
+ * counter 第二参引用编号样式令牌,样式下拉对模板同样生效;不含 {n} 时整段作为
+ * 固定符号替换编号(自动补尾随空格,与无序列表自定义符号一致)。回显反向解析,
+ * 识别不了的手写值原样显示。编译在控件层完成:编译器/导出/持久化对模板语法零感知。
+ */
+const OL_COUNTER_REF = 'counter(list-item, var(--t-ol-marker-style, decimal))'
+
+function encodeOlMarkerTemplate(raw: string): string {
+  const sym = raw.replace(/"/g, '').trim()
+  if (!sym) return ''
+  if (!sym.includes('{n}')) return `"${sym} "`
+  const parts = sym.split('{n}')
+  let value = ''
+  parts.forEach((part, i) => {
+    if (i > 0) value += ` ${OL_COUNTER_REF}`
+    if (part) {
+      // 末段自动补尾随空格作标记与正文的间隔;以 {n} 结尾时补一个空格串
+      value += ` "${i === parts.length - 1 && !part.endsWith(' ') ? `${part} ` : part}"`
+    } else if (i === parts.length - 1) {
+      value += ' " "'
+    }
+  })
+  return value.trim()
+}
+
+function decodeOlMarkerTemplate(value: string | undefined): string {
+  const v = (value ?? '').trim()
+  if (!v || v === 'normal') return ''
+  // 按段解析拼接:引号段还原裸文本、counter 段还原 {n},段间空白是 CSS 分隔符不属模板
+  // (全局替换会把这些分隔空格带回模板,继续编辑就会固化成「第 {n} 条」式假空格)
+  const segs = v.match(/"[^"]*"|counter\(list-item(?:, ?var\(--t-ol-marker-style, decimal\)|, ?[a-z-]+)?\)/g)
+  if (!segs) return v
+  const template = segs
+    .map((s) => (s.startsWith('"') ? s.slice(1, -1) : '{n}'))
+    .join('')
+  return template.replace(/ $/, '')
+}
+
+function MarkerTemplateInput({
+  value,
+  onChange,
+}: {
+  value: string | undefined
+  onChange: (v: string) => void
+}) {
+  const display = decodeOlMarkerTemplate(value)
+  return (
+    <Input
+      value={display}
+      // 占位符直接给可抄的示例,{n} 语法不靠文档也能发现
+      placeholder="如：第{n}章 → 第1章"
+      onChange={(e) => onChange(encodeOlMarkerTemplate(e.target.value))}
+      className="h-8 text-xs"
+    />
+  )
 }
 
 function weightHint(w: string) {
@@ -167,11 +364,16 @@ function weightHint(w: string) {
 }
 
 
+/** 字段说明小字:控件的用法约定(如 {n} 编号模板)必须直接可见,不能只藏在 title 里 */
+function FieldHint({ hint }: { hint?: string }) {
+  if (!hint) return null
+  return <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground/70">{hint}</p>
+}
+
 /**
  * 颜色属性行(仅 color 类型用):传入 fallbackColor(未设置时的实际观感色,由父级从
  * 迷你预览测量)时,未设置的色块显示回落色并带斜角标识;否则显示通用棋盘格。
- */
-export const ColorFieldRow = memo(function ColorFieldRow({
+ */export const ColorFieldRow = memo(function ColorFieldRow({
   field,
   value,
   fallbackColor,
@@ -203,13 +405,14 @@ export const ColorFieldRow = memo(function ColorFieldRow({
           onLivePreview={onLivePreview}
           onCommit={onCommit}
         />
+        <FieldHint hint={field.hint} />
       </div>
       <Button
         variant="ghost"
         size="icon"
         className={cn('size-6 shrink-0', value === undefined && 'invisible')}
         onClick={unset}
-        aria-label={`重置${field.label}`}
+        aria-label={`重置${field.section ?? ""}${field.label}`}
         title="恢复默认"
       >
         <RotateCcw className="size-3.5" />
@@ -241,9 +444,9 @@ function ColorInput({
   onLivePreview?: (field: FieldDef, v: string) => void
   onCommit?: (field: FieldDef, v: string) => void
 }) {
-  // 非受控取色器:受控 value 会在提交延迟的一帧里被 React 回拉旧值,
-  // 与用户拖动形成拔河(卡死根源)。用 ref 同步,只在「外部重置」时写回 DOM。
-  const colorInputRef = useRef<HTMLInputElement>(null)
+  // 取色器是受控 HexColorPicker:react-colorful 对受控色是安全的(拖动中
+  // onChange → store 按帧回流 → color prop 更新,不与拖动拔河);
+  // 非 hex 值(oklch/named)取色器从黑起步,色块仍显示真实色
   const safe = value && /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : '#000000'
   // 色块本地实时色:拖动期间直接写 DOM,不进 React state
   const swatchRef = useRef<HTMLSpanElement>(null)
@@ -289,12 +492,6 @@ function ColorInput({
     },
     [],
   )
-  // 外部值变化(重置/切主题/切明暗套)时同步取色器显示;用户拖动中不回写
-  useEffect(() => {
-    if (colorInputRef.current && pendingValue.current === null) {
-      colorInputRef.current.value = safe
-    }
-  }, [safe])
 
   // 色块显示:已设置→该色;未设置→回落色(若可测),否则透明棋盘格
   const swatchStyle: React.CSSProperties = value
@@ -309,24 +506,13 @@ function ColorInput({
 
   return (
     <div className="flex items-center gap-1.5">
-      <label className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-md border">
-        <span ref={swatchRef} className="absolute inset-0" style={swatchStyle} />
-        {/* 未设置但有回落色:右下角小斜角标识,区分「已固定」与「跟随回落」 */}
-        {!value && hasFallback && (
-          <span
-            aria-hidden
-            className="absolute right-0 bottom-0 size-2.5 border-t border-l border-border bg-background/85"
-          />
-        )}
-        <input
-          ref={colorInputRef}
-          type="color"
-          defaultValue={safe}
-          onChange={(e) => submitThrottled(e.target.value)}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          aria-label="取色器"
-        />
-      </label>
+      <SketchPopover
+        color={safe}
+        onColorChange={submitThrottled}
+        swatchStyle={swatchStyle}
+        swatchRef={swatchRef}
+        showFallbackCorner={!value && hasFallback}
+      />
       {/* 回显只做占位符,不做可编辑文本:若把回落色填进受控 value,
           删空瞬间令牌被删→回显整串回来,永远删不干净(退格死循环)。
           占位符直接显示默认色值本身(灰斜体=未自设,跟随默认) */}
@@ -344,23 +530,155 @@ function ColorInput({
 /** 未设置色板的「透明」标识:标准 crisp 棋盘格(国际通用的透明符号) */
 const TRANSPARENT_SWATCH = 'repeating-conic-gradient(#dcdcdc 0% 25%, #ffffff 0% 50%) 0 0 / 8px 8px'
 
+/** Sketch 内建样式变量压平:去掉它自带的框/投影/白底,由 Popover 的框统一,
+    否则面板套着 Popover 的框=双层 */
+const SKETCH_FLAT_STYLE = {
+  '--sketch-box-shadow': 'none',
+  '--sketch-background': 'transparent',
+} as React.CSSProperties
+
+/** 预设色板:黑白 + Tailwind 500 系 */
+const PRESET_COLORS = [
+  '#000000', '#ffffff', '#ef4444', '#f97316', '#f59e0b', '#eab308',
+  '#22c55e', '#10b981', '#14b8a6', '#0ea5e9', '#3b82f6', '#6366f1',
+  '#8b5cf6', '#a855f7', '#ec4899', '#6b7280',
+]
+
+/**
+ * Sketch 取色器弹层:色块触发 + 面板(饱和度/色相/透明度/hex/rgba 通道/预设色板)
+ * + 吸管。onColorChange 在拖动/输入/选色时连续回调,调用方决定直写或节流。
+ * swatchRef 供调用方在拖动中直写色块色(绕过 React)。
+ */
+function SketchPopover({
+  color,
+  onColorChange,
+  swatchStyle,
+  swatchRef,
+  swatchLabel = '取色器',
+  showFallbackCorner = false,
+}: {
+  color: string
+  onColorChange: (v: string) => void
+  swatchStyle: React.CSSProperties
+  swatchRef?: React.RefObject<HTMLSpanElement | null>
+  swatchLabel?: string
+  showFallbackCorner?: boolean
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-md border"
+          aria-label={swatchLabel}
+          title="点击打开取色器"
+        >
+          <span ref={swatchRef} className="absolute inset-0" style={swatchStyle} />
+          {showFallbackCorner && (
+            <span
+              aria-hidden
+              className="absolute right-0 bottom-0 size-2.5 border-t border-l border-border bg-background/85"
+            />
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2" align="start">
+        <Sketch
+          color={color}
+          onChange={(res) => {
+            const { rgba } = res
+            onColorChange(rgba.a === 1 ? res.hex : `rgba(${rgba.r}, ${rgba.g}, ${rgba.b}, ${rgba.a})`)
+          }}
+          presetColors={PRESET_COLORS}
+          style={SKETCH_FLAT_STYLE}
+        />
+        {/* 系统取色器的吸管是独有能力,面板里保留一个入口 */}
+        <button
+          type="button"
+          className="mt-1 w-full rounded-md border border-border py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          onClick={async () => {
+            const EyeDropper = (window as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper
+            if (!EyeDropper) return
+            try {
+              const { sRGBHex } = await new EyeDropper().open()
+              onColorChange(sRGBHex)
+            } catch {
+              /* 用户按 Esc 取消 */
+            }
+          }}
+        >
+          从屏幕取色
+        </button>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 /**
  * 画布背景控件:值 = 完整 CSS background(颜色/渐变/图片),由预览滚动容器
  * 以 background 原样消费。色块 + hex 覆盖最常用的纯色;「图片…」把本机图片
  * 压成 data URL 内嵌进主题值(主题要可分享可导出,不能引用本机路径);
  * 自由文本承接渐变、多背景等高级写法。
  */
-function BackgroundInput({ value, onChange }: { value: string | undefined; onChange: (v: string) => void }) {
+function BackgroundInput({
+  field,
+  value,
+  onChange,
+  onLivePreview,
+  onCommit,
+}: {
+  field: FieldDef
+  value: string | undefined
+  onChange: (v: string) => void
+  /** 拖动实时预览:app.bg 直写画布容器 background(app.bg 的消费点是
+      React 内联样式,CSS 变量写了对它无效),绕过编译+整树重渲染 */
+  onLivePreview?: (field: FieldDef, v: string) => void
+  /** 停止拖动 200ms 后的最终提交 */
+  onCommit?: (field: FieldDef, v: string) => void
+}) {
   const [picking, setPicking] = useState(false)
   const hasImage = value?.includes('url(') ?? false
   // 色块即预览:颜色/图片都是 background 值,直接渲染到色块上;未设置 = 透明棋盘格
   const swatchStyle: React.CSSProperties = value ? { background: value } : { background: TRANSPARENT_SWATCH }
-  // 非受控取色器:只在纯色/未设置态显示,外部重置时同步回显
-  const colorInputRef = useRef<HTMLInputElement>(null)
+  const swatchRef = useRef<HTMLSpanElement>(null)
   const safe = value && /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : '#ffffff'
+  // 回调 ref(effect 内同步,避免渲染期写 ref)
+  const cbRef = useRef({ onChange, onLivePreview, onCommit, field })
+  const onChangeRef = useRef(onChange)
   useEffect(() => {
-    if (colorInputRef.current && !hasImage) colorInputRef.current.value = safe
-  }, [safe, hasImage])
+    cbRef.current = { onChange, onLivePreview, onCommit, field }
+    onChangeRef.current = onChange
+  })
+
+  const frame = useRef(0)
+  const pendingValue = useRef<string | null>(null)
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  /** 取色拖动专用:色块直写 + 画布直写 + rAF 合拢提交,200ms 收口(与 ColorInput 同款) */
+  const submitThrottled = (v: string) => {
+    pendingValue.current = v
+    if (swatchRef.current) swatchRef.current.style.background = v
+    cbRef.current.onLivePreview?.(cbRef.current.field, v)
+    if (frame.current) return
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0
+      if (pendingValue.current !== null) onChangeRef.current(pendingValue.current)
+    })
+    if (commitTimer.current) clearTimeout(commitTimer.current)
+    commitTimer.current = setTimeout(() => {
+      if (pendingValue.current !== null) {
+        cbRef.current.onCommit?.(cbRef.current.field, pendingValue.current)
+      }
+    }, 200)
+  }
+  useEffect(
+    () => () => {
+      if (frame.current) cancelAnimationFrame(frame.current)
+      if (commitTimer.current) clearTimeout(commitTimer.current)
+      if (pendingValue.current !== null) onChangeRef.current(pendingValue.current)
+    },
+    [],
+  )
 
   const pickImage = async () => {
     setPicking(true)
@@ -380,20 +698,20 @@ function BackgroundInput({ value, onChange }: { value: string | undefined; onCha
 
   return (
     <div className="flex items-center gap-1.5">
-      <label className="relative size-8 shrink-0 overflow-hidden rounded-md border">
-        <span className="absolute inset-0" style={swatchStyle} />
-        {/* 图片态不叠取色器:点色块换色会静默丢掉图片,换色走清空后重设 */}
-        {!hasImage && (
-          <input
-            ref={colorInputRef}
-            type="color"
-            defaultValue={safe}
-            onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 cursor-pointer opacity-0"
-            aria-label="画布背景取色器"
-          />
-        )}
-      </label>
+      {/* 图片态不叠取色器:点色块换色会静默丢掉图片,换色走清空后重设 */}
+      {hasImage ? (
+        <span className="relative size-8 shrink-0 overflow-hidden rounded-md border">
+          <span className="absolute inset-0" style={swatchStyle} />
+        </span>
+      ) : (
+        <SketchPopover
+          color={safe}
+          onColorChange={submitThrottled}
+          swatchStyle={swatchStyle}
+          swatchRef={swatchRef}
+          swatchLabel="画布背景取色器"
+        />
+      )}
       <Input
         value={value ?? ''}
         placeholder="未设置"

@@ -100,6 +100,22 @@ Themd 把这些排印参数做成令牌，你在右侧调整的每一项都会�
 > 这是一段多段引用。
 >
 > 第二段仍在引用块里，用来观察背景色与内边距如何包裹整块内容；把「斜体」切成斜体，又是另一种语气。`,
+  callout: `提示块是带语义的引用：首行写 [!NOTE] 等标记，整块就会换上强调色与图标。五类颜色都在右侧单独可调：
+
+> [!NOTE]
+> Note 蓝：补充说明、背景知识这类「知道了更好」的信息。
+
+> [!TIP]
+> Tip 绿：小技巧与最佳实践。
+
+> [!IMPORTANT]
+> Important 紫：用户必须了解的关键信息。
+
+> [!WARNING]
+> Warning 黄：可能导致出错的风险提醒。
+
+> [!CAUTION]
+> Caution 红：操作不当会有严重后果的警告。`,
   codeBlock: `下面是一段 TypeScript，背景色、圆角、边框与内边距都可以在右侧调整：
 
 \`\`\`ts
@@ -123,7 +139,7 @@ applyTheme({ 'root.size': '17px', 'strong.color': '#b91c1c' })
 | ---- | ---- | ------ |
 | table.stripeBg | 偶数行斑马纹 | oklch(0.97 0 0) |
 | row.hoverBg | 行悬停背景 | oklch(0.95 0 0) |
-| cell.border | 单元格四边框 | 1px solid #d1d9e0 |
+| cell.rowLine + colLine | 行横线与竖线开关 | solid + none |
 | th.bg | 表头背景 | oklch(0.96 0 0) |
 | table.radius | 表格圆角 | 8px |
 | table.collapse | 边框合并 | separate |`,

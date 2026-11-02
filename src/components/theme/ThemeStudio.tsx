@@ -72,6 +72,7 @@ import {
 import { notebookController, useNotebook } from '@/store'
 import { useAppearance } from '@/store-appearance'
 import { cn } from '@/lib/utils'
+import { FieldLegend, FieldSet } from '@/components/ui/field'
 
 /**
  * 主题工场：左=主题库+元素导航，中=预览（专注样例/全内容样例/导入笔记），
@@ -261,6 +262,13 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     setTokenRef.current = setToken
     livePreviewImplRef.current = (field, v) => {
+      // app.* 画布类令牌的消费点不是 .themd-prose,是滚动容器(React 内联样式),
+      // 实时直写容器 background;正文类令牌直写 CSS 变量
+      if (field.key === 'app.bg') {
+        const canvas = previewHostRef.current?.querySelector('[data-app-canvas]') as HTMLElement | null
+        canvas?.style.setProperty('background', v)
+        return
+      }
       const varName = TOKEN_VAR[field.key as TokenKey]
       if (!varName) return
       ;(previewHostRef.current?.querySelector('.themd-prose') as HTMLElement | null)?.style.setProperty(
@@ -578,42 +586,68 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
 
         <ResizableHandle withHandle />
 
-        {/* 右栏：属性面板(只放调样式的控件) */}
+        {/* 右栏：属性面板(只放调样式的控件)。头/字段/附加 CSS 三段独立：
+            头部固定,字段区自己滚,附加 CSS 钉底不随字段滚走 */}
         <ResizablePanel defaultSize="30%" minSize="20%" maxSize="45%">
-          <div className="flex h-full flex-col overflow-y-auto">
+          <div className="flex h-full flex-col">
             {/* h-14 与中栏头部严格等高 */}
-            <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-background px-4">
+            <div className="flex h-14 shrink-0 items-center justify-between px-4">
               <h2 className="text-sm font-semibold">{element.label}</h2>
               <Button variant="ghost" size="xs" onClick={resetElement} className="font-normal">
                 <RotateCcw /> 恢复默认
               </Button>
             </div>
-            <div className="px-4 py-2">
-              {element.fields.map((f) =>
-                f.type === 'color' ? (
-                  <ColorFieldRow
-                    key={f.key}
-                    field={f}
-                    value={activeTokens[f.key]}
-                    fallbackColor={fallbackColors[f.key]}
-                    onChange={(v) => setTokenStable(f.key, v)}
-                    onLivePreview={livePreviewColor}
-                    onCommit={commitColor}
-                  />
-                ) : (
-                  <FieldRow
-                    key={f.key}
-                    field={f}
-                    value={activeTokens[f.key]}
-                    fallbackFont={fallbackFonts[f.key]}
-                    onChange={(v) => setTokenStable(f.key, v)}
-                  />
-                ),
-              )}
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+              {/* 分区渲染:相邻同 section 字段归入 shadcn FieldSet,FieldLegend 作分区标题
+                  (蓝竖条是标题装饰;无 section 的元素整体包进一个无标题 FieldSet,平铺不变) */}
+              {(() => {
+                const groups: { section?: string; fields: typeof element.fields }[] = []
+                for (const f of element.fields) {
+                  const last = groups[groups.length - 1]
+                  if (last && last.section === f.section) last.fields.push(f)
+                  else groups.push({ section: f.section, fields: [f] })
+                }
+                return groups.map((g, gi) => (
+                  <FieldSet key={g.section ?? gi} className={cn('gap-0', gi > 0 && 'mt-4')}>
+                    {g.section && (
+                      <FieldLegend className="flex items-center gap-1.5 text-[13px] font-semibold leading-none text-foreground/80">
+                        <span
+                          className="h-3.5 w-1 shrink-0 rounded-full"
+                          style={{ background: 'oklch(0.62 0.16 255)' }}
+                        />
+                        {g.section}
+                      </FieldLegend>
+                    )}
+                    {g.fields.map((f) =>
+                      f.type === 'color' ? (
+                        <ColorFieldRow
+                          key={f.key}
+                          field={f}
+                          value={activeTokens[f.key]}
+                          fallbackColor={fallbackColors[f.key]}
+                          onChange={(v) => setTokenStable(f.key, v)}
+                          onLivePreview={livePreviewColor}
+                          onCommit={commitColor}
+                        />
+                      ) : (
+                        <FieldRow
+                          key={f.key}
+                          field={f}
+                          value={activeTokens[f.key]}
+                          fallbackFont={fallbackFonts[f.key]}
+                          onChange={(v) => setTokenStable(f.key, v)}
+                          onLivePreview={f.type === 'background' ? livePreviewColor : undefined}
+                          onCommit={f.type === 'background' ? commitColor : undefined}
+                        />
+                      ),
+                    )}
+                  </FieldSet>
+                ))
+              })()}
             </div>
 
-            {/* 附加自定义 CSS（高级模式，P4） */}
-            <div className="mt-auto border-t">
+            {/* 附加自定义 CSS（高级模式，P4）——固定在字段区下方,不参与字段区滚动 */}
+            <div className="shrink-0 border-t">
               <button
                 type="button"
                 className="flex w-full items-center justify-between px-4 py-3 text-left"
@@ -766,6 +800,8 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
         inspect && 'cursor-crosshair [&_*:hover]:outline [&_*:hover]:outline-1 [&_*:hover]:outline-primary/50',
       )}
       // 画布背景铺在滚动容器(正文纸张之外);纸张颜色仍在 article 上
+      // data 标记供实时预览直写定位(预览容器在 previewHostRef 内)
+      data-app-canvas=""
       style={{ background: cssVars['--t-app-bg'] }}
       onClick={handleClick}
     >

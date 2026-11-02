@@ -21,11 +21,25 @@ export function exportThemeCss(theme: ThemeFile, scope: CssScope = '.themd-prose
   ]
   const body: string[] = []
   const appBody: string[] = []
+  // 列表组令牌按各自选择器分组导出,保持插入顺序
+  const scoped = new Map<string, string[]>()
   for (const [key, varName] of Object.entries(TOKEN_VAR)) {
     const value = theme.tokens[key as TokenKey]
     if (value !== undefined && value !== '') {
-      const target = key.startsWith('app.') ? appBody : body
-      target.push(`  ${cssPropFor(key as TokenKey)}: ${value}; /* ${varName} */`)
+      const line = `  ${cssPropFor(key as TokenKey)}: ${value}; /* ${varName} */`
+      const suffix = EXPORT_LIST_SCOPE[key as TokenKey]
+      if (key.startsWith('app.')) {
+        appBody.push(line)
+      } else if (suffix) {
+        // 后缀可能是 'ul, ol' 复合选择器,逐段加作用域前缀
+        for (const part of suffix.split(',').map((s) => s.trim())) {
+          const sel = `${scope} ${part}`
+          if (!scoped.has(sel)) scoped.set(sel, [])
+          scoped.get(sel)!.push(line)
+        }
+      } else {
+        body.push(line)
+      }
     }
   }
   // a.underline 策略展开
@@ -42,6 +56,11 @@ export function exportThemeCss(theme: ThemeFile, scope: CssScope = '.themd-prose
   lines.push(`${scope} {`)
   lines.push(...body)
   lines.push('}')
+  for (const [sel, ruleLines] of scoped) {
+    lines.push('', `${sel} {`)
+    lines.push(...ruleLines)
+    lines.push('}')
+  }
   if (appBody.length > 0) {
     lines.push('', 'body {')
     lines.push(...appBody)
@@ -51,6 +70,60 @@ export function exportThemeCss(theme: ThemeFile, scope: CssScope = '.themd-prose
     lines.push('', '/* ── 附加自定义 CSS ── */', theme.extraCss)
   }
   return lines.join('\n')
+}
+
+/**
+ * 列表组令牌的导出选择器后缀（scope 前缀之外还要落到具体列表元素）。
+ * 平铺进根规则会污染正文整体（markerColor 变全文颜色、indent 变根容器内边距）；
+ * 二级/三级必须落在对应嵌套深度,否则与一级的同名属性互相覆盖。
+ */
+const EXPORT_LIST_SCOPE: Partial<Record<TokenKey, string>> = {
+  'list.indent': 'ul, ol',
+  'list.marginBottom': 'ul, ol',
+  'list.position': 'ul, ol',
+  'li.spacing': 'li',
+  'li.fontSize': 'li',
+  'li.leading': 'li',
+  'li.color': 'li',
+  'ul.markerShape': 'ul',
+  'ul.markerShape2': 'ul ul',
+  'ul.markerShape3': 'ul ul ul',
+  'ul.markerColor': 'ul li::marker',
+  'ul.markerColor2': 'ul ul li::marker',
+  'ul.markerColor3': 'ul ul ul li::marker',
+  'ul.markerText': 'ul li::marker',
+  'ul.markerText2': 'ul ul li::marker',
+  'ul.markerText3': 'ul ul ul li::marker',
+  'ul.markerSize': 'ul li::marker',
+  'ol.markerColor': 'ol li::marker',
+  'ol.markerSize': 'ol li::marker',
+  'ol.markerStyle': 'ol',
+  'ol.markerStyle2': 'ol ol',
+  'ol.markerStyle3': 'ol ol ol',
+  'ol.markerText': 'ol li::marker',
+  'ol.markerText2': 'ol ol li::marker',
+  'ol.markerText3': 'ol ol ol li::marker',
+  // 提示块五色:强调色在 CSS 端一色三用(边框/标题/背景 mix),导出只落边框一条
+  // 表格组:平铺进根规则会污染正文(padding/background/边框全变全局),落各自选择器
+  'table.borderColor': 'table, th, td',
+  'table.stripeBg': 'tbody tr:nth-child(2n)',
+  'table.radius': 'table',
+  'table.collapse': 'table',
+  'th.bg': 'thead th',
+  'th.weight': 'thead th',
+  'cell.rowLine': 'th, td',
+  'cell.colLine': 'th, td',
+  'cell.borderWidth': 'th, td',
+  'cell.padding': 'th, td',
+  'row.hoverBg': 'tbody tr:hover',
+  'callout.borderWidth': '.themd-callout',
+  'callout.radius': '.themd-callout',
+  'callout.padding': '.themd-callout',
+  'callout.note': '.themd-callout-note',
+  'callout.tip': '.themd-callout-tip',
+  'callout.important': '.themd-callout-important',
+  'callout.warning': '.themd-callout-warning',
+  'callout.caution': '.themd-callout-caution',
 }
 
 /** 令牌键 → CSS 属性名（与 theme-base.css 消费端一致） */
@@ -134,9 +207,30 @@ function cssPropFor(key: TokenKey): string {
     'codeBlock.borderWidth': 'border-width',
     'codeBlock.borderColor': 'border-color',
     'list.indent': 'padding-left',
+    'list.marginBottom': 'margin-bottom',
+    'list.position': 'list-style-position',
     'li.spacing': 'margin-top',
+    'li.fontSize': 'font-size',
+    'li.leading': 'line-height',
+    'li.color': 'color',
     'ul.markerColor': 'color',
+    'ul.markerColor2': 'color',
+    'ul.markerColor3': 'color',
+    'ul.markerShape': 'list-style-type',
+    'ul.markerShape2': 'list-style-type',
+    'ul.markerShape3': 'list-style-type',
+    'ul.markerText': 'content',
+    'ul.markerText2': 'content',
+    'ul.markerText3': 'content',
+    'ul.markerSize': 'font-size',
     'ol.markerColor': 'color',
+    'ol.markerSize': 'font-size',
+    'ol.markerStyle': 'list-style-type',
+    'ol.markerStyle2': 'list-style-type',
+    'ol.markerStyle3': 'list-style-type',
+    'ol.markerText': 'content',
+    'ol.markerText2': 'content',
+    'ol.markerText3': 'content',
     'task.accent': 'accent-color',
     'quote.borderWidth': 'border-left-width',
     'quote.borderColor': 'border-left-color',
@@ -145,10 +239,24 @@ function cssPropFor(key: TokenKey): string {
     'quote.radius': 'border-radius',
     'quote.padding': 'padding',
     'quote.style': 'font-style',
+    'callout.borderWidth': 'border-left-width',
+    'callout.radius': 'border-radius',
+    'callout.padding': 'padding',
+    // 背景深浅没有独立 CSS 属性(消费点在 color-mix 里),导出为自定义属性——
+    // 配合 theme-base.css(独立 HTML 导出整体内嵌)即可生效,值本身也是合法声明
+    'callout.bgOpacity': '--t-callout-bg-opacity',
+    'callout.note': 'border-left-color',
+    'callout.tip': 'border-left-color',
+    'callout.important': 'border-left-color',
+    'callout.warning': 'border-left-color',
+    'callout.caution': 'border-left-color',
     'table.borderColor': 'border-color',
     'table.stripeBg': 'background',
     'th.bg': 'background',
     'th.weight': 'font-weight',
+    'cell.rowLine': 'border-top-style',
+    'cell.colLine': 'border-right-style',
+    'cell.borderWidth': 'border-width',
     'cell.padding': 'padding',
     'hr.color': 'background',
     'hr.thickness': 'height',
@@ -175,10 +283,10 @@ const SELECTOR_MAP: { keys: TokenKey[]; test: RegExp }[] = [
   { keys: ['inlineCode.font', 'inlineCode.size', 'inlineCode.weight', 'inlineCode.color', 'inlineCode.bg', 'inlineCode.padding', 'inlineCode.margin', 'inlineCode.radius', 'inlineCode.borderWidth', 'inlineCode.borderColor'], test: /(^|[\s,#.>])code$/ },
   { keys: ['quote.borderColor'], test: /(^|[\s,#.>])blockquote$/ },
   { keys: ['codeBlock.bg'], test: /(^|[\s,#.>])pre$/ },
-  { keys: ['ul.markerColor'], test: /(^|[\s,#.>])ul$/ },
-  { keys: ['ol.markerColor'], test: /(^|[\s,#.>])ol$/ },
-  { keys: ['list.indent'], test: /(^|[\s,#.>])(ul|ol)$/ },
-  { keys: ['li.spacing'], test: /(^|[\s,#.>])li$/ },
+  { keys: ['ul.markerColor', 'ul.markerColor2', 'ul.markerColor3', 'ul.markerShape', 'ul.markerSize'], test: /(^|[\s,#.>])ul$/ },
+  { keys: ['ol.markerColor', 'ol.markerSize'], test: /(^|[\s,#.>])ol$/ },
+  { keys: ['list.indent', 'list.marginBottom', 'list.position'], test: /(^|[\s,#.>])(ul|ol)$/ },
+  { keys: ['li.spacing', 'li.fontSize', 'li.leading', 'li.color'], test: /(^|[\s,#.>])li$/ },
   { keys: ['table.borderColor'], test: /(^|[\s,#.>])(table|th|td)$/ },
   { keys: ['th.bg', 'th.weight'], test: /(^|[\s,#.>])th$/ },
   { keys: ['cell.padding'], test: /(^|[\s,#.>])(th|td)$/ },
@@ -190,6 +298,26 @@ const SELECTOR_MAP: { keys: TokenKey[]; test: RegExp }[] = [
 
 /** 属性 → 令牌键 映射（元素内细分）。键为 '<元素>.*' 分组名，值为 CSS属性→令牌键。 */
 const PROP_MAP: Record<string, Record<string, TokenKey>> = {
+  // 列表组:第三方 CSS 的 ul/ol/li 规则按语义代理回填
+  // (ul 的 font-size 代理列表文字而非圆点,color 代理圆点色——与旧版行为一致)
+  'list.*': {
+    'padding-left': 'list.indent', 'margin-bottom': 'list.marginBottom',
+    'list-style-position': 'list.position',
+  },
+  'ul.*': {
+    'padding-left': 'list.indent', 'margin-bottom': 'list.marginBottom',
+    'list-style-position': 'list.position', 'list-style-type': 'ul.markerShape',
+    'color': 'ul.markerColor', 'font-size': 'li.fontSize',
+  },
+  'ol.*': {
+    'padding-left': 'list.indent', 'margin-bottom': 'list.marginBottom',
+    'list-style-position': 'list.position', 'list-style-type': 'ol.markerStyle',
+    'color': 'ol.markerColor', 'font-size': 'ol.markerSize',
+  },
+  'li.*': {
+    'margin-top': 'li.spacing', 'font-size': 'li.fontSize',
+    'line-height': 'li.leading', 'color': 'li.color',
+  },
   'inlineCode.*': {
     'font-family': 'inlineCode.font', 'font-size': 'inlineCode.size',
     'font-weight': 'inlineCode.weight',
@@ -279,6 +407,25 @@ function ingestStyleRule(
   extras: string[],
 ) {
   const sel = rule.selectorText ?? ''
+  // 嵌套深度规则(ul ul / ol ol 等):二级/三级圆点与编号的形状/样式/颜色。
+  // lastSeg 归一化会丢失嵌套层级,必须在入口先识别;带伪元素的走 extraCss 分支
+  const noPseudo = !/:{1,2}/.test(sel)
+  const ulDepth = noPseudo ? nestedListDepth(sel, 'ul') : 0
+  if (ulDepth === 2 || ulDepth === 3) {
+    const table: Record<string, TokenKey> = ulDepth === 2
+      ? { 'list-style-type': 'ul.markerShape2', 'color': 'ul.markerColor2' }
+      : { 'list-style-type': 'ul.markerShape3', 'color': 'ul.markerColor3' }
+    mapDepthRule(rule, table, target, report)
+    return
+  }
+  const olDepth = noPseudo ? nestedListDepth(sel, 'ol') : 0
+  if (olDepth === 2 || olDepth === 3) {
+    const table: Record<string, TokenKey> = olDepth === 2
+      ? { 'list-style-type': 'ol.markerStyle2' }
+      : { 'list-style-type': 'ol.markerStyle3' }
+    mapDepthRule(rule, table, target, report)
+    return
+  }
   // 归一化:去掉 #write/.themd-prose 等容器前缀后取「最后一段」判断目标元素
   const lastSeg = sel
     .split(/,/) // 多选择器逐段判断
@@ -313,6 +460,42 @@ function ingestStyleRule(
   }
   if (mappedAny) report.mapped++
   else report.skipped++
+}
+
+/** 嵌套深度规则按属性表回填令牌(ul/ol 深度分支共用) */
+function mapDepthRule(
+  rule: CSSStyleRule,
+  table: Record<string, TokenKey>,
+  target: { tokens: ThemeTokens },
+  report: CssImportReport,
+) {
+  let mappedAny = false
+  for (let i = 0; i < rule.style.length; i++) {
+    const prop = rule.style.item(i)
+    const value = rule.style.getPropertyValue(prop).trim()
+    const tokenKey = table[prop]
+    if (value && tokenKey && isValidValue(value)) {
+      target.tokens[tokenKey] = value
+      mappedAny = true
+    }
+  }
+  if (mappedAny) report.mapped++
+  else report.skipped++
+}
+
+/** 列表嵌套深度：选择器末段是纯 tag 后代链（如 `#write ul ul`）时返回层数,否则 0 */
+function nestedListDepth(selector: string, tag: 'ul' | 'ol'): number {
+  for (const part of selector.split(',')) {
+    const rel = part
+      .trim()
+      .replace(/^(\.themd-prose|#write|\.markdown-body|\.md-content|body)\s*/i, '')
+      .replace(/:{1,2}[a-z-]+$/i, '')
+    const re = new RegExp(`(^|[\\s>])${tag}([\\s>]${tag})+$`, 'i')
+    if (re.test(rel)) {
+      return rel.split(/[\s>]+/).filter((s) => s.toLowerCase() === tag).length
+    }
+  }
+  return 0
 }
 
 /** 属性 → 具体令牌键 */

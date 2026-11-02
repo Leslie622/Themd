@@ -36,7 +36,17 @@ const COLOR_FALLBACK_TARGETS: Partial<Record<TokenKey, { selector: string; prop:
   'quote.color': { selector: 'blockquote', prop: 'color' },
   'quote.bg': { selector: 'blockquote', prop: 'backgroundColor' },
   'quote.borderColor': { selector: 'blockquote', prop: 'borderLeftColor' },
+  // 提示块强调色:从未设置时的标题行实测(回落色 = 基础样式表的五色)
+  'callout.note': { selector: '.themd-callout-note .themd-callout-title', prop: 'color' },
+  'callout.tip': { selector: '.themd-callout-tip .themd-callout-title', prop: 'color' },
+  'callout.important': { selector: '.themd-callout-important .themd-callout-title', prop: 'color' },
+  'callout.warning': { selector: '.themd-callout-warning .themd-callout-title', prop: 'color' },
+  'callout.caution': { selector: '.themd-callout-caution .themd-callout-title', prop: 'color' },
   'ul.markerColor': { selector: 'ul li', prop: 'color' },
+  // 二/三级圆点色未设时链式回落到一级(最终 currentColor=所在 li 文字色),测对应层级 li
+  'ul.markerColor2': { selector: 'ul ul li', prop: 'color' },
+  'ul.markerColor3': { selector: 'ul ul ul li', prop: 'color' },
+  'li.color': { selector: 'li', prop: 'color' },
   'ol.markerColor': { selector: 'ol li', prop: 'color' },
   'task.accent': { selector: 'input.task-list-item-checkbox', prop: 'accentColor' },
   'table.borderColor': { selector: 'table', prop: 'borderColor' },
@@ -96,7 +106,9 @@ const FONT_FALLBACK_TARGETS: Partial<Record<TokenKey, string>> = {
   'h5.font': 'h5',
   'h6.font': 'h6',
   'inlineCode.font': ':scope p code, :scope li code',
-  'codeBlock.font': 'pre',
+  // 字体声明在 pre code 上(pre 本体被 Tailwind preflight 的 --font-mono 接管,
+  // 测 pre 会得到错误的回显),必须测真正携带字体的元素
+  'codeBlock.font': 'pre code',
   // strong/em/del/a 是行内元素,选正文段落里的对应标记测;样文里没有时测不到,不回显
   'strong.font': ':scope p strong, :scope li strong',
   'em.font': ':scope p em, :scope li em',
