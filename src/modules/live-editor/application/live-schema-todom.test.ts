@@ -32,23 +32,24 @@ describe('live schema toDOM 完整性', () => {
   it('公式块与 Front Matter 的兜底 toDOM 结构合法(卸载期重建路径)', () => {
     // node 环境无 DOM,不实际 renderSpec;校验 spec 是合法的数组描述
     // ['tag', attrs, 0](hole=0 表示内容插槽),PM 据此即可序列化
+    // DOMOutputSpec 是元组联合类型,数字索引会触发 TS7053,统一放宽为 unknown[]
     const mathDom = liveSchema.nodes.mathBlock.spec.toDOM?.(
       liveSchema.nodes.mathBlock.create(undefined, liveSchema.text('E=mc^2')),
-    )
+    ) as unknown[] | undefined
     expect(Array.isArray(mathDom)).toBe(true)
     expect(mathDom?.[0]).toBe('div')
     expect(mathDom?.[2]).toBe(0)
 
     const fmDom = liveSchema.nodes.frontMatter.spec.toDOM?.(
       liveSchema.nodes.frontMatter.create(undefined, liveSchema.text('title: x')),
-    )
+    ) as unknown[] | undefined
     expect(Array.isArray(fmDom)).toBe(true)
     expect(fmDom?.[0]).toBe('div')
     expect(fmDom?.[2]).toBe(0)
 
     const inlineDom = liveSchema.nodes.mathInline.spec.toDOM?.(
       liveSchema.nodes.mathInline.create(undefined, liveSchema.text('x')),
-    )
+    ) as unknown[] | undefined
     expect(Array.isArray(inlineDom)).toBe(true)
     expect(inlineDom?.[0]).toBe('span')
     expect(inlineDom?.[2]).toBe(0)

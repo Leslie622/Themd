@@ -23,7 +23,9 @@ for (const m of css.matchAll(/var\((--t-[a-z0-9-]+),\s*((?:[^()]|\([^()]*\))*)\)
   if (!CSS_FALLBACKS.has(varName)) CSS_FALLBACKS.set(varName, fallback.trim())
 }
 
-const VAR_TO_KEY = new Map(Object.entries(TOKEN_VAR).map(([k, v]) => [v, k as TokenKey]))
+const VAR_TO_KEY = new Map<string, TokenKey>(
+  Object.entries(TOKEN_VAR).map(([k, v]) => [v, k as TokenKey]),
+)
 
 /** 字体栈是长列表,占位符场景用不到,不进常表 */
 const FONT_STACK_VARS = new Set(['--t-root-font', '--t-inline-code-font', '--t-code-font'])
