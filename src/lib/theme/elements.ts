@@ -1,10 +1,21 @@
 import type { TokenKey } from './tokens'
+import { THEME_BASE_DEFAULTS } from './defaults'
 
 /**
  * 元数据驱动的工场 UI：每个可定制元素注册一份字段描述，
  * 左栏元素导航、右栏属性面板全部由这份注册表自动生成。
- * 新增可定制元素（如 KaTeX、脚注）= 在这里加一条 + theme-base.css 消费 + tokens.ts 加键。
+ * 新增可定制元素（如 KaTeX、脚注）= 在这里加一条 + theme-base.css 消费 + tokens.ts 加键
+ * + defaults.ts 登记回落值(占位符自动取,守门测试锁定与 CSS 一致)。
  */
+
+/**
+ * 未设置时的占位提示 = 令牌在基础样式表里的真实回落值(THEME_BASE_DEFAULTS)。
+ * 字段定义不手写 placeholder,渲染端统一按 key 查表;查不到(颜色/字体等
+ * 运行时实测类)由控件自己决定(实测回落色/「未设置」)。
+ */
+export function placeholderOf(key: TokenKey): string | undefined {
+  return THEME_BASE_DEFAULTS[key]
+}
 
 export type FieldType =
   | 'color'        // 取色器 + hex 输入
@@ -33,8 +44,8 @@ export interface FieldDef {
   min?: number
   max?: number
   step?: number
-  /** 占位提示（未设置时显示） */
-  placeholder?: string
+  /** select 未设置时的默认值名(基础样式表回落),未设置时灰斜体回显该值 */
+  defaultLabel?: string
 }
 
 export interface ElementDef {
@@ -69,13 +80,13 @@ export const ELEMENTS: ElementDef[] = [
     sampleHint: '正文段落',
     fields: [
       { key: 'root.font', label: '字体', type: 'font-family' },
-      { key: 'root.size', label: '字号', type: 'size', unit: 'px', placeholder: '16px' },
-      { key: 'root.leading', label: '行高', type: 'number', min: 1, max: 3, step: 0.05, placeholder: '1.75' },
+      { key: 'root.size', label: '字号', type: 'size', unit: 'px' },
+      { key: 'root.leading', label: '行高', type: 'number', min: 1, max: 3, step: 0.05 },
       { key: 'root.color', label: '文字颜色', type: 'color' },
       { key: 'app.bg', label: '画布背景', type: 'background', hint: '正文纸张之外的预览区整体;支持颜色、渐变与图片' },
       { key: 'root.bg', label: '纸张颜色', type: 'color', hint: '正文这页「纸」的底色;留空 = 透明,透出画布背景' },
-      { key: 'root.width', label: '页面宽度', type: 'size', unit: 'rem', placeholder: '48rem', hint: '正文最大宽度' },
-      { key: 'root.spacing', label: '字间距', type: 'size', unit: 'px', placeholder: 'normal' },
+      { key: 'root.width', label: '页面宽度', type: 'size', unit: 'rem', hint: '正文最大宽度' },
+      { key: 'root.spacing', label: '字间距', type: 'size', unit: 'px' },
     ],
   },
   {
@@ -83,9 +94,9 @@ export const ELEMENTS: ElementDef[] = [
     label: '段落',
     group: 'basic',
     fields: [
-      { key: 'p.marginBottom', label: '段间距', type: 'size', unit: 'em', placeholder: '1.25em' },
+      { key: 'p.marginBottom', label: '段间距', type: 'size', unit: 'em' },
       { key: 'p.align', label: '对齐', type: 'text-align' },
-      { key: 'p.indent', label: '首行缩进', type: 'size', unit: 'em', placeholder: '0' },
+      { key: 'p.indent', label: '首行缩进', type: 'size', unit: 'em' },
     ],
   },
   {
@@ -96,31 +107,31 @@ export const ELEMENTS: ElementDef[] = [
       { key: 'heading.font', label: '字体', type: 'font-family' },
       { key: 'heading.color', label: '颜色', type: 'color' },
       { key: 'heading.weight', label: '字重', type: 'font-weight' },
-      { key: 'heading.leading', label: '行高', type: 'number', min: 1, max: 2.5, step: 0.05, placeholder: '1.3' },
-      { key: 'heading.marginTop', label: '段前间距', type: 'size', unit: 'em', placeholder: '1.6em' },
-      { key: 'heading.marginBottom', label: '段后间距', type: 'size', unit: 'em', placeholder: '0.6em' },
+      { key: 'heading.leading', label: '行高', type: 'number', min: 1, max: 2.5, step: 0.05 },
+      { key: 'heading.marginTop', label: '段前间距', type: 'size', unit: 'em' },
+      { key: 'heading.marginBottom', label: '段后间距', type: 'size', unit: 'em' },
     ],
   },
   ...([
-    ['h1', 'H1 一级', '2em'],
-    ['h2', 'H2 二级', '1.5em'],
-    ['h3', 'H3 三级', '1.22em'],
-    ['h4', 'H4 四级', '1.05em'],
-    ['h5', 'H5 五级', '1em'],
-    ['h6', 'H6 六级', '0.9em'],
-  ] as const).map(([id, label, size]) => ({
+    ['h1', 'H1 一级'],
+    ['h2', 'H2 二级'],
+    ['h3', 'H3 三级'],
+    ['h4', 'H4 四级'],
+    ['h5', 'H5 五级'],
+    ['h6', 'H6 六级'],
+  ] as const).map(([id, label]) => ({
     id,
     label,
     group: 'headings' as const,
     fields: [
       { key: `${id}.font` as TokenKey, label: '字体', type: 'font-family' as const },
-      { key: `${id}.size` as TokenKey, label: '字号', type: 'size' as const, unit: 'em', placeholder: size },
+      { key: `${id}.size` as TokenKey, label: '字号', type: 'size' as const, unit: 'em' },
       { key: `${id}.color` as TokenKey, label: '颜色', type: 'color' as const },
       ...(id === 'h1' || id === 'h2'
         ? [
-            { key: `${id}.borderWidth` as TokenKey, label: '下边框粗细', type: 'size' as const, unit: 'px', placeholder: '0' },
+            { key: `${id}.borderWidth` as TokenKey, label: '下边框粗细', type: 'size' as const, unit: 'px' },
             { key: `${id}.borderColor` as TokenKey, label: '下边框颜色', type: 'color' as const },
-            { key: `${id}.paddingBottom` as TokenKey, label: '边框间距', type: 'size' as const, unit: 'em', placeholder: '0' },
+            { key: `${id}.paddingBottom` as TokenKey, label: '边框间距', type: 'size' as const, unit: 'em' },
           ]
         : []),
     ],
@@ -131,11 +142,12 @@ export const ELEMENTS: ElementDef[] = [
     group: 'inline',
     sampleHint: '加粗',
     fields: [
+      { key: 'strong.font', label: '字体', type: 'font-family' },
       { key: 'strong.weight', label: '字重', type: 'font-weight' },
       { key: 'strong.color', label: '文字颜色', type: 'color' },
       { key: 'strong.bg', label: '背景色', type: 'color', hint: '可做「高亮笔」效果' },
-      { key: 'strong.padding', label: '内边距', type: 'box', unit: 'em', placeholder: '0', hint: '配背景色使用' },
-      { key: 'strong.margin', label: '外边距', type: 'box', unit: 'em', placeholder: '0', hint: '行内元素,水平外边距才会撑开前后文字' },
+      { key: 'strong.padding', label: '内边距', type: 'box', unit: 'em', hint: '配背景色使用' },
+      { key: 'strong.margin', label: '外边距', type: 'box', unit: 'em', hint: '行内元素,水平外边距才会撑开前后文字' },
     ],
   },
   {
@@ -144,11 +156,16 @@ export const ELEMENTS: ElementDef[] = [
     group: 'inline',
     sampleHint: '斜体',
     fields: [
-      { key: 'em.style', label: '倾斜', type: 'select', options: [
+      { key: 'em.font', label: '字体', type: 'font-family' },
+      { key: 'em.weight', label: '字重', type: 'font-weight' },
+      { key: 'em.style', label: '倾斜', type: 'select', defaultLabel: '倾斜', options: [
         { value: 'italic', label: '倾斜' },
         { value: 'normal', label: '不倾斜' },
       ] },
-      { key: 'em.color', label: '颜色', type: 'color' },
+      { key: 'em.color', label: '文字颜色', type: 'color' },
+      { key: 'em.bg', label: '背景色', type: 'color', hint: '可做「高亮笔」效果' },
+      { key: 'em.padding', label: '内边距', type: 'box', unit: 'em', hint: '配背景色使用' },
+      { key: 'em.margin', label: '外边距', type: 'box', unit: 'em', hint: '行内元素,水平外边距才会撑开前后文字' },
     ],
   },
   {
@@ -157,8 +174,15 @@ export const ELEMENTS: ElementDef[] = [
     group: 'inline',
     sampleHint: '删除线',
     fields: [
+      { key: 'del.font', label: '字体', type: 'font-family' },
+      { key: 'del.weight', label: '字重', type: 'font-weight' },
       { key: 'del.color', label: '整体颜色', type: 'color' },
       { key: 'del.textColor', label: '删除线颜色', type: 'color' },
+      { key: 'del.thickness', label: '删除线粗细', type: 'size', unit: 'px', hint: '留空跟随浏览器默认;设置后删除线居中绘制' },
+      { key: 'del.offset', label: '垂直偏移', type: 'size', unit: 'px', hint: '相对居中位置:正值下移、负值上移' },
+      { key: 'del.bg', label: '背景色', type: 'color', hint: '可做「高亮笔」效果' },
+      { key: 'del.padding', label: '内边距', type: 'box', unit: 'em', hint: '配背景色使用' },
+      { key: 'del.margin', label: '外边距', type: 'box', unit: 'em', hint: '行内元素,水平外边距才会撑开前后文字' },
     ],
   },
   {
@@ -167,8 +191,18 @@ export const ELEMENTS: ElementDef[] = [
     group: 'inline',
     sampleHint: '链接',
     fields: [
-      { key: 'a.color', label: '颜色', type: 'color' },
+      { key: 'a.font', label: '字体', type: 'font-family' },
+      { key: 'a.weight', label: '字重', type: 'font-weight' },
+      { key: 'a.color', label: '文字颜色', type: 'color' },
+      { key: 'a.hoverColor', label: '悬停颜色', type: 'color', hint: '鼠标悬停时的文字颜色' },
       { key: 'a.underline', label: '下划线', type: 'select', options: UNDERLINE_OPTIONS },
+      { key: 'a.underlineColor', label: '下划线颜色', type: 'color' },
+      { key: 'a.underlineHeight', label: '下划线粗细', type: 'size', unit: 'px' },
+      { key: 'a.hoverLineColor', label: '悬停下划线色', type: 'color', hint: '悬停时下划线的颜色' },
+      { key: 'a.transition', label: '悬停过渡时长', type: 'size', unit: 's', hint: 'hover 变色的动画时长,0=瞬时切换' },
+      { key: 'a.bg', label: '背景色', type: 'color', hint: '可做「高亮笔」效果' },
+      { key: 'a.padding', label: '内边距', type: 'box', unit: 'em', hint: '配背景色使用' },
+      { key: 'a.margin', label: '外边距', type: 'box', unit: 'em', hint: '行内元素,水平外边距才会撑开前后文字' },
     ],
   },
   {
@@ -178,12 +212,14 @@ export const ELEMENTS: ElementDef[] = [
     sampleHint: '行内代码',
     fields: [
       { key: 'inlineCode.font', label: '字体', type: 'font-family' },
-      { key: 'inlineCode.size', label: '字号', type: 'size', unit: 'em', placeholder: '0.875em' },
+      { key: 'inlineCode.size', label: '字号', type: 'size', unit: 'em' },
+      { key: 'inlineCode.weight', label: '字重', type: 'font-weight' },
       { key: 'inlineCode.color', label: '文字颜色', type: 'color' },
       { key: 'inlineCode.bg', label: '背景色', type: 'color' },
-      { key: 'inlineCode.padding', label: '内边距', type: 'text', placeholder: '0.2em 0.35em' },
-      { key: 'inlineCode.radius', label: '圆角', type: 'size', unit: 'px', placeholder: '4px' },
-      { key: 'inlineCode.borderWidth', label: '边框粗细', type: 'size', unit: 'px', placeholder: '0' },
+      { key: 'inlineCode.padding', label: '内边距', type: 'box', unit: 'em', hint: '配背景色使用' },
+      { key: 'inlineCode.margin', label: '外边距', type: 'box', unit: 'em', hint: '行内元素,水平外边距才会撑开前后文字' },
+      { key: 'inlineCode.radius', label: '圆角', type: 'size', unit: 'px' },
+      { key: 'inlineCode.borderWidth', label: '边框粗细', type: 'size', unit: 'px' },
       { key: 'inlineCode.borderColor', label: '边框颜色', type: 'color' },
     ],
   },
@@ -193,8 +229,8 @@ export const ELEMENTS: ElementDef[] = [
     group: 'lists',
     sampleHint: '无序列表',
     fields: [
-      { key: 'list.indent', label: '缩进', type: 'size', unit: 'em', placeholder: '1.5em' },
-      { key: 'li.spacing', label: '项间距', type: 'size', unit: 'em', placeholder: '0.375em' },
+      { key: 'list.indent', label: '缩进', type: 'size', unit: 'em' },
+      { key: 'li.spacing', label: '项间距', type: 'size', unit: 'em' },
       { key: 'ul.markerColor', label: '圆点颜色', type: 'color' },
     ],
   },
@@ -204,8 +240,8 @@ export const ELEMENTS: ElementDef[] = [
     group: 'lists',
     sampleHint: '有序列表',
     fields: [
-      { key: 'list.indent', label: '缩进', type: 'size', unit: 'em', placeholder: '1.5em' },
-      { key: 'li.spacing', label: '项间距', type: 'size', unit: 'em', placeholder: '0.375em' },
+      { key: 'list.indent', label: '缩进', type: 'size', unit: 'em' },
+      { key: 'li.spacing', label: '项间距', type: 'size', unit: 'em' },
       { key: 'ol.markerColor', label: '编号颜色', type: 'color' },
     ],
   },
@@ -224,7 +260,7 @@ export const ELEMENTS: ElementDef[] = [
     group: 'blocks',
     sampleHint: '引用',
     fields: [
-      { key: 'quote.borderWidth', label: '左边框粗细', type: 'size', unit: 'px', placeholder: '3px' },
+      { key: 'quote.borderWidth', label: '左边框粗细', type: 'size', unit: 'px' },
       { key: 'quote.borderColor', label: '左边框颜色', type: 'color' },
       { key: 'quote.bg', label: '背景色', type: 'color' },
       { key: 'quote.color', label: '文字颜色', type: 'color' },
@@ -232,8 +268,8 @@ export const ELEMENTS: ElementDef[] = [
         { value: 'normal', label: '正常' },
         { value: 'italic', label: '斜体' },
       ] },
-      { key: 'quote.radius', label: '圆角', type: 'size', unit: 'px', placeholder: '0' },
-      { key: 'quote.padding', label: '内边距', type: 'text', placeholder: '0.25em 1em' },
+      { key: 'quote.radius', label: '圆角', type: 'size', unit: 'px' },
+      { key: 'quote.padding', label: '内边距', type: 'text' },
     ],
   },
   {
@@ -243,12 +279,12 @@ export const ELEMENTS: ElementDef[] = [
     sampleHint: '代码块',
     fields: [
       { key: 'codeBlock.font', label: '字体', type: 'font-family' },
-      { key: 'codeBlock.size', label: '字号', type: 'size', unit: 'em', placeholder: '0.875em' },
-      { key: 'codeBlock.leading', label: '行高', type: 'number', min: 1, max: 2.5, step: 0.05, placeholder: '1.6' },
+      { key: 'codeBlock.size', label: '字号', type: 'size', unit: 'em' },
+      { key: 'codeBlock.leading', label: '行高', type: 'number', min: 1, max: 2.5, step: 0.05 },
       { key: 'codeBlock.bg', label: '背景色', type: 'color' },
-      { key: 'codeBlock.padding', label: '内边距', type: 'text', placeholder: '1em 1.25em' },
-      { key: 'codeBlock.radius', label: '圆角', type: 'size', unit: 'px', placeholder: '8px' },
-      { key: 'codeBlock.borderWidth', label: '边框粗细', type: 'size', unit: 'px', placeholder: '0' },
+      { key: 'codeBlock.padding', label: '内边距', type: 'text' },
+      { key: 'codeBlock.radius', label: '圆角', type: 'size', unit: 'px' },
+      { key: 'codeBlock.borderWidth', label: '边框粗细', type: 'size', unit: 'px' },
       { key: 'codeBlock.borderColor', label: '边框颜色', type: 'color' },
     ],
   },
@@ -259,13 +295,13 @@ export const ELEMENTS: ElementDef[] = [
     sampleHint: '表格',
     fields: [
       { key: 'table.borderColor', label: '边框颜色', type: 'color' },
-      { key: 'cell.border', label: '单元格边框', type: 'text', placeholder: 'none', hint: '四边框（竖线/全网格），如 1px solid #d1d9e0；不设置=只有行横线' },
+      { key: 'cell.border', label: '单元格边框', type: 'text', hint: '四边框（竖线/全网格），如 1px solid #d1d9e0；不设置=只有行横线' },
       { key: 'th.bg', label: '表头背景', type: 'color' },
       { key: 'th.weight', label: '表头字重', type: 'font-weight' },
-      { key: 'cell.padding', label: '单元格内边距', type: 'text', placeholder: '0.5em 0.85em' },
+      { key: 'cell.padding', label: '单元格内边距', type: 'text' },
       { key: 'table.stripeBg', label: '斑马纹背景', type: 'color', hint: '偶数行底色，不设置即无斑马纹' },
       { key: 'row.hoverBg', label: '行悬停背景', type: 'color', hint: '鼠标悬停行底色，不设置即无' },
-      { key: 'table.radius', label: '表格圆角', type: 'size', unit: 'px', placeholder: '0', hint: '需配合边框合并=separate 才生效' },
+      { key: 'table.radius', label: '表格圆角', type: 'size', unit: 'px', hint: '需配合边框合并=separate 才生效' },
       { key: 'table.collapse', label: '边框合并', type: 'select', options: [{ value: 'collapse', label: '合并（collapse）' }, { value: 'separate', label: '分离（separate）' }], hint: 'separate 才能显示圆角与单元格间隙' },
     ],
   },
@@ -276,7 +312,7 @@ export const ELEMENTS: ElementDef[] = [
     sampleHint: '分割线',
     fields: [
       { key: 'hr.color', label: '颜色', type: 'color' },
-      { key: 'hr.thickness', label: '粗细', type: 'size', unit: 'px', placeholder: '1px' },
+      { key: 'hr.thickness', label: '粗细', type: 'size', unit: 'px' },
     ],
   },
   {
@@ -285,11 +321,11 @@ export const ELEMENTS: ElementDef[] = [
     group: 'blocks',
     sampleHint: '图片',
     fields: [
-      { key: 'img.maxWidth', label: '最大宽度', type: 'size', unit: '%', placeholder: '100%' },
-      { key: 'img.radius', label: '圆角', type: 'size', unit: 'px', placeholder: '4px' },
-      { key: 'img.borderWidth', label: '边框粗细', type: 'size', unit: 'px', placeholder: '0' },
+      { key: 'img.maxWidth', label: '最大宽度', type: 'size', unit: '%' },
+      { key: 'img.radius', label: '圆角', type: 'size', unit: 'px' },
+      { key: 'img.borderWidth', label: '边框粗细', type: 'size', unit: 'px' },
       { key: 'img.borderColor', label: '边框颜色', type: 'color' },
-      { key: 'img.shadow', label: '阴影', type: 'text', placeholder: 'none', hint: 'CSS box-shadow 值' },
+      { key: 'img.shadow', label: '阴影', type: 'text', hint: 'CSS box-shadow 值' },
     ],
   },
 ]

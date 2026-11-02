@@ -19,9 +19,17 @@ const COLOR_FALLBACK_TARGETS: Partial<Record<TokenKey, { selector: string; prop:
   'strong.color': { selector: 'strong', prop: 'color' },
   'strong.bg': { selector: 'strong', prop: 'backgroundColor' },
   'em.color': { selector: 'em', prop: 'color' },
-  'del.color': { selector: 'del', prop: 'color' },
-  'del.textColor': { selector: 'del', prop: 'textDecorationColor' },
+  'em.bg': { selector: 'em', prop: 'backgroundColor' },
+  // TipTap Strike 渲染 <s>,静态预览 <del>:选择器两者通吃
+  'del.color': { selector: 'del, s', prop: 'color' },
+  'del.textColor': { selector: 'del, s', prop: 'textDecorationColor' },
+  'del.bg': { selector: 'del, s', prop: 'backgroundColor' },
   'a.color': { selector: 'a', prop: 'color' },
+  // 悬停色未设置时回落常态链接色(不变色),测常态值即可
+  'a.hoverColor': { selector: 'a', prop: 'color' },
+  'a.hoverLineColor': { selector: 'a', prop: 'textDecorationColor' },
+  'a.underlineColor': { selector: 'a', prop: 'textDecorationColor' },
+  'a.bg': { selector: 'a', prop: 'backgroundColor' },
   'inlineCode.color': { selector: ':scope p code, :scope li code', prop: 'color' },
   'inlineCode.bg': { selector: ':scope p code, :scope li code', prop: 'backgroundColor' },
   'inlineCode.borderColor': { selector: ':scope p code, :scope li code', prop: 'borderColor' },
@@ -89,6 +97,11 @@ const FONT_FALLBACK_TARGETS: Partial<Record<TokenKey, string>> = {
   'h6.font': 'h6',
   'inlineCode.font': ':scope p code, :scope li code',
   'codeBlock.font': 'pre',
+  // strong/em/del/a 是行内元素,选正文段落里的对应标记测;样文里没有时测不到,不回显
+  'strong.font': ':scope p strong, :scope li strong',
+  'em.font': ':scope p em, :scope li em',
+  'del.font': ':scope p del, :scope li del, :scope p s, :scope li s, :scope del, :scope s',
+  'a.font': ':scope a',
 }
 
 /**

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { FieldDef } from '@/lib/theme/elements'
+import { placeholderOf } from '@/lib/theme/elements'
 import { cn } from '@/lib/utils'
 
 /**
@@ -64,15 +65,18 @@ function FieldControl({
   fallbackFont?: string
   onChange: (v: string) => void
 }) {
+  // 占位符 = 令牌在基础样式表的真实回落值,统一从常表查(defaults.ts,
+  // 守门测试锁定与 CSS 一致);颜色/字体类查不到,控件内部走运行时实测
+  const placeholder = placeholderOf(field.key)
   switch (field.type) {
     case 'color':
       return <ColorInput field={field} value={value} onChange={onChange} />
     case 'background':
       return <BackgroundInput value={value} onChange={onChange} />
     case 'size':
-      return <SizeInput value={value} onChange={onChange} unit={field.unit} placeholder={field.placeholder} />
+      return <SizeInput value={value} onChange={onChange} unit={field.unit} placeholder={placeholder} />
     case 'box':
-      return <BoxInput value={value} onChange={onChange} unit={field.unit} placeholder={field.placeholder} />
+      return <BoxInput value={value} onChange={onChange} unit={field.unit} placeholder={placeholder} />
     case 'number':
       return (
         <Input
@@ -82,7 +86,7 @@ function FieldControl({
           max={field.max}
           step={field.step}
           value={value ?? ''}
-          placeholder={field.placeholder}
+          placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
         />
       )
@@ -108,8 +112,13 @@ function FieldControl({
     case 'select':
       return (
         <Select value={value ?? ''} onValueChange={onChange}>
-          <SelectTrigger className="w-full" size="sm">
-            <SelectValue placeholder="未设置" />
+          <SelectTrigger
+            className={cn('w-full', !value && field.defaultLabel && 'text-muted-foreground italic')}
+            size="sm"
+            title={!value && field.defaultLabel ? '未设置,跟随基础样式表默认;选择即覆盖' : undefined}
+          >
+            {/* 未设置有默认值时回显默认值本身(灰斜体=非自设,来源语义在 title) */}
+            <SelectValue placeholder={field.defaultLabel ?? '未设置'} />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
@@ -141,7 +150,7 @@ function FieldControl({
       return (
         <Input
           value={value ?? ''}
-          placeholder={field.placeholder ?? '未设置'}
+          placeholder={placeholder ?? '未设置'}
           onChange={(e) => onChange(e.target.value)}
           className="h-8 text-xs"
         />
@@ -294,16 +303,16 @@ function ColorInput({
       ? { background: fallbackColor }
       : { background: TRANSPARENT_SWATCH }
 
-  // 未设置但测到回落色:输入框直接回显当前生效的色值(灰斜体 = 继承,非自设),
-  // 输入/取色即覆盖,清空回到回显——比「未设置 · 当前 …」占位符直观
-  const echoed = !value && fallbackColor ? fallbackColor : undefined
+  // 未设置但测到回落色:色块显示回落色 + 输入框占位符展示当前生效色,
+  // 输入/取色即覆盖,清空回到空框+占位符
+  const hasFallback = Boolean(fallbackColor)
 
   return (
     <div className="flex items-center gap-1.5">
       <label className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-md border">
         <span ref={swatchRef} className="absolute inset-0" style={swatchStyle} />
         {/* 未设置但有回落色:右下角小斜角标识,区分「已固定」与「跟随回落」 */}
-        {!value && fallbackColor && (
+        {!value && hasFallback && (
           <span
             aria-hidden
             className="absolute right-0 bottom-0 size-2.5 border-t border-l border-border bg-background/85"
@@ -318,12 +327,15 @@ function ColorInput({
           aria-label="取色器"
         />
       </label>
+      {/* 回显只做占位符,不做可编辑文本:若把回落色填进受控 value,
+          删空瞬间令牌被删→回显整串回来,永远删不干净(退格死循环)。
+          占位符直接显示默认色值本身(灰斜体=未自设,跟随默认) */}
       <Input
-        value={value ?? echoed ?? ''}
-        placeholder={fallbackColor ? `未设置 · 当前 ${fallbackColor}` : '未设置'}
+        value={value ?? ''}
+        placeholder={hasFallback ? (fallbackColor as string) : '未设置'}
         onChange={(e) => onChange(e.target.value)}
-        className={cn('h-8 font-mono text-xs', echoed && 'text-muted-foreground italic')}
-        title={echoed ? '未设置,显示当前生效的回落色;输入或取色即可覆盖' : undefined}
+        className={cn('h-8 font-mono text-xs', !value && hasFallback && 'text-muted-foreground italic')}
+        title={hasFallback ? '未设置,跟随默认色;输入或取色即可覆盖' : undefined}
       />
     </div>
   )
@@ -418,6 +430,7 @@ function BoxInput({
   value: string | undefined
   onChange: (v: string) => void
   unit?: string
+  /** 未设置时的真实回落值(如 '0.2em 0.35em'),逐边拆成占位符;空串=默认真是 0 */
   placeholder?: string
 }) {
   // 简写 → 四边 [数值, 单位]:1 值四边同用;2 值=上下|左右;4 值=上右下左;3 值/含非数字 = 不展示(保持占位)
@@ -439,6 +452,10 @@ function BoxInput({
   // 共享单位:优先取四边中第一个带单位的;无值时用上次选择,再回落字段默认
   const curUnit = sides?.[0]?.[1] || lastUnit || unit
   const base = sides ?? Array.from({ length: 4 }, () => ['', curUnit] as [string, string])
+  // 未设置的占位符:逐边拆默认值(每格只放自己那边的数值,不塞完整简写);
+  // 默认值解析不了(如 'auto')时统一占位 0
+  const phSides = parse(placeholder)
+  const placeholders = phSides?.map((s) => s[0]) ?? ['0', '0', '0', '0']
   const emit = (i: number, n: string) => {
     emitSides(base.map((s, j) => (j === i ? ([n, curUnit] as [string, string]) : s)))
   }
@@ -469,7 +486,7 @@ function BoxInput({
         type="number"
         inputMode="decimal"
         value={base[i][0]}
-        placeholder={placeholder}
+        placeholder={placeholders[i]}
         aria-label={['上', '右', '下', '左'][i]}
         onChange={(e) => emit(i, e.target.value)}
         className="h-7 min-w-0 flex-1 px-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -478,12 +495,14 @@ function BoxInput({
   )
   return (
     <div className="flex items-center gap-1">
-      {/* 单行四格(上右下左)均分整行宽度:Figma 式 padding 编辑器,不剩右侧空白,
-          与相邻控件保持同一行节奏;10px 常显方位标签免 hover,隐藏 spinner 降视觉噪音 */}
-      {cell(0)}
-      {cell(1)}
-      {cell(2)}
-      {cell(3)}
+      {/* 2×2 两排(上右 / 下左):每格比单行宽一倍,格子撑满列宽不留右侧空白;
+          10px 常显方位标签免 hover,隐藏 spinner 降视觉噪音 */}
+      <div className="grid min-w-0 flex-1 grid-cols-2 gap-1">
+        {cell(0)}
+        {cell(1)}
+        {cell(2)}
+        {cell(3)}
+      </div>
       <Select
         value={curUnit}
         onValueChange={(u) => {
@@ -491,7 +510,7 @@ function BoxInput({
           emitSides(base.map((s) => [s[0], u] as [string, string]))
         }}
       >
-        <SelectTrigger size="sm" className="w-12 shrink-0">
+        <SelectTrigger size="sm" className="w-16 shrink-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -507,7 +526,11 @@ function BoxInput({
     </div>
   )
 }
-/** 数字 + 单位。存值约定：带单位字符串（'16px' / '1.25em'），纯数字按默认单位补 */
+/** 数字 + 单位。存值约定：带单位字符串（'16px' / '1.25em'），纯数字按默认单位补。
+    单位候选跟随字段语义:时间类(s/ms)给时间单位,其余给长度单位 */
+const UNIT_OPTIONS_LENGTH = ['px', 'em', 'rem', '%']
+const UNIT_OPTIONS_TIME = ['s', 'ms']
+
 function SizeInput({
   value,
   onChange,
@@ -525,6 +548,7 @@ function SizeInput({
   // 若直接回落字段默认单位,「选 px 再输入数字」会被吞成默认单位(如 em)
   const [lastUnit, setLastUnit] = useState<string | null>(null)
   const curUnit = m?.[2] || lastUnit || unit
+  const unitOptions = UNIT_OPTIONS_TIME.includes(unit) ? UNIT_OPTIONS_TIME : UNIT_OPTIONS_LENGTH
   const emit = (n: string, u: string) => {
     if (n !== '') setLastUnit(u)
     onChange(n === '' ? '' : `${n}${u}`)
@@ -548,7 +572,7 @@ function SizeInput({
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-          {['px', 'em', 'rem', '%'].map((u) => (
+            {unitOptions.map((u) => (
               <SelectItem key={u} value={u}>
               {u}
             </SelectItem>
@@ -580,13 +604,14 @@ function FontFamilyInput({
 }) {
   const { fonts } = useLocalFontList()
   const mono = field.key === 'inlineCode.font' || field.key === 'codeBlock.font'
-  // 回显语义:标题各级跟「标题（共用）」走,共用跟正文走,其余跟随基础样式表默认
+  // 回显 = 纯当前生效字体名(灰斜体表示非自设);跟随来源(标题跟共用、
+  // 共用跟正文)挪进 hover 提示,不再占文本前缀
   const followPrefix = /^h[1-6]\.font$/.test(field.key)
-    ? '跟随标题'
+    ? '跟随标题（共用）'
     : field.key === 'heading.font'
       ? '跟随正文'
-      : '跟随默认'
-  const echo = !value && fallbackFamily ? `${followPrefix} · ${fallbackFamily}` : undefined
+      : '跟随基础样式表默认'
+  const echo = !value && fallbackFamily ? fallbackFamily : undefined
   return (
     <FontField
       label=""
@@ -596,6 +621,7 @@ function FontFamilyInput({
       mono={mono}
       fonts={fonts}
       echo={echo}
+      echoTitle={fallbackFamily ? `${followPrefix} · 当前生效字体,点选即可覆盖` : undefined}
     />
   )
 }

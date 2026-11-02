@@ -62,6 +62,7 @@
 /* ---------- 行内元素 ---------- */
 
 .themd-prose strong {
+  font-family: var(--t-strong-font, inherit);
   font-weight: var(--t-strong-weight, 700);
   color: var(--t-strong-color, inherit);
   background: var(--t-strong-bg, transparent);
@@ -70,30 +71,95 @@
   border-radius: 4px;
 }
 .themd-prose em {
+  font-family: var(--t-em-font, inherit);
+  font-weight: var(--t-em-weight, inherit);
   font-style: var(--t-em-style, italic);
   color: var(--t-em-color, inherit);
+  background: var(--t-em-bg, transparent);
+  padding: var(--t-em-padding, 0);
+  margin: var(--t-em-margin, 0);
+  border-radius: 4px;
 }
-.themd-prose del {
+/* TipTap Strike mark 渲染为 <s>,静态预览/markdown-it 输出 <del>:两标签都要覆盖。
+   text-underline-offset 只对下划线生效(CSS 规范无 line-through-offset),
+   所以「离文字距离/粗细」用背景渐变自绘删除线:随每行文字、位置粗细全可控;
+   与背景色共存时用两层 background-image 叠加,线色取 --t-del-text-color。 */
+.themd-prose del,
+.themd-prose s {
+  font-family: var(--t-del-font, inherit);
+  font-weight: var(--t-del-weight, inherit);
   color: var(--t-del-color, inherit);
   text-decoration-color: var(--t-del-text-color, currentColor);
+  background: var(--t-del-bg, transparent);
+  padding: var(--t-del-padding, 0);
+  margin: var(--t-del-margin, 0);
+  border-radius: 4px;
+}
+/* 自绘态:设置了 offset(垂直位置)或 thickness(粗细)任一即启用,
+   线 = 渐变层,颜色 = 删除线颜色令牌(回落 currentColor),再叠背景色层 */
+.themd-prose del,
+.themd-prose s {
+  text-decoration-line: var(--t-del-line, line-through);
+}
+.themd-prose[style*="--t-del-offset"],
+.themd-prose[style*="--t-del-thickness"] {
+  --t-del-line: none;
+}
+.themd-prose[style*="--t-del-offset"] del,
+.themd-prose[style*="--t-del-offset"] s,
+.themd-prose[style*="--t-del-thickness"] del,
+.themd-prose[style*="--t-del-thickness"] s {
+  text-decoration-line: none;
+  background-image:
+    linear-gradient(var(--t-del-text-color, currentColor), var(--t-del-text-color, currentColor)),
+    var(--t-del-bg-image, none);
+  background-size:
+    100% var(--t-del-thickness, 1px),
+    auto;
+  /* 线默认垂直居中;background-position 百分比参照(盒高-线高),center=50% 即居中;
+     设了 offset 时从居中位置上下偏移,正值下移、负值上移 */
+  background-position:
+    0 calc(50% + var(--t-del-offset, 0px)),
+    0 0;
+  background-repeat: no-repeat, no-repeat;
+  background-color: var(--t-del-bg, transparent);
 }
 
-/* a.underline 令牌值 always/hover/none 由编译器展开为两个变量 */
+/* a.underline 令牌值 always/hover/none 由编译器展开为两个变量;
+   hover 文字色/下划线色未设置时回落常态值(即不变色) */
 .themd-prose a {
+  font-family: var(--t-a-font, inherit);
+  font-weight: var(--t-a-weight, inherit);
   color: var(--t-a-color, inherit);
   text-decoration-line: var(--t-a-underline-line, underline);
+  text-decoration-color: var(--t-a-underline-color, currentColor);
+  text-decoration-thickness: var(--t-a-underline-height, auto);
   text-underline-offset: 0.2em;
+  background: var(--t-a-bg, transparent);
+  padding: var(--t-a-padding, 0);
+  margin: var(--t-a-margin, 0);
+  border-radius: 4px;
+  /* hover 动画:仅设置了过渡时长时注入(回落 0s 也成立,动画属性未列时不产生过渡) */
+  transition:
+    color var(--t-a-transition, 0s),
+    text-decoration-color var(--t-a-transition, 0s),
+    background-color var(--t-a-transition, 0s),
+    text-decoration-line var(--t-a-transition, 0s);
 }
 .themd-prose a:hover {
+  color: var(--t-a-hover-color, var(--t-a-color, inherit));
   text-decoration-line: var(--t-a-hover-underline, underline);
+  text-decoration-color: var(--t-a-hover-line-color, var(--t-a-underline-color, currentColor));
 }
 
 .themd-prose :not(pre) > code {
   font-family: var(--t-inline-code-font, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace);
   font-size: var(--t-inline-code-size, 0.875em);
+  font-weight: var(--t-inline-code-weight, inherit);
   color: var(--t-inline-code-color, inherit);
   background: var(--t-inline-code-bg, oklch(0.96 0 0));
   padding: var(--t-inline-code-padding, 0.2em 0.35em);
+  margin: var(--t-inline-code-margin, 0);
   border-radius: var(--t-inline-code-radius, 4px);
   border: var(--t-inline-code-border-width, 0) solid var(--t-inline-code-border-color, oklch(0.9 0 0));
 }

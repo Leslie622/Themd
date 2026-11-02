@@ -161,6 +161,7 @@ export function FontField({
   mono,
   fonts,
   echo,
+  echoTitle,
 }: {
   /** 行上方小标签;空串 = 不渲染(行内布局,由外层行名表意) */
   label: string
@@ -169,8 +170,10 @@ export function FontField({
   placeholder: string
   mono?: boolean
   fonts: string[]
-  /** 值未设置时的回显文案(如「跟随正文 · Geist Variable」),灰斜体;设置模块不传即无此行为 */
+  /** 值未设置时的回显文案(当前生效字体名),灰斜体;设置模块不传即无此行为 */
   echo?: string
+  /** 回显态的 hover 提示(跟随来源等);不传用通用文案 */
+  echoTitle?: string
 }) {
   const [open, setOpen] = useState(false)
   const display = value.trim()
@@ -207,7 +210,7 @@ export function FontField({
             echo ? (
               <span
                 className="truncate italic text-muted-foreground"
-                title="未设置,显示当前生效的回落字体;点选即可覆盖"
+                title={echoTitle ?? '未设置,显示当前生效的回落字体;点选即可覆盖'}
               >
                 {echo}
               </span>
