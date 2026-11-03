@@ -27,8 +27,12 @@ const VAR_TO_KEY = new Map<string, TokenKey>(
   Object.entries(TOKEN_VAR).map(([k, v]) => [v, k as TokenKey]),
 )
 
-/** 字体栈是长列表,占位符场景用不到,不进常表 */
-const FONT_STACK_VARS = new Set(['--t-root-font', '--t-inline-code-font', '--t-code-font'])
+/** 字体栈是长列表,占位符场景用不到,不进常表。
+ *  双字体改造后 CSS 只消费合并栈(--t-root-font 等),latin/cjk 分令牌的
+ *  回落在 compile.ts,同样不进常表——全部豁免。 */
+const FONT_STACK_VARS = new Set<string>(
+  Object.values(TOKEN_VAR).filter((v) => v.includes('-font')),
+)
 
 /** 常表值与 CSS 回落值在「展示语义」上等价(0 与 0s、0px 同义) */
 const norm = (v: string) => v.replace(/\s+/g, ' ').replace(/^(-|\+)?0(?=[.a-z])/, '').trim()

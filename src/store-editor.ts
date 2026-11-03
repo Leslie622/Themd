@@ -47,7 +47,7 @@ interface EditorPrefsState {
   liveEngine: 'prosemirror' | 'codemirror'
   /** CodeMirror 字号(px) */
   fontSize: number
-  /** 界面西文字体:空 = Geist Variable(打包默认) */
+  /** 界面西文字体:空 = system-ui(系统默认) */
   uiFontWestern: string
   /** 界面中文字体:空 = 系统默认链 */
   uiFontCjk: string
@@ -104,8 +104,8 @@ const applySize = (px: number) => {
   document.documentElement.style.setProperty('--font-editor-size', `${px}px`)
 }
 
-/** 界面默认字体链(中文默认使用打包的鸿蒙黑体) */
-const DEFAULT_UI_STACK = "'Geist Variable', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+/** 界面默认字体链:系统 UI 字体 + 打包鸿蒙黑体兜中文(Geist 已按用户要求移除) */
+const DEFAULT_UI_STACK = "system-ui, 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif"
 /** 编辑器默认字体链(西文使用打包的 JetBrains Mono,中文按字符回落) */
 export const DEFAULT_EDITOR_STACK = "'JetBrains Mono', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace"
 
@@ -249,7 +249,6 @@ export const EDITOR_FONT_RANGE = { MIN, MAX } as const
 
 /** 界面/编辑器共用的西文字体候选(预设 + 本机探测列表由 UI 层合并) */
 export const UI_FONT_PRESETS = [
-  { label: 'Geist(默认)', value: 'Geist Variable' },
   { label: 'HarmonyOS Sans SC', value: 'HarmonyOS Sans SC' },
   { label: '系统界面字体', value: 'system-ui' },
   { label: 'Segoe UI(Windows)', value: 'Segoe UI' },

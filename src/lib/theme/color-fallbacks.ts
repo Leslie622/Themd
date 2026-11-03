@@ -1,4 +1,5 @@
 import type { TokenKey } from './tokens'
+import { isFontAvailable } from '@/components/settings/is-font-available'
 
 /**
  * 回落色预览（P5 打磨）：颜色令牌未设置时,元素实际呈现「继承/回落」后的颜色。
@@ -97,29 +98,58 @@ export function resolveFallbackColors(
  *  共用 heading.font 同理从正文根实测:未设置时标题 inherit 正文字体,
  *  测 h1 会被 h1.font 等各级设置污染。 */
 const FONT_FALLBACK_TARGETS: Partial<Record<TokenKey, string>> = {
-  'root.font': ':scope',
-  'heading.font': ':scope',
-  'h1.font': 'h1',
-  'h2.font': 'h2',
-  'h3.font': 'h3',
-  'h4.font': 'h4',
-  'h5.font': 'h5',
-  'h6.font': 'h6',
-  'inlineCode.font': ':scope p code, :scope li code',
+  'root.fontLatin': ':scope',
+  'heading.fontLatin': ':scope',
+  'h1.fontLatin': 'h1',
+  'h2.fontLatin': 'h2',
+  'h3.fontLatin': 'h3',
+  'h4.fontLatin': 'h4',
+  'h5.fontLatin': 'h5',
+  'h6.fontLatin': 'h6',
+  'inlineCode.fontLatin': ':scope p code, :scope li code',
   // 字体声明在 pre code 上(pre 本体被 Tailwind preflight 的 --font-mono 接管,
   // 测 pre 会得到错误的回显),必须测真正携带字体的元素
-  'codeBlock.font': 'pre code',
+  'codeBlock.fontLatin': 'pre code',
   // strong/em/del/a 是行内元素,选正文段落里的对应标记测;样文里没有时测不到,不回显
-  'strong.font': ':scope p strong, :scope li strong',
-  'em.font': ':scope p em, :scope li em',
-  'del.font': ':scope p del, :scope li del, :scope p s, :scope li s, :scope del, :scope s',
-  'a.font': ':scope a',
+  'strong.fontLatin': ':scope p strong, :scope li strong',
+  'em.fontLatin': ':scope p em, :scope li em',
+  'del.fontLatin': ':scope p del, :scope li del, :scope p s, :scope li s, :scope del, :scope s',
+  'a.fontLatin': ':scope a',
+}
+
+/** 中文字体令牌与西文端共用同一实测元素(cjk 回显从合并栈里找覆盖汉字的族) */
+const CJK_TARGET_SOURCES: Partial<Record<TokenKey, TokenKey>> = {
+  'root.fontCjk': 'root.fontLatin',
+  'heading.fontCjk': 'heading.fontLatin',
+  'h1.fontCjk': 'h1.fontLatin',
+  'h2.fontCjk': 'h2.fontLatin',
+  'h3.fontCjk': 'h3.fontLatin',
+  'h4.fontCjk': 'h4.fontLatin',
+  'h5.fontCjk': 'h5.fontLatin',
+  'h6.fontCjk': 'h6.fontLatin',
+  'inlineCode.fontCjk': 'inlineCode.fontLatin',
+  'codeBlock.fontCjk': 'codeBlock.fontLatin',
+  'strong.fontCjk': 'strong.fontLatin',
+  'em.fontCjk': 'em.fontLatin',
+  'del.fontCjk': 'del.fontLatin',
+  'a.fontCjk': 'a.fontLatin',
+}
+
+/** 判断一个 font-family 族是否覆盖汉字:非拉丁限定族视为中文族。
+ *  通用族不算覆盖——回显要穿透它报出真实渲染的汉字族(Windows 上
+ *  system-ui 实际落到 Microsoft YaHei 画汉字),报 system-ui 没有信息量。 */
+function coversCjk(family: string): boolean {
+  if (/^(system-ui|sans-serif|serif|inherit|monospace)$/i.test(family)) return false
+  // 非纯 ASCII 名(中文族名)或明确带中文语义的族算覆盖
+  return !/^[a-z0-9 _-]+$/i.test(family) || /cjk|hei|song|kai|yahei|pingfang|harmony/i.test(family)
 }
 
 /**
  * 在预览根元素上测量一组字体令牌的回落字体:computed font-family 的
  * 第一个族名(去引号)。未设置时标题继承正文、正文回落基础样式表,
  * 测出来的就是「实际生效」的那个字体。找不到目标元素/族名的项不出现在结果里。
+ * cjk 令牌:从同一元素的合并栈里找第一个覆盖汉字的族(中文族排在栈后段,
+ * 取第一族永远拿到西文)。
  */
 export function resolveFallbackFonts(
   previewRoot: HTMLElement,
@@ -127,15 +157,33 @@ export function resolveFallbackFonts(
 ): Partial<Record<TokenKey, string>> {
   const result: Partial<Record<TokenKey, string>> = {}
   for (const key of keys) {
-    const selector = FONT_FALLBACK_TARGETS[key]
+    const cjkSource = CJK_TARGET_SOURCES[key as TokenKey]
+    const lookup = cjkSource ?? key
+    const selector = FONT_FALLBACK_TARGETS[lookup]
     if (!selector) continue
     const el = selector === ':scope' ? previewRoot : previewRoot.querySelector(selector)
     if (!el) continue
-    const family = getComputedStyle(el)
-      .fontFamily.split(',')[0]
-      ?.trim()
-      .replace(/^['"]|['"]$/g, '')
-    if (family) result[key] = family
+    const families = getComputedStyle(el)
+      .fontFamily.split(',')
+      .map((f) => f.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean)
+    if (cjkSource) {
+      // 报第一个「覆盖汉字且真实安装」的族:仅覆盖判定会命中未安装的 macOS 族
+      // (如 Windows 栈里的 PingFang SC),回显必须与实际渲染一致
+      const cjkFamily = families.find((f) => coversCjk(f) && isFontAvailable(f))
+      // 栈里全是通用族(如极简默认 system-ui,sans-serif)时没有具体汉字族可报,
+      // 穿透通用族报操作系统的中文默认(按平台;浏览器端同为这两大平台)
+      if (cjkFamily) result[key] = cjkFamily
+      else result[key] = isFontAvailable('PingFang SC') ? 'PingFang SC' : 'Microsoft YaHei'
+      continue
+    }
+    // 西文端:第一族是通用族(system-ui 等)时穿透报真实渲染族
+    // (Windows 上 system-ui = Segoe UI);具体族照实报
+    const first = families[0]
+    if (!first) continue
+    result[key] = /^(system-ui|sans-serif|serif|inherit)$/i.test(first)
+      ? (isFontAvailable('Segoe UI') ? 'Segoe UI' : first)
+      : first
   }
   return result
 }

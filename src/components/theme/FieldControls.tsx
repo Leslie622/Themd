@@ -1,5 +1,9 @@
 import { ImagePlus, RotateCcw } from 'lucide-react'
-import Sketch from '@uiw/react-color-sketch'
+import { hexToHsva, hsvaToHex, hsvaToRgba, rgbaToHsva, type HsvaColor } from '@uiw/color-convert'
+import Saturation from '@uiw/react-color-saturation'
+import Hue from '@uiw/react-color-hue'
+import Alpha from '@uiw/react-color-alpha'
+import Swatch from '@uiw/react-color-swatch'
 import { toast } from 'sonner'
 import { memo, useEffect, useRef, useState } from 'react'
 import { FontField } from '@/components/settings/FontField'
@@ -41,8 +45,10 @@ export const FieldRow = memo(function FieldRow({
   const unset = () => onChange(undefined)
 
   return (
-    <div className="flex items-center gap-2 py-1.5">
-      <Label className="w-20 shrink-0 text-xs text-muted-foreground">{field.label}</Label>
+    <div className="flex items-start gap-2 py-1.5">
+      {/* items-start + leading 对齐控件本体高度:有描述时 label 仍与控件第一行对齐,
+          描述悬在控件下方不参与垂直居中 */}
+      <Label className="w-20 shrink-0 pt-[10px] text-xs leading-none text-muted-foreground">{field.label}</Label>
       <div className="min-w-0 flex-1">
         {/* key 按字段隔离:SizeInput 记单位的 ref 不能跨字段残留 */}
         <FieldControl
@@ -116,6 +122,7 @@ function FieldControl({
           value={value ?? ''}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
+          className="h-8 text-xs"
         />
       )
     case 'font-weight':
@@ -394,8 +401,9 @@ function FieldHint({ hint }: { hint?: string }) {
   const unset = () => onChange(undefined)
 
   return (
-    <div className="flex items-center gap-2 py-1.5">
-      <Label className="w-20 shrink-0 text-xs text-muted-foreground">{field.label}</Label>
+    <div className="flex items-start gap-2 py-1.5">
+      {/* items-start + pt 对齐控件本体:描述悬在控件下方,label 不随整体变高而偏移 */}
+      <Label className="w-20 shrink-0 pt-[10px] text-xs leading-none text-muted-foreground">{field.label}</Label>
       <div className="min-w-0 flex-1">
         <ColorInput
           field={field}
@@ -444,10 +452,9 @@ function ColorInput({
   onLivePreview?: (field: FieldDef, v: string) => void
   onCommit?: (field: FieldDef, v: string) => void
 }) {
-  // 取色器是受控 HexColorPicker:react-colorful 对受控色是安全的(拖动中
-  // onChange → store 按帧回流 → color prop 更新,不与拖动拔河);
-  // 非 hex 值(oklch/named)取色器从黑起步,色块仍显示真实色
-  const safe = value && /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : '#000000'
+  // 取色器是受控面板:hex 与 rgba() 串都能精确回流;其他值(oklch/named)
+  // 取色器从黑起步,色块仍显示真实色
+  const safe = value && (/^#[0-9a-fA-F]{3,8}$/.test(value) || /^rgba?\(/i.test(value)) ? value : '#000000'
   // 色块本地实时色:拖动期间直接写 DOM,不进 React state
   const swatchRef = useRef<HTMLSpanElement>(null)
   // 始终持有最新回调(effect 内同步,避免渲染期写 ref)
@@ -467,6 +474,15 @@ function ColorInput({
     // 实时路径:色块 + 预览容器 CSS 变量,同步直写,无 React 参与
     if (swatchRef.current) swatchRef.current.style.background = v
     cbRef.current.onLivePreview?.(cbRef.current.field, v)
+    // 最终提交:停止拖动 200ms 后收口(松手或悬停停顿)。
+    // 必须在 rAF 合拢判断之前设置:rAF 在窗口被遮挡等场景下可能长期不触发,
+    // 若挂在 return 之后,收口定时器会被一同跳过,store 永远停在旧值
+    if (commitTimer.current) clearTimeout(commitTimer.current)
+    commitTimer.current = setTimeout(() => {
+      if (pendingValue.current !== null) {
+        cbRef.current.onCommit?.(cbRef.current.field, pendingValue.current)
+      }
+    }, 200)
     if (frame.current) return
     frame.current = requestAnimationFrame(() => {
       frame.current = 0
@@ -475,13 +491,6 @@ function ColorInput({
         onChangeRef.current(pendingValue.current)
       }
     })
-    // 最终提交:停止拖动 200ms 后收口(松手或悬停停顿)
-    if (commitTimer.current) clearTimeout(commitTimer.current)
-    commitTimer.current = setTimeout(() => {
-      if (pendingValue.current !== null) {
-        cbRef.current.onCommit?.(cbRef.current.field, pendingValue.current)
-      }
-    }, 200)
   }
   // 卸载时若还有未提交的值,立即提交(避免松手瞬间丢最后一次)
   useEffect(
@@ -530,13 +539,6 @@ function ColorInput({
 /** 未设置色板的「透明」标识:标准 crisp 棋盘格(国际通用的透明符号) */
 const TRANSPARENT_SWATCH = 'repeating-conic-gradient(#dcdcdc 0% 25%, #ffffff 0% 50%) 0 0 / 8px 8px'
 
-/** Sketch 内建样式变量压平:去掉它自带的框/投影/白底,由 Popover 的框统一,
-    否则面板套着 Popover 的框=双层 */
-const SKETCH_FLAT_STYLE = {
-  '--sketch-box-shadow': 'none',
-  '--sketch-background': 'transparent',
-} as React.CSSProperties
-
 /** 预设色板:黑白 + Tailwind 500 系 */
 const PRESET_COLORS = [
   '#000000', '#ffffff', '#ef4444', '#f97316', '#f59e0b', '#eab308',
@@ -545,7 +547,203 @@ const PRESET_COLORS = [
 ]
 
 /**
- * Sketch 取色器弹层:色块触发 + 面板(饱和度/色相/透明度/hex/rgba 通道/预设色板)
+ * 取色器弹层面板:饱和度方块 + 色相/透明度条 + shadcn 输入行 + 预设色板。
+ * 拖拽核心用 @uiw 子包(Saturation/Hue/Alpha),外壳/输入行/色板全部
+ * 项目自有样式 —— 原 Sketch 整包的内联白底、下划线输入、3px 小色板不复存在。
+ *
+ * 受控语义与原 Sketch 一致:内部持有 hsva,外部 color prop 回流同步
+ * (hex 回流;rgba 串只在 a≠1 时出现,同样解析回流),拖动中 onChange
+ * 连续回调,调用方决定直写或节流。
+ */
+function ColorPanel({ color, onChange }: { color: string; onChange: (v: string) => void }) {
+  // 内部 hsva 状态:拖动中自持;外部 color 变化时回流
+  const [hsva, setHsva] = useState<HsvaColor>(() => hexToHsva(color))
+  const change = (next: HsvaColor) => {
+    setHsva(next)
+    onChange(hsvaColorToValue(next))
+  }
+  // 外部 prop 回流(渲染期调整,React 官方模式):拖动中 onChange → store 回流
+  // color,值等价时跳过 setState 避免拖动拔河;非法值保持原状
+  const incoming = parseColorValue(color)
+  const [prevColor, setPrevColor] = useState(color)
+  if (incoming && prevColor !== color) {
+    setPrevColor(color)
+    if (!equalHsva(hsva, incoming)) setHsva(incoming)
+  }
+
+  const rgba = hsvaToRgba(hsva)
+
+  /** 通道输入行通用提交:数值合法才进 change,非法输入不动色 */
+  const submitChannel = (raw: string, apply: (hsva: HsvaColor, n: number) => HsvaColor) => {
+    const n = Number(raw)
+    if (raw.trim() !== '' && Number.isFinite(n)) change(apply(hsva, n))
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {/* 饱和度/明度方块:指针沿用库默认圆点(白描边黑投影,任何底色都可辨);
+          库对 size 是内联 style,className 压不过,尺寸走 style */}
+      <Saturation
+        hsva={hsva}
+        onChange={(c) => change({ ...hsva, ...c, a: hsva.a })}
+        radius={6}
+        style={{ width: '100%', height: 144 }}
+      />
+      <Hue hue={hsva.h} pointer={BarPointer} radius={3} onChange={(h) => change({ ...hsva, ...h })} />
+      <Alpha hsva={hsva} pointer={BarPointer} radius={3} onChange={(a) => change({ ...hsva, a: a.a })} />
+      {/* 输入行:Hex 独占一行(6 位值需要宽度),RGBA 四格一行;shadcn Input
+          替代库内建下划线输入框;A 通道以百分比计 */}
+      <ColorChannelInput
+        label="Hex"
+        value={hsvaToHex(hsva).replace(/^#/, '').toUpperCase()}
+        onSubmit={(raw) => {
+          const hex = `#${raw.trim().replace(/^#/, '')}`
+          if (/^#[0-9a-fA-F]{3,8}$/.test(hex)) change({ ...hexToHsva(hex), a: hsva.a })
+        }}
+        mono
+      />
+      <div className="flex items-center gap-1.5">
+        <ColorChannelInput
+          label="R"
+          value={String(rgba.r)}
+          onSubmit={(raw) => submitChannel(raw, (h, n) => setRgbaChannel(h, 'r', n))}
+          className="min-w-11 flex-1"
+          mono
+        />
+        <ColorChannelInput
+          label="G"
+          value={String(rgba.g)}
+          onSubmit={(raw) => submitChannel(raw, (h, n) => setRgbaChannel(h, 'g', n))}
+          className="min-w-11 flex-1"
+          mono
+        />
+        <ColorChannelInput
+          label="B"
+          value={String(rgba.b)}
+          onSubmit={(raw) => submitChannel(raw, (h, n) => setRgbaChannel(h, 'b', n))}
+          className="min-w-11 flex-1"
+          mono
+        />
+        <ColorChannelInput
+          label="A"
+          value={String(Math.round(hsva.a * 100))}
+          onSubmit={(raw) => submitChannel(raw, (h, n) => ({ ...h, a: Math.min(100, Math.max(0, n)) / 100 }))}
+          className="min-w-11 flex-1"
+          mono
+        />
+      </div>
+      {/* 预设色板:rectRender 自绘格子 —— shadcn 圆角/间距/选中描边,替代库默认 3px 小方块;
+          Swatch 是 flex-wrap 容器,格子间 gap-1.5 */}
+      <Swatch
+        colors={PRESET_COLORS}
+        color={hsvaToHex(hsva)}
+        onChange={(hsv) => change({ ...hsv, a: hsva.a })}
+        className="gap-1.5"
+        rectRender={({ color: c, checked, style, onClick }) => (
+          <button
+            type="button"
+            key={c}
+            title={c}
+            aria-label={`预设色 ${c}`}
+            aria-pressed={checked}
+            onClick={(e) => onClick(e as unknown as React.MouseEvent<HTMLDivElement>)}
+            className={cn(
+              'size-4 shrink-0 rounded-sm border border-black/10 transition-shadow hover:scale-110',
+              checked && 'ring-2 ring-ring ring-offset-1 ring-offset-popover',
+            )}
+            style={{ background: c, ...style, height: 16, width: 16, margin: 0 }}
+          />
+        )}
+      />
+    </div>
+  )
+}
+
+/** color prop( hex 或 rgba() 串)→ hsva;非法值返回 null(回流时保持原状) */
+function parseColorValue(v: string): HsvaColor | null {
+  if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return hexToHsva(v)
+  const m = v.match(/^rgba?\(([^)]+)\)$/i)
+  if (m) {
+    const parts = m[1].split(/[,\s/]+/).filter(Boolean).map(Number)
+    if (parts.length >= 3 && parts.slice(0, 3).every((n) => Number.isFinite(n))) {
+      return rgbaToHsva({ r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 1 })
+    }
+  }
+  return null
+}
+
+/** 拖动回流守卫:hsva 各分量都在浮点噪声容差内视为相等,避免 setHsva 抖动 */
+function equalHsva(a: HsvaColor, b: HsvaColor): boolean {
+  const near = (x: number, y: number) => Math.abs(x - y) < 1e-6
+  return near(a.h, b.h) && near(a.s, b.s) && near(a.v, b.v) && near(a.a, b.a)
+}
+
+/** hsva → 弹层对外值:a=1 出 hex(主流场景值干净),否则 rgba() 串 */
+function hsvaColorToValue(hsva: HsvaColor): string {
+  return hsva.a === 1
+    ? hsvaToHex(hsva)
+    : `rgba(${hsvaToRgba(hsva).r}, ${hsvaToRgba(hsva).g}, ${hsvaToRgba(hsva).b}, ${Math.round(hsva.a * 100) / 100})`
+}
+
+const clamp255 = (n: number) => Math.min(255, Math.max(0, Math.round(n)))
+
+/** 纯色 RGB 通道写入:把 r/g/b 之一设到 hsva 对应的 rgba 上,再转回 hsva */
+function setRgbaChannel(hsva: HsvaColor, channel: 'r' | 'g' | 'b', n: number): HsvaColor {
+  return { ...hsva, ...rgbaToHsva({ ...hsvaToRgba(hsva), [channel]: clamp255(n) }) }
+}
+
+/** 色相/透明度条的指针:细竖条(替代库默认圆点),观感对齐原生取色器 */
+function BarPointer({ left }: { left?: string; top?: string; prefixCls?: string; fillProps?: React.HTMLAttributes<HTMLDivElement> }) {
+  return (
+    <div
+      className="pointer-events-none absolute top-0 bottom-0 w-1 rounded-full border border-black/20 bg-white shadow-sm"
+      style={{ left }}
+    />
+  )
+}
+
+/** 通道输入行单项:shadcn Input + 下方小字标签,替代库内建下划线输入框。
+    聚焦中显示本地草稿,失焦显示外部值(拖动/取色实时同步);提交走 onSubmit */
+function ColorChannelInput({
+  label,
+  value,
+  onSubmit,
+  className,
+  mono = false,
+}: {
+  label: string
+  value: string
+  onSubmit: (raw: string) => void
+  className?: string
+  mono?: boolean
+}) {
+  const [focused, setFocused] = useState(false)
+  const [draft, setDraft] = useState(value)
+  return (
+    <label className={cn('flex min-w-0 flex-col gap-0.5', className)}>
+      <span className="text-center text-[10px] leading-none text-muted-foreground">{label}</span>
+      <Input
+        value={focused ? draft : value}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={() => {
+          setFocused(true)
+          setDraft(value)
+        }}
+        onBlur={() => setFocused(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            onSubmit(draft)
+            e.currentTarget.blur()
+          }
+        }}
+        className={cn('h-7 px-1.5 text-center text-xs', mono && 'font-mono')}
+      />
+    </label>
+  )
+}
+
+/**
+ * Sketch 取色器弹层:色块触发 + 面板(饱和度/色相/透明度/通道输入/预设色板)
  * + 吸管。onColorChange 在拖动/输入/选色时连续回调,调用方决定直写或节流。
  * swatchRef 供调用方在拖动中直写色块色(绕过 React)。
  */
@@ -582,20 +780,14 @@ function SketchPopover({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-2" align="start">
-        <Sketch
-          color={color}
-          onChange={(res) => {
-            const { rgba } = res
-            onColorChange(rgba.a === 1 ? res.hex : `rgba(${rgba.r}, ${rgba.g}, ${rgba.b}, ${rgba.a})`)
-          }}
-          presetColors={PRESET_COLORS}
-          style={SKETCH_FLAT_STYLE}
-        />
+      {/* 基类自带 flex-col gap-4,这里用 gap-2.5 覆盖(space-y 会与 gap 叠加) */}
+      <PopoverContent className="w-64 gap-2.5 p-3" align="start">
+        <ColorPanel color={color} onChange={onColorChange} />
         {/* 系统取色器的吸管是独有能力,面板里保留一个入口 */}
-        <button
+        <Button
           type="button"
-          className="mt-1 w-full rounded-md border border-border py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          variant="outline"
+          className="h-7 w-full text-xs text-muted-foreground"
           onClick={async () => {
             const EyeDropper = (window as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper
             if (!EyeDropper) return
@@ -608,7 +800,7 @@ function SketchPopover({
           }}
         >
           从屏幕取色
-        </button>
+        </Button>
       </PopoverContent>
     </Popover>
   )
@@ -641,7 +833,7 @@ function BackgroundInput({
   // 色块即预览:颜色/图片都是 background 值,直接渲染到色块上;未设置 = 透明棋盘格
   const swatchStyle: React.CSSProperties = value ? { background: value } : { background: TRANSPARENT_SWATCH }
   const swatchRef = useRef<HTMLSpanElement>(null)
-  const safe = value && /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : '#ffffff'
+  const safe = value && (/^#[0-9a-fA-F]{3,8}$/.test(value) || /^rgba?\(/i.test(value)) ? value : '#ffffff'
   // 回调 ref(effect 内同步,避免渲染期写 ref)
   const cbRef = useRef({ onChange, onLivePreview, onCommit, field })
   const onChangeRef = useRef(onChange)
@@ -659,17 +851,18 @@ function BackgroundInput({
     pendingValue.current = v
     if (swatchRef.current) swatchRef.current.style.background = v
     cbRef.current.onLivePreview?.(cbRef.current.field, v)
-    if (frame.current) return
-    frame.current = requestAnimationFrame(() => {
-      frame.current = 0
-      if (pendingValue.current !== null) onChangeRef.current(pendingValue.current)
-    })
+    // 收口定时器先于 rAF 合拢判断设置:rAF 长期不触发时(窗口被遮挡)提交不能丢
     if (commitTimer.current) clearTimeout(commitTimer.current)
     commitTimer.current = setTimeout(() => {
       if (pendingValue.current !== null) {
         cbRef.current.onCommit?.(cbRef.current.field, pendingValue.current)
       }
     }, 200)
+    if (frame.current) return
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0
+      if (pendingValue.current !== null) onChangeRef.current(pendingValue.current)
+    })
   }
   useEffect(
     () => () => {
@@ -921,12 +1114,12 @@ function FontFamilyInput({
   onChange: (v: string) => void
 }) {
   const { fonts } = useLocalFontList()
-  const mono = field.key === 'inlineCode.font' || field.key === 'codeBlock.font'
+  const mono = /^inlineCode\.font|^codeBlock\.font/.test(field.key)
   // 回显 = 纯当前生效字体名(灰斜体表示非自设);跟随来源(标题跟共用、
   // 共用跟正文)挪进 hover 提示,不再占文本前缀
-  const followPrefix = /^h[1-6]\.font$/.test(field.key)
+  const followPrefix = /^h[1-6]\.font(Latin|Cjk)$/.test(field.key)
     ? '跟随标题（共用）'
-    : field.key === 'heading.font'
+    : /^heading\.font(Latin|Cjk)$/.test(field.key)
       ? '跟随正文'
       : '跟随基础样式表默认'
   const echo = !value && fallbackFamily ? fallbackFamily : undefined

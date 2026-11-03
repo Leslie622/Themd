@@ -31,7 +31,7 @@ const GITHUB: ThemeFile = {
   builtin: true,
   tokens: {
     // 正文(.markdown-body)
-    'root.font':
+    'root.fontLatin':
       '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"',
     'root.size': '16px',
     'root.leading': '1.5',
@@ -62,14 +62,14 @@ const GITHUB: ThemeFile = {
     'a.underline': 'always',
     'strong.weight': '600',
     // 行内代码(code,tt: 85% / .2em .4em / #818b981f / 6px)
-    'inlineCode.font':
+    'inlineCode.fontLatin':
       'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
     'inlineCode.size': '85%',
     'inlineCode.bg': '#818b981f',
     'inlineCode.padding': '.2em .4em',
     'inlineCode.radius': '6px',
     // 代码块(pre: 85% / 1.45 / 1rem / #f6f8fa / 6px,无边框)
-    'codeBlock.font':
+    'codeBlock.fontLatin':
       'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
     'codeBlock.size': '85%',
     'codeBlock.leading': '1.45',
@@ -100,7 +100,7 @@ const GITHUB: ThemeFile = {
   } satisfies ThemeTokens,
   /** dark 面 = github-markdown-css dark:整体替换 light 面,需带全部存续键 */
   dark: {
-    'root.font':
+    'root.fontLatin':
       '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"',
     'root.size': '16px',
     'root.leading': '1.5',
@@ -128,13 +128,13 @@ const GITHUB: ThemeFile = {
     'a.color': '#4493f8',
     'a.underline': 'always',
     'strong.weight': '600',
-    'inlineCode.font':
+    'inlineCode.fontLatin':
       'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
     'inlineCode.size': '85%',
     'inlineCode.bg': '#656c7633',
     'inlineCode.padding': '.2em .4em',
     'inlineCode.radius': '6px',
-    'codeBlock.font':
+    'codeBlock.fontLatin':
       'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
     'codeBlock.size': '85%',
     'codeBlock.leading': '1.45',

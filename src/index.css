@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 @import "@fontsource-variable/jetbrains-mono";
 @plugin "@tailwindcss/typography";
 
@@ -44,11 +43,11 @@
 @theme inline {
     --font-heading: var(--font-sans);
     /* 界面/编辑器字体可在设置里自定义(store-editor 注入 --font-ui-*),
-       这里是未设置时的默认值:Geist(界面) + HarmonyOS Sans SC(打包中文字体)。
+       这里是未设置时的默认值:系统 UI 字体(界面)+ 打包鸿蒙黑体兜中文。
        编辑器默认使用打包的 JetBrains Mono + HarmonyOS Sans SC,
        西文与汉字按字符自动分流。 */
     --font-editor-size: 13.5px;
-    --font-sans: var(--font-ui-sans, 'Geist Variable', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif);
+    --font-sans: var(--font-ui-sans, system-ui, 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif);
     --font-mono: var(--font-editor, 'JetBrains Mono', 'HarmonyOS Sans SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'PingFang SC', 'Microsoft YaHei', monospace);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -436,15 +435,44 @@ pre::-webkit-scrollbar,
   align-items: flex-start;
   gap: 0.5rem;
 }
+/* 任务项内容层是 li > div > p:theme-base 的 .themd-prose p 规则(p.marginBottom
+   令牌)会给每项追加段间距,而预览侧 checkbox 是 li 直接子没有这段——
+   两侧观感不一致。单任务项的间距统一吃 li.spacing 令牌(theme-base 的
+   li + li 规则对 live 侧同样生效),这里把 p 归零 */
+.live-editor-shell ul[data-type='taskList'] li > div > p {
+  margin-bottom: 0;
+}
 .live-editor-shell ul[data-type='taskList'] li > label {
   flex: none;
-  margin-top: 0.35em;
+  /* 勾选框光学对齐:label 内 checkbox 与文字中线的恒定偏差实测 0.8px,
+     margin-top 0.35em 是近似基线,减掉偏差量 */
+  margin-top: calc(0.35em - 0.05em);
   line-height: 1;
   user-select: none;
 }
 .live-editor-shell ul[data-type='taskList'] li > label input {
-  /* 勾选框吃 task.accent 令牌(此前用的 --t-strong 不是令牌,永远回落 primary) */
-  accent-color: var(--t-task-accent, oklch(0.55 0 0));
+  /* 自绘勾选框:与预览侧(theme-base.css task 段)同一套 task.* 令牌;
+     TipTap 的 input 无 task-list-item-checkbox 类,按结构匹配 */
+  appearance: none;
+  width: var(--t-task-size, 1em);
+  height: var(--t-task-size, 1em);
+  border: var(--t-task-border-width, 1px) solid var(--t-task-border-color, oklch(0.7 0 0));
+  border-radius: var(--t-task-radius, 3px);
+  margin: 0;
+  box-sizing: border-box;
+  cursor: pointer;
+  background-color: transparent;
+}
+.live-editor-shell ul[data-type='taskList'] li > label input:checked {
+  background-color: var(--t-task-accent, oklch(0.55 0 0));
+  border-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M3 8.5L6.5 12L13 4.5' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 78%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.live-editor-shell ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--t-task-done-color, inherit);
 }
 .live-editor-shell ul[data-type='taskList'] li[data-checked='false'] > div > p {
   color: inherit;

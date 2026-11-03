@@ -32,7 +32,78 @@ export function compileTokens(
     vars['--t-a-underline-line'] = 'none'
     vars['--t-a-hover-underline'] = 'underline'
   }
+  // 字体双令牌(latin/cjk)拼合成一条 font-family 栈:latin 在前 cjk 在后,
+  // 浏览器按字符自动分流。只设其一 = 另一端走 theme-base.css 回落族,
+  // 所以拼栈时用 CSS 端的回落族补齐空端,保证单设也即刻生效
+  for (const [base, varPrefix] of FONT_STACKS) {
+    const latin = active[`${base}.fontLatin` as TokenKey]
+    const cjk = active[`${base}.fontCjk` as TokenKey]
+    if (latin !== undefined || cjk !== undefined) {
+      vars[varPrefix] = joinFontStack(latin, cjk, FONT_FALLBACK_TAILS[base] ?? 'sans-serif')
+    }
+  }
   return vars
+}
+
+/** 双字体令牌的元素基名 → 编译产出的合并变量名(与 theme-base.css 消费点一致) */
+const FONT_STACKS: [string, string][] = [
+  ['root', '--t-root-font'],
+  ['heading', '--t-heading-font'],
+  ['h1', '--t-h1-font'],
+  ['h2', '--t-h2-font'],
+  ['h3', '--t-h3-font'],
+  ['h4', '--t-h4-font'],
+  ['h5', '--t-h5-font'],
+  ['h6', '--t-h6-font'],
+  ['strong', '--t-strong-font'],
+  ['em', '--t-em-font'],
+  ['del', '--t-del-font'],
+  ['a', '--t-a-font'],
+  ['inlineCode', '--t-inline-code-font'],
+  ['codeBlock', '--t-code-font'],
+]
+
+/** 各元素合并栈的尾部回落(与 theme-base.css 原回落尾一致,去 Geist/HarmonyOS 打包族) */
+const FONT_FALLBACK_TAILS: Record<string, string> = {
+  root: 'system-ui, sans-serif',
+  heading: 'inherit',
+  h1: 'var(--t-heading-font, inherit)',
+  h2: 'var(--t-heading-font, inherit)',
+  h3: 'var(--t-heading-font, inherit)',
+  h4: 'var(--t-heading-font, inherit)',
+  h5: 'var(--t-heading-font, inherit)',
+  h6: 'var(--t-heading-font, inherit)',
+  strong: 'inherit',
+  em: 'inherit',
+  del: 'inherit',
+  a: 'inherit',
+  inlineCode: "ui-monospace, 'Cascadia Mono', Consolas, monospace",
+  codeBlock: "ui-monospace, 'Cascadia Mono', Consolas, monospace",
+}
+
+/**
+ * 字体族名集合 → font-family 栈文本。
+ * latin 在前 cjk 在后,浏览器按字符自动分流(西文字体缺汉字时落到中文字体)。
+ * 族名去引号统一保存,含空格的重新加引号;跨 latin/cjk 的重复族去重。
+ */
+function joinFontStack(latin: string | undefined, cjk: string | undefined, fallbackTail: string): string {
+  const families: string[] = []
+  const pushAll = (v: string | undefined) => {
+    for (const f of (v ?? '').split(',')) {
+      const t = f.trim().replace(/^['"]|['"]$/g, '')
+      if (t && !families.includes(t)) families.push(t)
+    }
+  }
+  pushAll(latin)
+  pushAll(cjk)
+  for (const t of fallbackTail.split(',')) {
+    const clean = t.trim()
+    if (!clean) continue
+    const bare = clean.replace(/^['"]|['"]$/g, '')
+    if (!families.includes(bare) && !clean.startsWith('var(')) families.push(bare)
+    else if (clean.startsWith('var(')) families.push(clean)
+  }
+  return families.map((f) => (/\s/.test(f) && !f.startsWith('var(') ? `'${f}'` : f)).join(', ')
 }
 
 /** 导出用：令牌解析为 CSS 变量声明文本 */
