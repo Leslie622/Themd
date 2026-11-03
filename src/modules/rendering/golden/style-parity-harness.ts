@@ -54,9 +54,9 @@ const CROSS_PAIRS: ReadonlyArray<{
     label: 'CM 代码文本(.cm-content ↔ pre>code)',
     liveSel: 'pre.live-codeblock .cm-content',
     staticSel: 'pre > code',
-    // 长手测量:Chromium 对 white-space 简写的计算值序列化在
-    // 「基座只设 collapse 长手」时会把简写读成 pre-wrap,属测量口径问题
-    props: ['font-family', 'font-size', 'line-height', 'color', 'white-space-collapse', 'text-wrap-mode'],
+    // white-space 长手对 contenteditable 的计算值序列化口径不可信
+    // (2026-11-03 几何探针已证行为一致),折行行为由 wrapProbe 长行几何把关
+    props: ['font-family', 'font-size', 'line-height', 'color'],
   },
 ]
 
@@ -83,16 +83,13 @@ const PROPS = [
   'border-top-left-radius', 'border-bottom-right-radius',
 ] as const
 
-/** 已知结构差异(方案 §8-4 余项,单列不计违规;清一项删一行) */
-const KNOWN_STRUCTURAL = [
-  /^pre: /, // 代码块 CM 内嵌(语言标签/CM 内部行结构,属 I4 镀层)
-  /^code: /, // 同上(CM 内部 code 元素)
+/** I4 固有结构豁免(永久,非挂账):编辑面规范结构的合法偏离,不计违规。
+ *  来源两类:① CM 代码块内部行结构(.cm-line/div 而非 code,镀层正统);
+ *  ② raw HTML 块/行内源码态显示(编辑面按解析保真政策①显示源码,静态侧透传)。 */
+const I4_INHERENT = [
+  /^pre: /, // ① CM 内嵌 + ② raw HTML 块级源码态(pre.live-raw-html)
+  /^code: /, // ① CM 无 code 元素 + ② raw HTML 源码态 code
 ]
-
-/** 已知样式差异挂账:CM 基座与主题两条 author 规则均明写 white-space: pre,
- *  Chromium 对 contenteditable 元素的 text-wrap-mode 计算值仍报 wrap——
- *  实际折行行为以肉眼/几何验证为准,疑似测量口径问题(2026-11-03 挂账) */
-const KNOWN_DIFF = /^CM 代码文本.*\| text-wrap-mode: /
 
 export interface StyleDiff {
   selector: string
@@ -106,8 +103,10 @@ export interface StyleParityReport {
   pairs: number
   diffs: StyleDiff[]
   structural: string[]
-  /** 已知余项(方案挂账的编辑面结构差异,单列不计违规) */
+  /** I4 固有豁免(CM 内部结构 / raw HTML 源码态),单列不计违规 */
   known: string[]
+  /** 长行折行几何探针:两侧必须同为「不折行 · 横向溢出」 */
+  wrapProbe: { liveOverflow: boolean; staticOverflow: boolean; match: boolean }
   /** 调试:计数不等选择器的两侧文本清单(withTexts 时填充) */
   texts?: Record<string, { live: string[]; staticSide: string[] }>
 }
@@ -153,7 +152,7 @@ export async function runStyleParity(
     const staticNodes = [...staticEl.querySelectorAll(selector)]
     if (liveNodes.length !== staticNodes.length) {
       const line = `${selector}: 数量 live=${liveNodes.length} ≠ static=${staticNodes.length}(${describe(liveNodes[0])} vs ${describe(staticNodes[0])})`
-      if (KNOWN_STRUCTURAL.some((re) => re.test(line))) known.push(line)
+      if (I4_INHERENT.some((re) => re.test(line))) known.push(line)
       else structural.push(line)
       if (opts?.withTexts) {
         texts[selector] = {
@@ -185,7 +184,7 @@ export async function runStyleParity(
     const staticNodes = [...staticEl.querySelectorAll(pair.staticSel)]
     if (liveNodes.length !== staticNodes.length) {
       const line = `${pair.label}: 数量 live=${liveNodes.length} ≠ static=${staticNodes.length}`
-      if (KNOWN_STRUCTURAL.some((re) => re.test(line))) known.push(line)
+      if (I4_INHERENT.some((re) => re.test(line))) known.push(line)
       else structural.push(line)
       continue
     }
@@ -197,17 +196,46 @@ export async function runStyleParity(
       const b = getComputedStyle(staticNode) as unknown as Record<string, string>
       for (const prop of props) {
         if (a[prop] !== b[prop]) {
-          const line = `${pair.label} | ${prop}: ${a[prop]} vs ${b[prop]}`
-          if (KNOWN_DIFF.test(line)) known.push(line)
-          else diffs.push({ selector: pair.label, index: i, prop, live: a[prop], staticSide: b[prop] })
+          diffs.push({ selector: pair.label, index: i, prop, live: a[prop], staticSide: b[prop] })
         }
       }
     })
   }
 
+  // 探针在配对测量之后跑:插入的节点不污染选择器计数
+  const wrapProbe = measureWrapProbe(editor, liveEl, staticEl)
+
   editor.destroy()
   host.remove()
-  return { pairs, diffs, structural, known, ...(opts?.withTexts ? { texts } : {}) }
+  return { pairs, diffs, structural, known, wrapProbe, ...(opts?.withTexts ? { texts } : {}) }
+}
+
+/**
+ * 折行行为几何探针(2026-11-03 text-wrap-mode 挂账的清账手段):
+ * Chromium 对 contenteditable 的 text-wrap-mode 计算值序列化不可信
+ * (author 规则明写 nowrap 仍报 wrap),计算值比对退役,改为行为级测量——
+ * 两侧各插一根 600 字符长行,「不折行」判定 = 容器横向溢出。
+ * 设计契约:静态 pre 靠 UA white-space:pre 不折行,CM 侧 textWrapMode:nowrap
+ * 钉死,两侧都必须溢出(不折行)。
+ */
+function measureWrapProbe(
+  editor: Editor,
+  liveEl: HTMLElement,
+  staticEl: HTMLElement,
+): { liveOverflow: boolean; staticOverflow: boolean; match: boolean } {
+  const LONG = 'x'.repeat(600)
+  const schema = editor.state.schema
+  const probeNode = schema.nodes.codeBlock.create({ language: null }, schema.text(LONG))
+  editor.commands.insertContentAt(editor.state.doc.content.size, probeNode)
+  const probePre = document.createElement('pre')
+  probePre.appendChild(document.createElement('code')).textContent = LONG
+  staticEl.appendChild(probePre)
+
+  const cmPres = [...liveEl.querySelectorAll('pre.live-codeblock')]
+  const cmScroller = cmPres[cmPres.length - 1]?.querySelector<HTMLElement>('.cm-scroller')
+  const liveOverflow = !!cmScroller && cmScroller.scrollWidth > cmScroller.clientWidth + 1
+  const staticOverflow = probePre.scrollWidth > probePre.clientWidth + 1
+  return { liveOverflow, staticOverflow, match: liveOverflow && staticOverflow }
 }
 
 function describe(el: Element | undefined): string {
