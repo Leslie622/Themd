@@ -15,6 +15,7 @@ import {
   FolderOpen,
   Focus,
   Luggage,
+  MoreHorizontal,
   Pencil,
   Plus,
   RotateCcw,
@@ -24,8 +25,17 @@ import { toast } from 'sonner'
 import { platformServices } from '@/app/platform'
 
 import { Button } from '@/components/ui/button'
+import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
+import { Badge } from '@/components/ui/badge'
 import { ImageLightbox } from '@/components/ImageLightbox'
 import { collectLightboxState, type LightboxSlide } from '@/lib/image-lightbox-state'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,12 +46,21 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
-  ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
+import { GlowResizeHandle } from '@/components/GlowResizeHandle'
 import { Spinner } from '@/components/ui/spinner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -350,8 +369,9 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const handleCreate = () => {
     const id = crypto.randomUUID()
     upsertTheme({ version: 1, id, name: `我的主题 ${themes.length + 1}`, tokens: {} })
-    setEditId(id)
-    setActive(id)
+    // 只把新主题加进列表,不动预览/编辑对象——预览跟随「正在编辑」,
+    // 这里若切 editId,用户正在看的主题预览会被强行换成一张白纸(观感=被应用了);
+    // 激活同理(见 copy/import 的不变式)。编辑新主题 = 点它那一行。
   }
 
   // 中栏预览文稿:专注样例跟随左侧选中元素,全内容样例固定,导入模式用编辑副本
@@ -451,13 +471,13 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
       </header>
 
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        {/* 左栏：主题库 + 元素导航 */}
+        {/* 左栏：主题库 + 元素导航——两个分区各自独立滚动,主题库最多占 45% 高,
+            列表多时在自己分区内滚,不把元素导航挤出视野 */}
         <ResizablePanel defaultSize="22%" minSize="14%" maxSize="38%">
-          <div className="flex h-full flex-col overflow-y-auto">
+          <div className="flex h-full flex-col">
             <ThemeLibrary
               themes={listAllThemes({ themes, activeId })}
               activeId={activeId}
-              editingId={editing.id}
               onSelectPreview={(id) => {
                 setActive(id)
                 setEditId(id)
@@ -478,23 +498,25 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
               }}
               onCreate={handleCreate}
             />
-            <ElementNav
-              selected={selectedElement}
-              onSelect={setSelectedElement}
-              collapsed={collapsedGroups}
-              onToggleCollapse={(g) =>
-                setCollapsedGroups((s) => {
-                  const next = new Set(s)
-                  if (next.has(g)) next.delete(g)
-                  else next.add(g)
-                  return next
-                })
-              }
-            />
+            <AutoHideScrollArea className="min-h-0 flex-1">
+              <ElementNav
+                selected={selectedElement}
+                onSelect={setSelectedElement}
+                collapsed={collapsedGroups}
+                onToggleCollapse={(g) =>
+                  setCollapsedGroups((s) => {
+                    const next = new Set(s)
+                    if (next.has(g)) next.delete(g)
+                    else next.add(g)
+                    return next
+                  })
+                }
+              />
+            </AutoHideScrollArea>
           </div>
         </ResizablePanel>
 
-        <ResizableHandle withHandle />
+        <GlowResizeHandle withHandle />
 
         {/* 中栏：预览(专注样例 / 全内容样例 / 导入笔记) */}
         <ResizablePanel defaultSize="48%" minSize="25%">
@@ -548,7 +570,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     className="size-8 px-0 aria-pressed:text-primary"
                     aria-label="选择元素"
                   >
-                    <Crosshair className="size-4" />
+                    <Crosshair />
                   </Toggle>
                 </IconTip>
                 <IconTip label={`应用「${editing.name}」到笔记预览`}>
@@ -562,7 +584,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     }}
                     aria-label="应用此主题"
                   >
-                    <Check className="size-4" />
+                    <Check />
                   </Button>
                 </IconTip>
               </div>
@@ -604,7 +626,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
           </div>
         </ResizablePanel>
 
-        <ResizableHandle withHandle />
+        <GlowResizeHandle withHandle />
 
         {/* 右栏：属性面板(只放调样式的控件)。头/字段/附加 CSS 三段独立：
             头部固定,字段区自己滚,附加 CSS 钉底不随字段滚走 */}
@@ -617,7 +639,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                 <RotateCcw /> 恢复默认
               </Button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+            <AutoHideScrollArea className="min-h-0 flex-1" viewportProps={{ className: 'px-4 py-2' }}>
               {/* 分区渲染:相邻同 section 字段归入 shadcn FieldSet,FieldLegend 作分区标题
                   (蓝竖条是标题装饰;无 section 的元素整体包进一个无标题 FieldSet,平铺不变) */}
               {(() => {
@@ -633,7 +655,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                       <FieldLegend className="flex items-center gap-1.5 text-[13px] font-semibold leading-none text-foreground/80">
                         <span
                           className="h-3.5 w-1 shrink-0 rounded-full"
-                          style={{ background: 'oklch(0.62 0.16 255)' }}
+                          style={{ background: 'var(--chrome-accent)' }}
                         />
                         {g.section}
                       </FieldLegend>
@@ -664,7 +686,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                   </FieldSet>
                 ))
               })()}
-            </div>
+            </AutoHideScrollArea>
 
             {/* 附加自定义 CSS（高级模式，P4）——固定在字段区下方,不参与字段区滚动 */}
             <div className="shrink-0 border-t">
@@ -815,16 +837,18 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
       }
 
   return (
-    <div
+    <AutoHideScrollArea
       className={cn(
-        'h-full overflow-y-auto',
+        'h-full',
         inspect && 'cursor-crosshair [&_*:hover]:outline [&_*:hover]:outline-1 [&_*:hover]:outline-primary/50',
       )}
       // 画布背景铺在滚动容器(正文纸张之外);纸张颜色仍在 article 上
       // data 标记供实时预览直写定位(预览容器在 previewHostRef 内)
-      data-app-canvas=""
-      style={{ background: cssVars['--t-app-bg'] }}
-      onClick={handleClick}
+      viewportProps={{
+        'data-app-canvas': '',
+        style: { background: cssVars['--t-app-bg'] },
+        onClick: handleClick,
+      } as React.ComponentPropsWithoutRef<'div'>}
     >
       <article
         className="themd-prose mx-auto px-6 py-8"
@@ -838,15 +862,14 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
           onClose={() => setLightbox(null)}
         />
       )}
-    </div>
+    </AutoHideScrollArea>
   )
 })
 
-/** 左栏上部：主题库 */
+/** 左栏上部：主题库(标题带 + 独立滚动的列表;列表多时本分区最多占左栏 45% 高) */
 function ThemeLibrary(props: {
   themes: ThemeFile[]
   activeId: string
-  editingId: string
   onSelectPreview: (id: string) => void
   onSelectEdit: (id: string) => void
   onDuplicate: (id: string) => void
@@ -854,132 +877,204 @@ function ThemeLibrary(props: {
   onDelete: (id: string) => void
   onCreate: () => void
 }) {
-  const { themes, activeId, editingId } = props
+  const { themes, activeId } = props
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
 
+  const commitRename = () => {
+    if (renamingId && renameValue.trim()) props.onRename(renamingId, renameValue.trim())
+    setRenamingId(null)
+  }
+
   return (
-    <div className="border-b p-2">
-      <div className="flex items-center justify-between px-1 pb-1">
-        <span className="text-xs font-medium text-muted-foreground">主题库</span>
+    <div className="flex max-h-[45%] shrink-0 flex-col border-b">
+      {/* h-14 + text-sm font-semibold 与中/右栏头部同规格,三栏标题成一条线 */}
+      <div className="flex h-14 shrink-0 items-center justify-between px-4">
+        <h2 className="text-sm font-semibold">主题库</h2>
         <IconTip label="新建主题">
-          <Button variant="ghost" size="icon-xs" onClick={props.onCreate} aria-label="新建主题">
+          <Button variant="ghost" size="icon" className="size-8" onClick={props.onCreate} aria-label="新建主题">
             {/* Plus:应用内「新建」的统一语言(主页新建笔记同款) */}
             <Plus />
           </Button>
         </IconTip>
       </div>
-      <div className="space-y-0.5">
-        {themes.map((t) => (
-          <div
-            key={t.id}
-            className={cn(
-              'group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent',
-              editingId === t.id && 'bg-accent',
-            )}
-          >
-            <button
-              type="button"
-              className="min-w-0 flex-1 truncate text-left"
-              onClick={() => props.onSelectEdit(t.id)}
-              title="编辑此主题"
-            >
-              {t.name}
-              {t.builtin && <span className="ml-1.5 text-xs text-muted-foreground">内置</span>}
-              {activeId === t.id && (
-                <span className="ml-1.5 text-xs text-primary">● 使用中</span>
-              )}
-            </button>
-            {activeId !== t.id && (
-              <Button
-                variant="ghost"
-                size="xs"
-                className="shrink-0 font-normal"
-                onClick={() => props.onSelectPreview(t.id)}
-              >
-                使用
-              </Button>
-            )}
-            <ThemeItemMenu
-              canRename={!t.builtin}
-              canDelete={!t.builtin}
-              duplicating={false}
-              onDuplicate={() => props.onDuplicate(t.id)}
-              onRename={() => {
-                setRenamingId(t.id)
-                setRenameValue(t.name)
-              }}
-              onDelete={() => props.onDelete(t.id)}
-            />
-          </div>
-        ))}
-      </div>
-      {renamingId && (
-        <div className="mt-1 flex items-center gap-1 px-1">
+      {/* 列表独立滚动。收紧标题与列表间距的负边距必须加在滚动容器(Root)上,
+          不能加进视口内容——视口内负 margin 会把首行顶出可滚动范围被裁掉;
+          -mt-3 让列表容器贴到头部带下沿(加号按钮底边),首行文字间隙 ~14px */}
+      <AutoHideScrollArea className="-mt-3 min-h-0 flex-1">
+        <div className="space-y-0.5 px-2 pb-2 pt-0.5">
+        {themes.map((t) => {
+          const menuProps = {
+            canRename: !t.builtin,
+            canDelete: !t.builtin,
+            active: activeId === t.id,
+            onUse: () => props.onSelectPreview(t.id),
+            onRename: () => {
+              setRenamingId(t.id)
+              setRenameValue(t.name)
+            },
+            onDuplicate: () => props.onDuplicate(t.id),
+            onDelete: () => props.onDelete(t.id),
+          }
+          return (
+            <ContextMenu key={t.id}>
+              {/* 右键行 = 「⋯」菜单同一套操作(Sidebar 笔记/文件夹行同款范式);
+                  ContextMenuTrigger 只拦右键,行内左键(编辑/使用/⋯)不受影响;
+                  行不再有 hover/选中底色,正在编辑只靠「使用中」tag 表达 */}
+              <ContextMenuTrigger asChild>
+                <div className="group flex items-center gap-1 px-2 py-1.5 text-sm">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left"
+                    onClick={() => props.onSelectEdit(t.id)}
+                    title="编辑此主题"
+                  >
+                    {t.name}
+                  </button>
+                  {t.builtin && <TagBadge>内置</TagBadge>}
+                  {activeId === t.id && <TagBadge tone="primary">使用中</TagBadge>}
+                  {activeId !== t.id && (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      className="shrink-0 font-normal"
+                      onClick={() => props.onSelectPreview(t.id)}
+                    >
+                      使用
+                    </Button>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                        aria-label={`主题 ${t.name} 操作`}
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-40">
+                      <ThemeMenuItems parts={{ Item: DropdownMenuItem, Separator: DropdownMenuSeparator }} {...menuProps} />
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent className="min-w-40">
+                <ThemeMenuItems parts={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }} {...menuProps} />
+              </ContextMenuContent>
+            </ContextMenu>
+          )
+        })}
+        </div>
+      </AutoHideScrollArea>
+      {/* 重命名弹窗:侧栏改笔记名称同款。不用内联编辑——菜单关闭后 WebView2
+          会程序性抢焦,内联输入框聚焦不可靠;弹窗内 Radix Dialog 自带焦点管理 */}
+      <Dialog
+        open={renamingId !== null}
+        onOpenChange={(open) => !open && setRenamingId(null)}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>重命名主题</DialogTitle>
+            <DialogDescription>输入新的主题名称。</DialogDescription>
+          </DialogHeader>
           <Input
             value={renameValue}
-            autoFocus
-            className="h-7 text-xs"
+            aria-label="新名称"
             onChange={(e) => setRenameValue(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && renameValue.trim()) {
-                props.onRename(renamingId, renameValue.trim())
-                setRenamingId(null)
-              }
+              if (e.key === 'Enter') commitRename()
               if (e.key === 'Escape') setRenamingId(null)
             }}
           />
-          <Button
-            size="sm"
-            onClick={() => {
-              if (renameValue.trim()) props.onRename(renamingId, renameValue.trim())
-              setRenamingId(null)
-            }}
-          >
-            <Check />
-          </Button>
-        </div>
-      )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button onClick={commitRename}>确定</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-function ThemeItemMenu(props: {
+/** 主题行小标签(内置/使用中):shadcn Badge 收窄到列表行密度;
+    primary = 界面强调色 --chrome-accent 淡底着色(与分区标题竖条/分割线高光同一色彩来源),默认灰色 secondary(内置) */
+function TagBadge({ children, tone }: { children: React.ReactNode; tone?: 'primary' }) {
+  return (
+    <Badge
+      variant={tone === 'primary' ? 'ghost' : 'secondary'}
+      className="gap-0 rounded-sm px-1 text-[10px] font-normal leading-4"
+      style={
+        tone === 'primary'
+          ? {
+              height: '1.5rem',
+              paddingInline: '0.375rem',
+              fontSize: '0.75rem',
+              lineHeight: '1.5rem',
+              fontWeight: 500,
+              color: 'var(--chrome-accent)',
+              background: 'color-mix(in oklch, var(--chrome-accent) 12%, transparent)',
+              borderColor: 'color-mix(in oklch, var(--chrome-accent) 30%, transparent)',
+            }
+          : undefined
+      }
+    >
+      {children}
+    </Badge>
+  )
+}
+
+/** 主题操作项:「⋯」下拉与右键菜单共用一份(Sidebar 同款 parts 模式);
+    重命名/删除只对用户主题有意义:内置主题在 BUILTIN_THEMES 静态表里,
+    renameTheme/removeTheme 只改 state.themes,对内置点了也是静默无效 */
+function ThemeMenuItems({
+  parts,
+  canRename,
+  canDelete,
+  active,
+  onUse,
+  onRename,
+  onDuplicate,
+  onDelete,
+}: {
+  parts: { Item: React.ElementType; Separator: React.ElementType }
   canRename: boolean
   canDelete: boolean
-  duplicating: boolean
-  onDuplicate: () => void
+  active: boolean
+  onUse: () => void
   onRename: () => void
+  onDuplicate: () => void
   onDelete: () => void
 }) {
+  const { Item, Separator } = parts
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-6 shrink-0 opacity-0 group-hover:opacity-100" aria-label="主题操作">
-          <Pencil className="size-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {/* 重命名只对用户主题有意义:内置主题在 BUILTIN_THEMES 静态表里,
-            renameTheme 只改 state.themes,对内置点了也是静默无效 */}
-        {props.canRename && (
-          <DropdownMenuItem onClick={props.onRename}>
-            <Pencil /> 重命名
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem onClick={props.onDuplicate}>
-          <Copy /> 创建副本
-        </DropdownMenuItem>
-        {props.canDelete && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={props.onDelete}>
-              <Trash2 /> 删除
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      {!active && (
+        <Item onClick={onUse}>
+          <Check /> 使用此主题
+        </Item>
+      )}
+      {canRename && (
+        <Item onClick={onRename}>
+          <Pencil /> 重命名
+        </Item>
+      )}
+      <Item onClick={onDuplicate}>
+        <Copy /> 创建副本
+      </Item>
+      {canDelete && (
+        <>
+          <Separator />
+          <Item variant="destructive" onClick={onDelete}>
+            <Trash2 /> 删除
+          </Item>
+        </>
+      )}
+    </>
   )
 }
 
@@ -1018,7 +1113,7 @@ function ElementNav({
                     type="button"
                     onClick={() => onSelect(e.id)}
                     className={cn(
-                      'block w-full rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-accent',
+                      'list-row-wipe block w-full rounded-md px-2 py-1 text-left text-sm',
                       selected === e.id && 'bg-accent',
                     )}
                   >
