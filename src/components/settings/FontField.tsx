@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
+import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
 import { isFontAvailable } from './is-font-available'
 import { useLocalFontList } from './use-local-font-list'
 import { Check, ChevronDown, Copy, XIcon } from 'lucide-react'
@@ -93,7 +94,7 @@ function FontListDialog({
             )}
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        <AutoHideScrollArea className="min-h-0 flex-1" viewportProps={{ className: 'p-1.5' }}>
           {filtered.length === 0 ? (
             <p className="flex items-center justify-center gap-2 px-3 py-8 text-center text-xs text-muted-foreground">
               {(requesting || fonts.length === 0) && <Spinner className="size-3.5" />}
@@ -135,7 +136,7 @@ function FontListDialog({
               )
             })
           )}
-        </div>
+        </AutoHideScrollArea>
         <div className="border-t px-4 py-2.5">
           <Input
             value={value}

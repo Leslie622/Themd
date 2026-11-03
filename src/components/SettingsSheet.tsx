@@ -7,6 +7,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { listAllThemes, useThemeStore } from '@/store-themes'
 import { EDITOR_FONT_RANGE, useEditorPrefs } from '@/store-editor'
@@ -148,7 +149,8 @@ export function SettingsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       {/* 紧凑 header:vega 默认关闭按钮按 p-6+ 定位(top-4),放这里会偏出
           标题行,故 showCloseButton=false + 官方 SheetClose 放标题行内 */}
-      <SheetContent side="left" showCloseButton={false} className="w-80 gap-0 overflow-y-auto sm:max-w-80">
+      <SheetContent side="left" showCloseButton={false} className="w-80 gap-0 overflow-hidden sm:max-w-80">
+        <AutoHideScrollArea className="min-h-0 flex-1">
         {/* 抽屉盖住顶栏后窗口拖拽区随之失效,头部补一块拖拽区:
             属性必须落在 mousedown 的实际目标上,所以 header 与标题都带 */}
         <SheetHeader
@@ -362,6 +364,7 @@ export function SettingsSheet({
           </section>
         </div>
         )}
+        </AutoHideScrollArea>
       </SheetContent>
     </Sheet>
   )

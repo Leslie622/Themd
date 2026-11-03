@@ -29,6 +29,7 @@ import { assetsPathToAbsolute } from '@/lib/image-src'
 import { appEvents } from '@/shared/events/app-events'
 import { platformServices } from '@/app/platform'
 import { Button } from '@/components/ui/button'
+import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -371,20 +372,22 @@ export const LiveEditorPane = memo(function LiveEditorPane({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div
+        <AutoHideScrollArea
           ref={containerRef}
-          className="h-full overflow-y-auto"
-          style={{ ...cssVars, background: 'var(--t-app-bg, transparent)' }}
-          onContextMenu={handleContextMenu}
-          onMouseMove={onMouseMove}
-          onMouseLeave={(e) => {
-            // 指针移到浮层按钮上也会让容器收到 mouseleave(按钮非容器子元素);
-            // 等待区内不隐藏,与 CM 版 EditorPane 同款处理
-            if (!inHoverKeep(e.clientX, e.clientY)) hideHover()
+          className="h-full"
+          viewportProps={{
+            style: { ...cssVars, background: 'var(--t-app-bg, transparent)' },
+            onContextMenu: handleContextMenu,
+            onMouseMove: onMouseMove,
+            onMouseLeave: (e) => {
+              // 指针移到浮层按钮上也会让容器收到 mouseleave(按钮非容器子元素);
+              // 等待区内不隐藏,与 CM 版 EditorPane 同款处理
+              if (!inHoverKeep(e.clientX, e.clientY)) hideHover()
+            },
           }}
         >
           <EditorContent editor={editor} className="live-editor-shell" />
-        </div>
+        </AutoHideScrollArea>
       </ContextMenuTrigger>
       <ContextMenuContent className="min-w-56">
         {/* 剪贴板图标网格(Typora 同款) */}

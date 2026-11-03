@@ -62,6 +62,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
 import {
   Tooltip,
   TooltipContent,
@@ -328,7 +329,7 @@ export function Sidebar() {
         >
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <div className="group/row flex items-center rounded-lg transition-colors hover:bg-sidebar-accent">
+              <div className="group/row list-row-wipe flex items-center rounded-lg">
                 <CollapsibleTrigger className="group/chev flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium">
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
                   <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
@@ -421,7 +422,8 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col space-y-0.5 overflow-y-auto p-2">
+      <AutoHideScrollArea className="flex-1">
+        <div className="flex h-full flex-col space-y-0.5 p-2">
         {/* 无工作区:引导打开目录(folder-first 的起点) */}
         {!workspaceRoot && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
@@ -496,7 +498,8 @@ export function Sidebar() {
             </ContextMenuContent>
           </ContextMenu>
         )}
-      </nav>
+        </div>
+      </AutoHideScrollArea>
 
       {/* 工作区胶囊固定侧栏底部:目录是全局上下文,不是头部操作;「新建」在其左侧 */}
       <div className="flex items-center gap-1 p-2">
@@ -889,7 +892,7 @@ function NoteItem({
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            'group flex w-full items-center gap-2 rounded-lg pr-1 transition-colors hover:bg-sidebar-accent',
+            'group list-row-wipe flex w-full items-center gap-2 rounded-lg pr-1',
             active ? 'bg-sidebar-accent' : '',
           )}
         >

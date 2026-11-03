@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { CmScrollbarOverlay } from '@/components/cm-scrollbar-overlay'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -550,6 +551,28 @@ export function EditorPane({
     }
   }, [bindScroller])
 
+  // 自绘浮动滚动条:同样要等 .cm-scroller 出现(与同步滚动绑定同款时序),
+  // 原生滚动条已隐藏,显隐与观感走 AutoHideScrollArea 同一套 DOM/CSS
+  const [cmScroller, setCmScroller] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    const tryBind = () => {
+      const sc = root.querySelector<HTMLElement>('.cm-scroller')
+      if (sc) {
+        setCmScroller(sc)
+        return true
+      }
+      return false
+    }
+    if (tryBind()) return
+    const mo = new MutationObserver(() => {
+      if (tryBind()) mo.disconnect()
+    })
+    mo.observe(root, { childList: true, subtree: true })
+    return () => mo.disconnect()
+  }, [])
+
   // 编辑器区域右键走自定义菜单(shadcn ContextMenu),压掉 WebView2 原生菜单;
   // trigger 自带 select-none,这里用 select-text 覆盖回来,保证编辑器可选中
 
@@ -597,7 +620,7 @@ export function EditorPane({
         <div
           ref={rootRef}
           onContextMenu={() => setMenuTick((t) => t + 1)}
-          className="h-full overflow-hidden text-sm select-text"
+          className="relative h-full overflow-hidden text-sm select-text"
         >
           <CodeMirror
         value={value}
@@ -641,6 +664,8 @@ export function EditorPane({
           imageChipExt,
         ]}
       />
+      {/* 自绘浮动滚动条(原生条已隐藏),观感与显隐和 Radix 区域同一套 */}
+      <CmScrollbarOverlay scroller={cmScroller} />
       <input
         ref={fileInputRef}
         type="file"

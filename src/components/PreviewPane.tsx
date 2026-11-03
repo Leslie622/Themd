@@ -3,6 +3,7 @@ import 'highlight.js/styles/github.css'
 import { ListTree, PanelRightClose } from 'lucide-react'
 
 import { ImageLightbox } from '@/components/ImageLightbox'
+import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
 import { collectLightboxState, type LightboxSlide } from '@/lib/image-lightbox-state'
 import { renderStaticHtml } from '@/modules/rendering/static-html'
 import { buildOutline, type OutlineItem } from '@/modules/rendering/outline'
@@ -14,7 +15,8 @@ import { useExtraCss } from '@/components/theme/useExtraCss'
 import { platformServices } from '@/app/platform'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { GlowResizeHandle } from '@/components/GlowResizeHandle'
 import { cn } from '@/lib/utils'
 
 /**
@@ -175,13 +177,15 @@ export const PreviewPane = memo(function PreviewPane({
           defaultSize={outlineEnabled && outline.length > 0 ? '60' : '100'}
           minSize="40"
         >
-          <div
-            ref={setScrollEl}
-            className="h-full min-w-0 overflow-y-auto"
+          <AutoHideScrollArea
+            viewportRef={setScrollEl}
+            className="h-full min-w-0"
             // 画布背景铺在滚动容器(正文纸张之外);纸张颜色仍在 article 上
-            style={{ background: cssVars['--t-app-bg'] }}
-            onClick={handleClick}
-            onScroll={handleScroll}
+            viewportProps={{
+              style: { background: cssVars['--t-app-bg'] },
+              onClick: handleClick,
+              onScroll: handleScroll,
+            }}
           >
             <article
               className="themd-prose mx-auto px-6 py-8"
@@ -193,11 +197,11 @@ export const PreviewPane = memo(function PreviewPane({
               initialIndex={lightbox?.index}
               onClose={() => setLightbox(null)}
             />
-          </div>
+          </AutoHideScrollArea>
         </ResizablePanel>
         {outlineEnabled && outline.length > 0 && (
           <>
-            <ResizableHandle withHandle />
+            <GlowResizeHandle withHandle />
             <ResizablePanel id="outline-panel" defaultSize="40" minSize="12" maxSize="45">
               <OutlinePanel
                 items={outline}
@@ -252,7 +256,8 @@ function OutlinePanel({
           <PanelRightClose />
         </Button>
       </div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+      <AutoHideScrollArea className="min-h-0 flex-1" viewportProps={{ className: 'px-2 pb-3' }}>
+        <div className="space-y-0.5">
         {items.map((item, i) => (
           <button
             key={`${item.id}-${i}`}
@@ -270,7 +275,8 @@ function OutlinePanel({
             {item.text}
           </button>
         ))}
-      </nav>
+        </div>
+      </AutoHideScrollArea>
     </aside>
   )
 }

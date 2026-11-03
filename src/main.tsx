@@ -4,6 +4,11 @@ import './index.css'
 import './styles/theme-base.css'
 // 暗色模式 class 同步(store 副作用):主窗口与托盘菜单窗口都跟随同一开关
 import '@/store-appearance'
+// 原生滚动条统一「滚动浮现 / 静止淡出」:CM 编辑器、弹层菜单、代码块等
+// 所有 ::-webkit-scrollbar 容器与 AutoHideScrollArea 的 Radix 浮动滚动条同一节奏
+import { installGlobalScrollbarFade } from '@/components/scroll-visibility'
+
+installGlobalScrollbarFade()
 
 // 全局压掉 WebView2/浏览器的原生右键菜单(返回/刷新/打印/检查等):
 // 编辑器区域由 shadcn ContextMenu 接管,其余区域不需要原生菜单;

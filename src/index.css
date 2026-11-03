@@ -209,18 +209,25 @@
 }
 .cm-scroller {
   overflow-y: auto;
+  /* 原生滚动条整体退场:编辑器的浮动滚动条由 CmScrollbarOverlay 自绘
+     (DOM 方案,与 AutoHideScrollArea 同一套显隐/配色),两套机制并存会双条。
+     设标准属性后 ::-webkit-scrollbar 伪元素对本元素整套失效——正是想要的 */
+  scrollbar-width: none;
 }
 
 /* ---------- 全局滚动条 ----------
- * 细轨圆角、muted 配色、hover 加深,暗色模式自动跟随(--border/--muted-foreground 语义令牌)。
+ * 细轨圆角、muted 配色,暗色模式自动跟随(--border/--muted-foreground 语义令牌)。
  * 只用 ::-webkit-scrollbar 伪元素,不设标准 scrollbar-width/color——
  * Chromium 121+ 两套互斥:一旦设置标准属性,伪元素整套失效,滚动条回退
  * 系统默认样式(带步进箭头)。桌面端固定 WebView2,无 Firefox 场景。
+ * 显隐与 AutoHideScrollArea 同一节奏(scroll-visibility.ts):thumb 默认透明
+ * 只留轨位(布局占位不变不抖动),滚动期间 .osb-active 点亮,静止 900ms 淡出;
+ * hover 不点亮。thumb 边距 1px,点亮后可见宽度 6px,对齐 Radix 浮动 thumb。
  */
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 /* 隐藏滚动条两端的上下/左右步进箭头(Chromium 默认渲染),只留轨道+滑块 */
 ::-webkit-scrollbar-button {
@@ -232,24 +239,51 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+  background: transparent;
   border-radius: 999px;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
+.osb-active::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--muted-foreground) 25%, transparent);
+  background-clip: padding-box;
+}
+.osb-active::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-/* 代码区内更窄的滚动条(横向滚动频繁,少占高度) */
-pre::-webkit-scrollbar,
-.cm-scroller::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* ---------- AutoHideScrollArea(主流 overlay 滚动条) ----------
+ * shadcn ScrollArea 的浮动 thumb 本就不占布局,Radix 自会隐藏原生滚动条;
+ * 这里补三件事:静止淡出的显隐时序(.osb-active 由包装组件维护)、
+ * thumb 配色对齐全局 ::-webkit-scrollbar 的 muted 双档、
+ * 内容层还原块级流(Radix 默认包 display:table 为横向测量服务,
+ * 本包装只做纵向滚动,还原后 h-full/flex 内容布局照常生效;
+ * display 需 !important 压过 Radix 的内联样式)。
+ */
+[data-autohide] [data-slot='scroll-area-scrollbar'] {
+  opacity: 0;
+  /* 空闲时事件穿透:透明滚动条不得挡住右缘内容的点击;悬停穿透到内容,
+     也不会误保持可见——「不滚动就不出现」 */
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+[data-autohide].osb-active [data-slot='scroll-area-scrollbar'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+[data-autohide] [data-slot='scroll-area-thumb'] {
+  background: color-mix(in oklch, var(--muted-foreground) 25%, transparent);
+}
+[data-autohide] [data-slot='scroll-area-scrollbar']:hover [data-slot='scroll-area-thumb'] {
+  background: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
+}
+[data-autohide] > [data-slot='scroll-area-viewport'] > div {
+  display: block !important;
+  height: 100%;
 }
 
 /* ---------- 打印 / 导出 PDF ----------
