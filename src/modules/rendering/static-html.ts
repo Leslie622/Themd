@@ -143,6 +143,13 @@ function renderBlock(node: PMNode): string {
     case 'rawHtmlBlock':
       // 解析保真政策①:schema 不认识的块级 HTML 原样透传
       return String(node.attrs.html ?? '')
+    case 'frontMatter':
+      // 元数据不是正文:静态面隐藏(编辑面保留折叠状态条;契约 §5 已知边界,
+      // md-it oracle 无此概念,金样不覆盖)
+      return ''
+    case 'text':
+      // 防御位:块级位置漏进来的内联文本按行内规则渲染,预览永不崩
+      return renderText(node)
     default: {
       const spec = (node.type.spec as NodeSpec).toDOM?.(node)
       if (!spec || typeof spec !== 'object' || !Array.isArray(spec)) {
