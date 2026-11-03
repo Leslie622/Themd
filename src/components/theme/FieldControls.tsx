@@ -920,7 +920,7 @@ function BackgroundInput({
         title="插入背景图片"
         aria-label="插入背景图片"
       >
-        <ImagePlus className="size-4" />
+        <ImagePlus className="size-[18px]" />
       </Button>
     </div>
   )

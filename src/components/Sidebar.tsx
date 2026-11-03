@@ -404,7 +404,7 @@ export function Sidebar() {
                   onClick={() => appEvents.emit('collapseSidebar')}
                   aria-label="收起侧栏"
                 >
-                  <PanelLeftClose />
+                  <PanelLeftClose className="size-[18px]" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>收起侧栏</TooltipContent>
@@ -513,7 +513,7 @@ export function Sidebar() {
               onClick={handleCreateNote}
               aria-label="新建笔记"
             >
-              <Plus />
+              <Plus className="size-[18px]" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>在工作区根新建笔记</TooltipContent>

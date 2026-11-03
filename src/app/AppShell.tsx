@@ -89,7 +89,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   onClick={onSidebarExpand}
                   aria-label="展开侧栏"
                 >
-                  <PanelLeft />
+                  <PanelLeft className="size-[18px]" />
                 </Button>
               </IconTip>
             )}
@@ -163,7 +163,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                       className="relative h-8 w-8 justify-center border-none bg-transparent px-0 shadow-none hover:bg-accent [&>svg:last-child]:hidden dark:bg-transparent"
                       aria-label={noteThemeLabel}
                     >
-                      <Palette className="size-4 shrink-0" />
+                      <Palette className="size-[18px] shrink-0" />
                       {active.themeId && (
                         <span
                           aria-hidden
@@ -210,7 +210,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     onClick={() => appEvents.emit('insertImage')}
                     aria-label="插入图片"
                   >
-                    <ImagePlus />
+                    <ImagePlus className="size-[18px]" />
                   </Button>
                 </IconTip>
                 {/* 另存为是「文件落到哪」的操作,不属于导出格式,独立成按钮:
@@ -224,7 +224,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     onClick={onNoteSaveAs}
                     aria-label="另存为"
                   >
-                    <Save />
+                    <Save className="size-[18px]" />
                   </Button>
                 </IconTip>
                 {/* 导出:三种格式进下拉;FileSymlink 箭头向右穿出文件,
@@ -241,7 +241,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                         className="size-8"
                         aria-label="导出笔记"
                       >
-                        <FileSymlink />
+                        <FileSymlink className="size-[18px]" />
                       </Button>
                     </DropdownMenuTrigger>
                   </IconTip>
@@ -285,7 +285,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     onClick={() => setStudioOpen(true)}
                     aria-label="打开主题工厂"
                   >
-                    <Paintbrush />
+                    <Paintbrush className="size-[18px]" />
                   </Button>
                 </IconTip>
                 <IconTip label="设置:外观、编辑器与字体偏好">
@@ -296,7 +296,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     onClick={() => setSettingsOpen(true)}
                     aria-label="打开设置"
                   >
-                    <Settings />
+                    <Settings className="size-[18px]" />
                   </Button>
                 </IconTip>
               </>

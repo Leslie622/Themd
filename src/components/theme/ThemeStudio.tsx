@@ -415,7 +415,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
               aria-label="导入"
             >
               {/* FileInput:箭头指入文件=收进来,与主页/侧栏导入语言一致 */}
-              <FileInput />
+              <FileInput className="size-[18px]" />
             </Button>
           </IconTip>
           <input
@@ -436,7 +436,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="size-8" aria-label="导出">
                   {/* FileSymlink:主页导出笔记同款(箭头穿出文件),与 FileInput 构成一对 */}
-                  <FileSymlink />
+                  <FileSymlink className="size-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
             </IconTip>
@@ -570,7 +570,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     className="size-8 px-0 aria-pressed:text-primary"
                     aria-label="选择元素"
                   >
-                    <Crosshair />
+                    <Crosshair className="size-[18px]" />
                   </Toggle>
                 </IconTip>
                 <IconTip label={`应用「${editing.name}」到笔记预览`}>
@@ -584,7 +584,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     }}
                     aria-label="应用此主题"
                   >
-                    <Check />
+                    <Check className="size-[18px]" />
                   </Button>
                 </IconTip>
               </div>
@@ -894,7 +894,7 @@ function ThemeLibrary(props: {
         <IconTip label="新建主题">
           <Button variant="ghost" size="icon" className="size-8" onClick={props.onCreate} aria-label="新建主题">
             {/* Plus:应用内「新建」的统一语言(主页新建笔记同款) */}
-            <Plus />
+            <Plus className="size-[18px]" />
           </Button>
         </IconTip>
       </div>
