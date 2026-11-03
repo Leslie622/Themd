@@ -16,11 +16,7 @@ fn main() {
         // 第二实例的 argv,需要时可用于文件关联打开;这里只做聚焦唤起。
         // 插件必须第一个注册,晚于其他插件时锁的行为不保证
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
-                let _ = win.unminimize();
-                let _ = win.set_focus();
-            }
+            tray::summon_main(app);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -49,7 +45,11 @@ fn main() {
             commands::files::delete_directory,
             commands::files::unique_destination,
             commands::watch::watch_workspace,
-            commands::pdf::export_pdf
+            commands::pdf::export_pdf,
+            commands::tray::position_tray_menu,
+            commands::tray::resize_tray_menu,
+            commands::tray::close_tray_menu,
+            commands::tray::tray_menu_action
         ])
         .setup(|app| {
             tray::build_tray(app)?;
