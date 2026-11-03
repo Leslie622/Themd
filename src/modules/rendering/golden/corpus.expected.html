@@ -1,0 +1,178 @@
+<h1 id="金样语料全元素覆盖">金样语料:全元素覆盖</h1>
+<p>本文是渲染结构契约(docs/渲染结构契约.md)的金样语料。<br>
+期望 HTML 由当前 markdown-it 管线冻结生成(corpus.expected.html),任何渲染器(含 TipTap generateHTML)必须逐字节复现它。</p>
+<h2 id="标题与锚点">标题与锚点</h2>
+<h1 id="一级标题">一级标题</h1>
+<h2 id="二级标题">二级标题</h2>
+<h3 id="三级标题">三级标题</h3>
+<h4 id="四级标题">四级标题</h4>
+<h5 id="五级标题">五级标题</h5>
+<h6 id="六级标题">六级标题</h6>
+<h1 id="setext-一级标题">Setext 一级标题</h1>
+<h2 id="中英混排标题-mixed-中文-heading">中英混排标题 Mixed 中文 Heading</h2>
+<h2 id="段落与行内元素">段落与行内元素</h2>
+<p>普通段落:中英文混排 Themd 是样式自设的本地 Markdown 笔记本,支持 <strong>加粗</strong>、<em>倾斜</em>、<em><strong>粗斜</strong></em>、<s>删除线</s>、<code>行内代码</code> 和 <a href="https://example.com/docs?a=1&amp;b=2">链接</a>。</p>
+<p>带标题的链接:<a href="https://example.com/titled" title="链接标题">带标题链接</a>。</p>
+<p>自动链接:<a href="https://example.com/auto">https://example.com/auto</a> 会因 linkify 变成超链接;尖括号形式 <a href="https://example.com/angle">https://example.com/angle</a>。</p>
+<p>软换行(breaks):这一行末尾敲了回车<br>
+下一行应当出现 br 而不是空格。</p>
+<p>硬换行(行尾反斜杠)<br>
+第二行硬换行。</p>
+<p>排版替换(typographer):引号 “straight” 与 ‘single’、省略号 … 、连字符 – 长破折 — 与版权 © 2026 Themd。</p>
+<p>转义与实体:*不是斜体*、``不是代码``、字面实体 &amp; &lt; &gt; ©。</p>
+<h2 id="图片">图片</h2>
+<p>远程图片带 alt:<img src="https://example.com/images/logo.png" alt="Themd 标识" loading="lazy" decoding="async"></p>
+<p>带标题图片:<img src="https://example.com/titled.png" alt="带标题" title="标题文字" loading="lazy" decoding="async"></p>
+<p>Data URI 截图:<img src="data:image/png;base64,iVBORw0KGgo=" alt="截图" loading="lazy" decoding="async"></p>
+<p>空 alt 图片:<img src="https://example.com/bare.png" alt="" loading="lazy" decoding="async"></p>
+<h2 id="列表">列表</h2>
+<h3 id="紧凑列表无空行">紧凑列表(无空行)</h3>
+<ul>
+<li>第一项</li>
+<li>第二项</li>
+<li>第三项</li>
+</ul>
+<ol>
+<li>有序一</li>
+<li>有序二</li>
+<li>有序三</li>
+</ol>
+<p>中间隔一个段落,下一条才是新列表(同类型列表间空行不会断开):</p>
+<ol start="5">
+<li>start 属性</li>
+<li>从第五项开始</li>
+</ol>
+<h3 id="宽松列表项间空行">宽松列表(项间空行)</h3>
+<ul>
+<li>
+<p>宽松项一</p>
+</li>
+<li>
+<p>宽松项二带第二段</p>
+<p>段落二</p>
+</li>
+</ul>
+<h3 id="嵌套列表">嵌套列表</h3>
+<ul>
+<li>外层一
+<ul>
+<li>内层一
+<ul>
+<li>三层</li>
+</ul>
+</li>
+<li>内层二</li>
+</ul>
+</li>
+<li>外层二
+<ol>
+<li>有序嵌套</li>
+<li>第二条</li>
+</ol>
+</li>
+</ul>
+<h3 id="任务列表">任务列表</h3>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="" type="checkbox"> 未完成任务</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" checked="" disabled="" type="checkbox"> 已完成任务</li>
+</ul>
+<h2 id="引用">引用</h2>
+<blockquote>
+<p>普通引用第一段。<br>
+同段第二行。</p>
+</blockquote>
+<blockquote>
+<p>引用内嵌 <strong>加粗</strong> 与 <code>code</code>。</p>
+</blockquote>
+<blockquote>
+<blockquote>
+<p>嵌套引用外层<br>
+内层引用。</p>
+</blockquote>
+</blockquote>
+<h2 id="gfm-提示块">GFM 提示块</h2>
+<div class="themd-callout themd-callout-note" data-alert="note">
+<p class="themd-callout-title"><svg class="themd-callout-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>Note</p><p>注意事项正文,标记独占首段。</p>
+</div>
+<div class="themd-callout themd-callout-tip" data-alert="tip">
+<p class="themd-callout-title"><svg class="themd-callout-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.75.75 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg>Tip</p><p>小技巧。</p>
+</div>
+<div class="themd-callout themd-callout-important" data-alert="important">
+<p class="themd-callout-title"><svg class="themd-callout-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>Important</p><p>重要信息。</p>
+</div>
+<div class="themd-callout themd-callout-warning" data-alert="warning">
+<p class="themd-callout-title"><svg class="themd-callout-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.083 15H1.917a1.75 1.75 0 0 1-1.542-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>Warning</p><p>警告信息。</p>
+</div>
+<div class="themd-callout themd-callout-caution" data-alert="caution">
+<p class="themd-callout-title"><svg class="themd-callout-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .389.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25a.749.749 0 0 1-.53.22H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.389.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>Caution</p><p>危险操作。</p>
+</div>
+<blockquote>
+<p>[!TIP] 同段还有正文的情况<br>
+这一段正文与标记同段。</p>
+</blockquote>
+<blockquote>
+<p>[!UNKNOWN]<br>
+不识别的类型降级为普通引用。</p>
+</blockquote>
+<h2 id="代码">代码</h2>
+<p>行内代码:<code>npm run dev</code> 与 <code>cargo check --manifest-path src-tauri/Cargo.toml</code>。</p>
+<pre><code class="language-ts"><span class="hljs-keyword">const</span> <span class="hljs-attr">value</span>: <span class="hljs-built_in">number</span> = <span class="hljs-number">1</span>
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">greet</span>(<span class="hljs-params"><span class="hljs-attr">name</span>: <span class="hljs-built_in">string</span></span>): <span class="hljs-built_in">string</span> {
+  <span class="hljs-keyword">return</span> <span class="hljs-string">`Hello, <span class="hljs-subst">${name}</span>`</span>
+}
+</code></pre>
+<p>无语言代码块:</p>
+<pre><code>plain text
+  keep   spacing
+</code></pre>
+<div class="themd-mermaid" data-src="graph%20TD%0A%20%20A%5B%E5%BC%80%E5%A7%8B%5D%20--%3E%20B%7B%E6%9D%A1%E4%BB%B6%7D%0A%20%20B%20--%3E%7C%E6%98%AF%7C%20C%5B%E7%BB%93%E6%9D%9F%5D%0A%20%20B%20--%3E%7C%E5%90%A6%7C%20A%0A">graph TD
+  A[开始] --&gt; B{条件}
+  B --&gt;|是| C[结束]
+  B --&gt;|否| A
+</div><h2 id="数学">数学</h2>
+<p>行内公式:质能方程 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8141em;"></span><span class="mord mathnormal">m</span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 出自相对论。</p>
+<p>块级公式:</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msubsup><mo>∫</mo><mrow><mo>−</mo><mi mathvariant="normal">∞</mi></mrow><mi mathvariant="normal">∞</mi></msubsup><msup><mi>e</mi><mrow><mo>−</mo><msup><mi>x</mi><mn>2</mn></msup></mrow></msup><mtext> </mtext><mi>d</mi><mi>x</mi><mo>=</mo><msqrt><mi>π</mi></msqrt></mrow><annotation encoding="application/x-tex">\int_{-\infty}^{\infty} e^{-x^2} \, dx = \sqrt{\pi}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:2.3846em;vertical-align:-0.9703em;"></span><span class="mop"><span class="mop op-symbol large-op" style="margin-right:0.4445em;position:relative;top:-0.0011em;">∫</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.4143em;"><span style="top:-1.7881em;margin-left:-0.4445em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">∞</span></span></span></span><span style="top:-3.8129em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">∞</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9703em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.0369em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-2.931em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="katex-sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1.04em;vertical-align:-0.1908em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8492em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal" style="margin-right:0.0359em;">π</span></span></span><span style="top:-2.8092em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1908em;"><span></span></span></span></span></span></span></span></span></span></p>
+<h2 id="表格">表格</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">左对齐</th>
+<th style="text-align:center">居中</th>
+<th style="text-align:right">右对齐</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">a1</td>
+<td style="text-align:center">b1</td>
+<td style="text-align:right">c1</td>
+</tr>
+<tr>
+<td style="text-align:left">a2</td>
+<td style="text-align:center">b2</td>
+<td style="text-align:right">c2</td>
+</tr>
+</tbody>
+</table>
+<h2 id="分隔线">分隔线</h2>
+<hr>
+<h2 id="内嵌-html-与实体htmltrue">内嵌 HTML 与实体(html:true)</h2>
+<div class="custom-block" data-kind="demo">
+  <p>块级内嵌 HTML 原样透传。</p>
+</div>
+<!-- HTML 注释透传 -->
+<p>行内内嵌:一段里带 <span style="color: red">红色 span</span>、<u>下划线 u 标签</u> 和实体 &amp; &lt; &gt; ©。</p>
+<p>脚注语法边界(管线无脚注插件):行内 见<a href="%E8%84%9A%E6%B3%A8%E6%AD%A3%E6%96%87%E4%BC%9A%E8%A2%AB%E5%BD%93%E4%BD%9C%E9%93%BE%E6%8E%A5%E7%9B%AE%E6%A0%87(%E5%B7%B2%E7%9F%A5%E8%BE%B9%E7%95%8C:%E8%84%9A%E6%B3%A8%E5%BE%85%E7%AE%A1%E7%BA%BF%E5%BC%95%E5%85%A5%E6%8F%92%E4%BB%B6%E5%90%8E%E5%86%8D%E4%BF%AE%E8%AE%A2%E5%A5%91%E7%BA%A6)%E3%80%82">^1</a> 按 CommonMark 链接引用解析为引用链接,文末定义行被消费为链接定义。</p>
