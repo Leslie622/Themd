@@ -122,6 +122,8 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+    /* 界面强调色(黑白 shadcn 基调下的唯一彩色):分割线高光、主题工厂分区标题蓝竖条共用 */
+    --chrome-accent: oklch(0.62 0.12 255);
 }
 
 .dark {
@@ -156,6 +158,7 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+    --chrome-accent: oklch(0.78 0.11 255);
 }
 
 @layer base {
@@ -408,6 +411,34 @@ pre::-webkit-scrollbar,
 [data-slot="input"][aria-invalid="true"],
 [data-slot="textarea"][aria-invalid="true"] {
   border-color: var(--destructive);
+}
+
+/* ── 分割线指针跟随渐变高光(GlowResizeHandle) ────────────────────────
+ * 1px 基线之上叠 ::before 高光层(::after 已被拖拽热区占用):2px 核心 +
+ * 3px 宽柔晕两层渐变,纵向位置跟随 --glow-y,整体透明度随指针离线的
+ * 水平距离衰减(--glow-strength),两个变量由组件 pointermove 直写 DOM。 */
+.divider-glow::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: var(--glow-strength, 0);
+  transition: opacity 0.18s linear;
+  background:
+    linear-gradient(to bottom, transparent, var(--chrome-accent) 50%, transparent)
+      center calc(var(--glow-y, -9999px) - 70px) / 2px 140px no-repeat,
+    linear-gradient(to bottom, transparent, color-mix(in oklch, var(--chrome-accent) 45%, transparent) 50%, transparent)
+      center calc(var(--glow-y, -9999px) - 80px) / 100% 160px no-repeat;
+}
+/* 把手默认灰,光带纵向扫到它时(--glow-knob 非零)才混入强调色。
+   混色必须用 oklab:oklch 下蓝(色相 255)与灰(色相 0)插值会绕经粉/红区。
+   过渡与光带同档:变量是逐帧直写的,离开时一步归零,没过渡会闪断 */
+.divider-glow > div {
+  background: color-mix(in oklab, var(--chrome-accent) calc(var(--glow-knob, 0) * 100%), var(--border));
+  transition: background-color 0.18s linear;
 }
 
 /* ── 实时预览编辑器(TipTap/ProseMirror,P1 骨架) ──────────────────────

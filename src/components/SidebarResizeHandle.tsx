@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react'
+import { useDividerGlow } from '@/components/useDividerGlow'
 
 interface SidebarResizeHandleProps {
   /** 侧栏容器节点:拖拽期间直接改它的 style.width,完全绕开 React 渲染 */
@@ -40,7 +41,7 @@ function horizontalResizeCursor(): string {
  */
 export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: SidebarResizeHandleProps) {
   const frame = useRef<number | null>(null)
-  const elementRef = useRef<HTMLDivElement | null>(null)
+  const elementRef = useDividerGlow()
 
   const setState = (state: SeparatorState) => {
     if (elementRef.current) elementRef.current.dataset.separator = state
@@ -140,7 +141,7 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
       onKeyDown={handleKeyDown}
       /* 类名与 components/ui/resizable.tsx 的 Separator 逐字一致(省略库托管的水平变体),
          仅补 shrink-0——shadcn 形态下由库注入 */
-      className="bg-border focus-visible:ring-1 focus-visible:ring-ring relative flex w-px shrink-0 items-center justify-center after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-hidden"
+      className="bg-border focus-visible:ring-1 focus-visible:ring-ring divider-glow relative flex w-px shrink-0 items-center justify-center after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-hidden"
       style={{ touchAction: 'none' }}
     >
       <div className="z-10 flex h-6 w-1 shrink-0 rounded-lg bg-border" />
