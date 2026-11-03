@@ -191,12 +191,13 @@ function renderListItem(node: PMNode, loose = false): string {
 
 function renderTaskItem(node: PMNode): string {
   const checked = node.attrs.checked ? ' checked=""' : ''
+  // 契约 §3:input 紧贴文本(无空格字符,间距由 input margin-right 承担)
   const input = `<input class="task-list-item-checkbox"${checked} disabled="" type="checkbox">`
   const blocks: PMNode[] = []
   node.forEach((child) => blocks.push(child))
   const head = blocks[0]?.type.name === 'paragraph' ? renderInlines(blocks[0]) : ''
-  const tail = blocks.slice(1).map(renderBlock)
-  return element('li', [['class', 'task-list-item']], [input, head, ...tail].filter(Boolean).join(' ') || ' ')
+  const tail = blocks.slice(1).map((b) => `\n${renderBlock(b)}`)
+  return element('li', [['class', 'task-list-item']], head ? input + head + tail.join('') : input)
 }
 
 function renderListItems(list: PMNode): string {

@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it'
+import type { StateCore } from 'markdown-it'
 import taskLists from 'markdown-it-task-lists'
 import { katex as katexPlugin } from '@mdit/plugin-katex'
 import { gfmAlerts } from './gfm-alerts'
@@ -90,6 +91,29 @@ export const md = new MarkdownIt({
   breaks: true,
   highlight: highlightCode,
 }).use(taskLists).use(katexPlugin).use(gfmAlerts)
+
+/**
+ * 契约 §3 任务列表(2026-11-03 修订):markdown-it-task-lists 只吞 `[ ]` 三字符,
+ * 源码空格留在正文首文本里 → 预览间距 = margin + 空格双份;PM 解析吃前导空白,
+ * 编辑面 = margin 单份。契约定间距由 input 的 margin-right 独自承担,
+ * 此处剥除首文本的前导空格,md-it 侧与静态序列化器/编辑面三面同构。
+ */
+function taskGapRule(state: StateCore): void {
+  for (const token of state.tokens) {
+    if (token.type !== 'inline' || !token.children) continue
+    const checkbox = token.children[0]
+    const text = token.children[1]
+    if (
+      checkbox?.type === 'html_inline' &&
+      checkbox.content.startsWith('<input class="task-list-item-checkbox"') &&
+      text?.type === 'text' &&
+      text.content.startsWith(' ')
+    ) {
+      text.content = text.content.replace(/^ +/, '')
+    }
+  }
+}
+md.core.ruler.push('themd_task_gap', taskGapRule)
 
 // ============================================================
 // 自定义渲染规则：想把 md 渲染成「自己喜欢的 HTML」，就在这里改。
