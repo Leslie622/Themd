@@ -266,6 +266,15 @@
   content: var(--t-ol-marker-text3, var(--t-ol-marker-text, normal));
 }
 
+/* mermaid 图表:居中 + 自适应宽(预览/导出/编辑面同源;独立 HTML 导出
+   内嵌本文件,规则在应用内部 index.css 时导出件从未吃到——2026-11-03 审出) */
+.themd-prose .themd-mermaid {
+  text-align: center;
+}
+.themd-prose .themd-mermaid svg {
+  max-width: 100%;
+}
+
 /* 任务列表：去掉圆点,勾选框自绘(appearance:none 拆掉原生绘制,DOM 不动,
    点击/键盘/打印交互全部保留);各部件走 task.* 令牌 */
 .themd-prose ul:has(> li.task-list-item) {

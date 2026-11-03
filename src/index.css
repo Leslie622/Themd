@@ -506,10 +506,8 @@ pre::-webkit-scrollbar,
 .live-frontmatter.editing .live-frontmatter-src {
   display: block;
 }
-.live-mermaid {
-  text-align: center;
-  padding: 8px 0;
-}
+/* mermaid 编辑面:容器挂规范类 .themd-mermaid(居中/限宽在 theme-base,
+   预览/导出/编辑面同源);这里只剩选中态源码切换 */
 .live-mermaid .live-mermaid-src {
   display: none;
   font-family: var(--font-mono);
@@ -525,12 +523,6 @@ pre::-webkit-scrollbar,
 }
 .live-mermaid-error {
   color: var(--destructive);
-}
-.themd-mermaid {
-  text-align: center;
-}
-.themd-mermaid svg {
-  max-width: 100%;
 }
 
 /* ── 实时编辑器·表格工具条 / 图片调宽(P4d) ─────────────────────────── */

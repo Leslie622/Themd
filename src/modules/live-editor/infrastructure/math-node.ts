@@ -40,8 +40,10 @@ class MathView {
   constructor(node: PMNode, displayMode: boolean, className: string) {
     this.node = node
     this.displayMode = displayMode
-    this.dom = document.createElement('div')
-    this.dom.className = className
+    // 块级公式外壳用规范形态 p.katex-block(静态侧 @mdit/plugin-katex 同型,
+    // 段落边距两侧同源);行内用中性 span(inline 零布局镀层)
+    this.dom = document.createElement(displayMode ? 'p' : 'span')
+    this.dom.className = displayMode ? `katex-block ${className}` : className
     this.render = document.createElement('span')
     this.render.className = 'live-math-render'
     this.contentDOM = document.createElement('span')
@@ -97,7 +99,7 @@ export const MathBlock = Node.create({
   // 兜底 DOM 序列化:NodeView 缺席时(如 React 卸载期 setProps 清空
   // nodeViews 的重建)PM 走 spec.toDOM,缺了会抛 toDOM is not a function
   renderHTML() {
-    return ['div', { class: 'live-math live-math-block' }, 0]
+    return ['p', { class: 'katex-block live-math live-math-block' }, 0]
   },
   markdownTokenizer: {
     name: 'mathBlock',

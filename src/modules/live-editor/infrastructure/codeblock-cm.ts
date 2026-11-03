@@ -27,19 +27,27 @@ import { renderMermaidSvg } from './mermaid-render'
 const languageComp = new Compartment()
 
 /**
- * 字体/字号/行高吃主题令牌,与 theme-base 的 pre code 同一套 --t-code-*:
- * 令牌在滚动容器上注入,CM 生成的是普通 class,运行期照常从级联解析。
+ * 字体/字号/行高吃主题令牌,与 theme-base 的 pre code 同一套 --t-code-*。
+ * '&.cm-editor' 把特异性抬到 0-2-0:index.css 里 v1 全文编辑器的
+ * `.cm-editor { font-size: var(--font-editor-size) }`(CodeMirror 时代遗产,
+ * 第 5 步退役)会无差别命中代码块内嵌 CM,劫持主题字号——2026-11-03
+ * 样式守门 harness 量出 13.5px vs 14px 的根因。回落链与 theme-base
+ * `pre code` 逐字同源(双字体改造后的现链)。
  */
 const cmTheme = CMEditorView.theme({
-  '&': { fontSize: 'var(--t-code-size, 0.875em)' },
+  '&.cm-editor': { fontSize: 'var(--t-code-size, 0.875em)' },
   '.cm-scroller': {
-    fontFamily:
-      "var(--t-code-font, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace)",
+    fontFamily: "var(--t-code-font, ui-monospace, 'Cascadia Mono', Consolas, monospace)",
     lineHeight: 'var(--t-code-leading, 1.6)',
   },
   '.cm-content': {
     padding: '2px 0',
     caretColor: 'var(--t-strong-color, var(--primary))',
+    // 静态 pre>code 不折行(overflow-x 滚动);CM 基座只设 white-space-collapse
+    // 长手,text-wrap-mode 落在初始值 wrap 会折行——两个长手精确钉死
+    // (注意 CM 的属性序列化:textWrap 会被写成 text-wrap-style,须用精确长手名)
+    whiteSpaceCollapse: 'preserve',
+    textWrapMode: 'nowrap',
   },
   '.cm-gutters': { display: 'none' },
   '.cm-activeLine': { background: 'transparent' },
@@ -87,7 +95,7 @@ class CodeMirrorNodeView {
         doc: this.node.textContent,
         extensions: [
           history(),
-          CMEditorView.lineWrapping,
+          // 不开 lineWrapping:静态代码块不换行(overflow-x 滚动),两侧同观感
           cmTheme,
           syntaxHighlighting(githubHighlight),
           languageComp.of([]),
@@ -175,7 +183,8 @@ class MermaidNodeView {
   constructor(node: PMNode) {
     this.node = node
     this.dom = document.createElement('div')
-    this.dom.className = 'live-mermaid'
+    // 挂规范类 .themd-mermaid(居中/限宽吃 theme-base,与预览/导出同源)
+    this.dom.className = 'themd-mermaid live-mermaid'
     this.svgHost = document.createElement('div')
     this.svgHost.className = 'live-mermaid-svg'
     this.contentDOM = document.createElement('div')

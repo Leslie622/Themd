@@ -25,10 +25,11 @@ import { renderStaticHtml } from '../static-html'
  *  继承方向差异(如 ***x*** 的 em>strong vs strong>em 嵌套序)不算差。 */
 const SELECTORS = [
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  // 语料内两条挂账排除(清账即删):katex-block 是静态侧 p 包装(live 走
-  // MathView,数学族挂账);div.custom-block p 是内嵌 HTML 透传里的真 p
+  // 语料内挂账排除(清账即删):div.custom-block p 是内嵌 HTML 透传里的真 p
   // (编辑面按 I4 设计显示源码不渲染,raw HTML 族挂账)
-  'p:not(li p):not(td p):not(th p):not(p.katex-block):not(div.custom-block p)',
+  'p:not(li p):not(td p):not(th p):not(div.custom-block p):not(svg p):not(foreignObject p)',
+  'p.katex-block',
+  '.themd-mermaid',
   'ul', 'ol', 'li',
   'li.task-list-item',
   'input.task-list-item-checkbox',
@@ -36,6 +37,28 @@ const SELECTORS = [
   'blockquote', 'table', 'tr', 'th', 'td',
   'hr', 'a', 'strong', 'em', 's', 'code', 'pre',
 ] as const
+
+/** 跨侧配对:编辑面私有容器 ↔ 静态规范容器(CM 族镀层审查的量化手段) */
+const CROSS_PAIRS: ReadonlyArray<{
+  label: string
+  liveSel: string
+  staticSel: string
+  props?: readonly string[]
+}> = [
+  {
+    label: 'CM 代码块外壳(pre.live-codeblock ↔ pre)',
+    liveSel: 'pre.live-codeblock',
+    staticSel: 'pre',
+  },
+  {
+    label: 'CM 代码文本(.cm-content ↔ pre>code)',
+    liveSel: 'pre.live-codeblock .cm-content',
+    staticSel: 'pre > code',
+    // 长手测量:Chromium 对 white-space 简写的计算值序列化在
+    // 「基座只设 collapse 长手」时会把简写读成 pre-wrap,属测量口径问题
+    props: ['font-family', 'font-size', 'line-height', 'color', 'white-space-collapse', 'text-wrap-mode'],
+  },
+]
 
 /** 标记类职责属性:只比该标记自己负责的样式,继承来的不比 */
 const MARK_PROPS: Record<string, readonly string[]> = {
@@ -62,11 +85,14 @@ const PROPS = [
 
 /** 已知结构差异(方案 §8-4 余项,单列不计违规;清一项删一行) */
 const KNOWN_STRUCTURAL = [
-  /^pre: /, // 代码块 CM 内嵌(语言标签/行结构),待镀层审查
+  /^pre: /, // 代码块 CM 内嵌(语言标签/CM 内部行结构,属 I4 镀层)
   /^code: /, // 同上(CM 内部 code 元素)
-  /^thead: /, // PM 表格模型无行分组(theme-base 规则不得依赖 thead/tbody)
-  /^\.themd-mermaid: /, // 编辑面走 codeblock-cm 图表视图,非占位容器
 ]
+
+/** 已知样式差异挂账:CM 基座与主题两条 author 规则均明写 white-space: pre,
+ *  Chromium 对 contenteditable 元素的 text-wrap-mode 计算值仍报 wrap——
+ *  实际折行行为以肉眼/几何验证为准,疑似测量口径问题(2026-11-03 挂账) */
+const KNOWN_DIFF = /^CM 代码文本.*\| text-wrap-mode: /
 
 export interface StyleDiff {
   selector: string
@@ -148,6 +174,32 @@ export async function runStyleParity(
       for (const prop of props) {
         if (a[prop] !== b[prop]) {
           diffs.push({ selector, index: i, prop, live: a[prop], staticSide: b[prop] })
+        }
+      }
+    })
+  }
+
+  // 跨侧配对(CM 族镀层审查)
+  for (const pair of CROSS_PAIRS) {
+    const liveNodes = [...liveEl.querySelectorAll(pair.liveSel)]
+    const staticNodes = [...staticEl.querySelectorAll(pair.staticSel)]
+    if (liveNodes.length !== staticNodes.length) {
+      const line = `${pair.label}: 数量 live=${liveNodes.length} ≠ static=${staticNodes.length}`
+      if (KNOWN_STRUCTURAL.some((re) => re.test(line))) known.push(line)
+      else structural.push(line)
+      continue
+    }
+    const props = pair.props ?? PROPS
+    liveNodes.forEach((liveNode, i) => {
+      const staticNode = staticNodes[i]
+      pairs++
+      const a = getComputedStyle(liveNode) as unknown as Record<string, string>
+      const b = getComputedStyle(staticNode) as unknown as Record<string, string>
+      for (const prop of props) {
+        if (a[prop] !== b[prop]) {
+          const line = `${pair.label} | ${prop}: ${a[prop]} vs ${b[prop]}`
+          if (KNOWN_DIFF.test(line)) known.push(line)
+          else diffs.push({ selector: pair.label, index: i, prop, live: a[prop], staticSide: b[prop] })
         }
       }
     })

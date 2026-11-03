@@ -37,7 +37,8 @@ describe('live schema toDOM 完整性', () => {
       liveSchema.nodes.mathBlock.create(undefined, liveSchema.text('E=mc^2')),
     ) as unknown[] | undefined
     expect(Array.isArray(mathDom)).toBe(true)
-    expect(mathDom?.[0]).toBe('div')
+    // 契约 §3:块级公式规范外壳 p.katex-block(与静态侧 @mdit/plugin-katex 同型)
+    expect(mathDom?.[0]).toBe('p')
     expect(mathDom?.[2]).toBe(0)
 
     const fmDom = liveSchema.nodes.frontMatter.spec.toDOM?.(
