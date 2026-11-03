@@ -2,14 +2,14 @@
  * GFM Alerts 提示块(infrastructure 层):`> [!NOTE]` 等标记引用块。
  *
  * - 文档模型:复用 blockquote 节点 + `alertType` 属性(不新增节点类型,
- *   schema/卸载兜底 toDOM/守门测试全部不受影响;普通引用完全走原路径)
+ *   守门测试不受影响;普通引用完全走原路径)
  * - 解析:blockquote 首段为 [!TYPE] 标记时,吞掉标记、存 alertType;marked 把
  *   段内多行文本放在单个 text token 里,剥离即改它的 text
  * - 序列化:renderMarkdown 回写 `> [!TYPE]` 首行,正文行 `> ` 前缀与默认实现同构
- * - NodeView:仅 alertType 引用块渲染标题条(图标+类型名,复用静态侧的
- *   Octicon 与命名),普通引用返回 null 落回默认 DOM 渲染
- * - 静态/导出侧:markdown-renderer.ts 的 gfm-alerts 规则产出 .themd-callout,
- *   两侧共用同一套 --t-callout-* 主题令牌
+ * - 编辑面(第 4 步拉平):renderHTML 直出规范结构 div.themd-callout +
+ *   标题行(静态 spec 子节点,不可编辑,字节与静态侧 gfm-alerts 同源)+
+ *   内容洞——NodeView 整体退役,编辑面/预览/导出同构(theme-base 的
+ *   .themd-callout > * 子选择器两侧同样命中)
  */
 import Blockquote from '@tiptap/extension-blockquote'
 import {
@@ -18,11 +18,11 @@ import {
   type MarkdownParseHelpers,
   type MarkdownRendererHelpers,
   type MarkdownToken,
-  type NodeViewRenderer,
-  type NodeViewRendererProps,
 } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Node as PMNode } from '@tiptap/pm/model'
-import { ALERT_ICONS, ALERT_LABELS, type GfmAlertType } from '@/modules/rendering/gfm-alerts'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { titleInnerHtml, type GfmAlertType } from '@/modules/rendering/gfm-alerts'
 
 const ALERT_MARKER_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:\n|$)/
 
@@ -67,46 +67,6 @@ function stripMarker(token: MarkdownToken): void {
   }
 }
 
-function iconSvg(type: GfmAlertType): string {
-  return `<svg class="themd-callout-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="${ALERT_ICONS[type]}"></path></svg>`
-}
-
-/** 提示块 NodeView:标题条 + 内容区;alertType 变化时刷新类名与标题 */
-class CalloutView {
-  dom: HTMLElement
-  contentDOM: HTMLElement
-  private node: PMNode
-  private titleEl: HTMLElement
-
-  constructor(node: PMNode) {
-    this.node = node
-    this.dom = document.createElement('div')
-    this.titleEl = document.createElement('p')
-    this.titleEl.className = 'themd-callout-title'
-    this.contentDOM = document.createElement('div')
-    this.dom.append(this.titleEl, this.contentDOM)
-    this.refresh()
-  }
-
-  private refresh(): void {
-    const type = this.node.attrs.alertType as GfmAlertType | null
-    this.dom.className = type ? `themd-callout themd-callout-${type}` : 'themd-callout'
-    if (type) {
-      this.titleEl.innerHTML = `${iconSvg(type)}${ALERT_LABELS[type]}`
-      this.titleEl.style.display = ''
-    } else {
-      this.titleEl.style.display = 'none'
-    }
-  }
-
-  update(node: PMNode): boolean {
-    if (node.type !== this.node.type) return false
-    this.node = node
-    this.refresh()
-    return true
-  }
-}
-
 export const CalloutBlockquote = Blockquote.extend({
   addAttributes() {
     return {
@@ -120,10 +80,36 @@ export const CalloutBlockquote = Blockquote.extend({
     }
   },
 
-  renderHTML({ node, HTMLAttributes }) {
+  parseHTML() {
     return [
-      'blockquote',
-      mergeAttributes(HTMLAttributes, node.attrs.alertType ? { 'data-alert': node.attrs.alertType as string } : {}),
+      ...(this.parent?.() ?? [{ tag: 'blockquote' }]),
+      {
+        // 规范结构的粘贴往返:div.themd-callout 解析回提示块;
+        // 标题行不是内容(装饰注入),contentElement 里排除——PM 的
+        // contentElement 类型只认单元素,Fragment 需断言(运行时按节点集合读)
+        tag: 'div.themd-callout',
+        contentElement: (el: HTMLElement) => {
+          const frag = el.ownerDocument.createDocumentFragment()
+          for (const child of [...el.children]) {
+            if (!child.classList.contains('themd-callout-title')) frag.append(child)
+          }
+          return frag as unknown as HTMLElement
+        },
+      },
+    ]
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    const type = node.attrs.alertType as GfmAlertType | null
+    if (!type) return ['blockquote', mergeAttributes(HTMLAttributes), 0]
+    // spec 只出壳(内容洞独占);标题行见 calloutTitleKey 装饰(首子前注入,
+    // DOM 与静态侧规范结构逐同:div.themd-callout > p.themd-callout-title + 正文)
+    return [
+      'div',
+      mergeAttributes(HTMLAttributes, {
+        class: `themd-callout themd-callout-${type}`,
+        'data-alert': type,
+      }),
       0,
     ]
   },
@@ -160,10 +146,45 @@ export const CalloutBlockquote = Blockquote.extend({
     return type ? `> [!${type.toUpperCase()}]\n${body}` : body
   },
 
-  addNodeView() {
-    // 普通引用返回 null 落回默认 DOM 渲染;提示块才有标题条
-    // (PM 运行时支持 factory 返回 null,类型未建模,显式断言)
-    return ((props: NodeViewRendererProps) =>
-      props.node.attrs.alertType ? new CalloutView(props.node) : null) as NodeViewRenderer
+  addProseMirrorPlugins() {
+    const typeName = this.name
+    const build = (doc: PMNode): DecorationSet => {
+      const widgets: Decoration[] = []
+      doc.descendants((node, pos) => {
+        if (node.type.name !== typeName) return
+        const type = node.attrs.alertType as GfmAlertType | null
+        if (!type || !node.firstChild) return
+        // 首子之前(div 开头):标题行成为 .themd-callout 的第一个子元素,
+        // theme-base 的 .themd-callout > * / > * + * 选择器与静态侧同样命中
+        widgets.push(
+          Decoration.widget(
+            pos + 1,
+            () => {
+              const p = document.createElement('p')
+              p.className = 'themd-callout-title'
+              p.contentEditable = 'false'
+              p.innerHTML = titleInnerHtml(type)
+              return p
+            },
+            { side: -1 },
+          ),
+        )
+      })
+      return DecorationSet.create(doc, widgets)
+    }
+    const key = new PluginKey<DecorationSet>('canonicalCalloutTitle')
+    return [
+      new Plugin({
+        key,
+        state: {
+          init: (_, state) => build(state.doc),
+          apply: (tr, value, _old, newState) =>
+            tr.docChanged ? build(newState.doc) : value.map(tr.mapping, newState.doc),
+        },
+        props: {
+          decorations: (state) => key.getState(state),
+        },
+      }),
+    ]
   },
 })

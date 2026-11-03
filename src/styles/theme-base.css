@@ -299,6 +299,11 @@
 .themd-prose li.task-list-item:has(> p > input:checked) {
   color: var(--t-task-done-color, inherit);
 }
+/* 任务项内段落:紧凑形态项内无 p(裸文本),宽松形态/编辑面(PM 内容模型
+   恒为段落)有 p——两形态观感一致,项内段落零边距,项距统一吃 li 层间距 */
+.themd-prose li.task-list-item > p {
+  margin: 0;
+}
 
 /* ---------- 引用 ---------- */
 

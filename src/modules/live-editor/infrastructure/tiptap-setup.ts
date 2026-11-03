@@ -2,7 +2,10 @@
  * 实时编辑引擎装配(infrastructure 层):MarkdownManager 与 TipTap 编辑器
  * 共用同一份扩展——解析/序列化规则与编辑器 schema 严格同源,禁止两处各配。
  */
-import { Extension } from '@tiptap/core'
+import { Extension, mergeAttributes } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import type { Node as PMNode } from '@tiptap/pm/model'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Bold from '@tiptap/extension-bold'
 import Italic from '@tiptap/extension-italic'
@@ -135,6 +138,121 @@ const CanonicalHardBreak = HardBreak.extend({
 })
 
 /**
+ * 任务列表规范形态(契约 §3 迁移铁律,编辑面拉平第 4 步):
+ * ul.contains-task-list + li.task-list-item,勾选框以 **Widget 装饰**注入
+ * 首段内容头部(li > p > input + 文本 = md-it 宽松形态的标准结构)。
+ *
+ * 为什么用装饰:PM 的 DOMOutputSpec 约束「内容洞必须是父元素唯一子」,
+ * 官方 TaskItem 的 label/span/div 包装正是绕这个约束的私有结构;装饰层
+ * 是 PM 的正统镀层机制(I4)——不属于文档内容、不参与序列化,勾选态仍由
+ * 节点 attrs 承载。令牌/自绘/完成态全部吃 theme-base 规范链,工厂映射表
+ * (li.task-list-item)静态样例与导入笔记同选择器,编辑面零布局桥。
+ */
+const CanonicalTaskList = TaskList.extend({
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'ul',
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { class: 'contains-task-list' }),
+      0,
+    ]
+  },
+  parseHTML() {
+    return [{ tag: 'ul.contains-task-list', priority: 51 }, ...(this.parent?.() ?? [])]
+  },
+})
+
+const taskCheckboxKey = new PluginKey<DecorationSet>('canonicalTaskCheckbox')
+
+const CanonicalTaskItem = TaskItem.extend({
+  addAttributes() {
+    const parent = (this.parent?.() ?? {}) as Record<string, unknown>
+    const checked = parent.checked as Record<string, unknown>
+    return {
+      ...parent,
+      // checked 不再落 data-checked 私有属性(勾选态由装饰 input 承载)
+      checked: {
+        ...checked,
+        renderHTML: () => ({}),
+      },
+    }
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    // spec 只出壳(内容洞独占);勾选框见 taskCheckboxKey 装饰
+    return ['li', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { class: 'task-list-item' }), 0]
+  },
+
+  parseHTML() {
+    return [{ tag: 'li.task-list-item', priority: 51 }, ...(this.parent?.() ?? [])]
+  },
+
+  // 拔掉官方 NodeView(label+span+div 包装):null = 落回 spec 渲染
+  addNodeView() {
+    return null
+  },
+
+  addProseMirrorPlugins() {
+    const typeName = this.name
+    const editor = this.editor
+    const build = (doc: PMNode): DecorationSet => {
+      const widgets: Decoration[] = []
+      doc.descendants((node, pos) => {
+        if (node.type.name !== typeName || !node.firstChild) return
+        const itemPos = pos
+        const checked = !!node.attrs.checked
+        // 首段内容头部:li 内段落内文本前(= md-it 宽松形态 input 的位置)
+        const widgetPos = pos + 2
+        widgets.push(
+          Decoration.widget(
+            widgetPos,
+            () => {
+              const input = document.createElement('input')
+              input.className = 'task-list-item-checkbox'
+              input.type = 'checkbox'
+              if (checked) {
+                input.checked = true
+                input.setAttribute('checked', '')
+              }
+              input.setAttribute('aria-label', '任务项')
+              input.contentEditable = 'false'
+              // 拦焦点保持编辑光标,点击即切换勾选态
+              input.addEventListener('mousedown', (e) => e.preventDefault())
+              input.addEventListener('click', () => {
+                const { state, view } = editor
+                const current = state.doc.nodeAt(itemPos)
+                if (current?.type.name !== typeName) return
+                view.dispatch(
+                  state.tr.setNodeMarkup(itemPos, undefined, {
+                    ...current.attrs,
+                    checked: !current.attrs.checked,
+                  }),
+                )
+              })
+              return input
+            },
+            { side: -1, marks: [] },
+          ),
+        )
+      })
+      return DecorationSet.create(doc, widgets)
+    }
+    return [
+      new Plugin({
+        key: taskCheckboxKey,
+        state: {
+          init: (_, state) => build(state.doc),
+          apply: (tr, value, _old, newState) =>
+            tr.docChanged ? build(newState.doc) : value.map(tr.mapping, newState.doc),
+        },
+        props: {
+          decorations: (state) => taskCheckboxKey.getState(state),
+        },
+      }),
+    ]
+  },
+})
+
+/**
  * 契约 §3「紧凑/宽松两形态」:捕获 marked 列表 token 的 loose 进 tight 属性。
  * 仅静态序列化器(rendering/golden/static-html)消费;renderHTML 置空、
  * renderMarkdown 不读 = 编辑器 DOM 与字节保真协议零影响。
@@ -214,8 +332,8 @@ export function liveExtensions() {
     TableRow,
     TableCell,
     TableHeader,
-    TaskList,
-    TaskItem,
+    CanonicalTaskList,
+    CanonicalTaskItem,
     LiveTableMenu,
     BaseShortcuts,
   ] as const
