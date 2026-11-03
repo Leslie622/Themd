@@ -14,7 +14,7 @@ import {
   FileText,
   FolderOpen,
   Focus,
-  Paintbrush,
+  Luggage,
   Pencil,
   Plus,
   RotateCcw,
@@ -31,6 +31,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -53,6 +56,7 @@ import { NotePicker } from '@/components/theme/NotePicker'
 import { useExtraCss } from '@/components/theme/useExtraCss'
 import { compileTokens, } from '@/lib/theme/compile'
 import { exportThemeCss, importThemeCss } from '@/lib/theme/css-io'
+import { PORTABLE_TARGETS, buildPortableCss, portableCssFileName, type PortableCssTarget } from '@/lib/theme/portable-css'
 import { ELEMENTS, ELEMENT_GROUPS, elementTokenKeys } from '@/lib/theme/elements'
 import { FOCUSED_SAMPLES } from '@/lib/theme/element-samples'
 import { TOKEN_VAR } from '@/lib/theme/tokens'
@@ -300,11 +304,17 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     toast.success(`已导出「${editing.name}」主题包`)
   }
 
-  const handleExportCss = (typora: boolean) => {
-    const css = exportThemeCss(editing, typora ? '#write' : '.themd-prose')
-    const suffix = typora ? '.typora' : ''
-    downloadFile(`${editing.name}${suffix}.css`, css, 'text/css')
-    toast.success(typora ? '已导出 Typora 兼容 CSS' : '已导出 CSS')
+  const handleExportCss = () => {
+    const css = exportThemeCss(editing, '.themd-prose')
+    downloadFile(`${editing.name}.css`, css, 'text/css')
+    toast.success('已导出 CSS')
+  }
+
+  // 可移植样式包:theme-base 全文 + 令牌内联,贴到 Typora/VSCode/GitHub 复现观感
+  const handleExportPortable = (target: PortableCssTarget) => {
+    const css = buildPortableCss(editing, target)
+    downloadFile(portableCssFileName(editing.name, target), css, 'text/css')
+    toast.success(`已导出可移植 CSS(${PORTABLE_TARGETS.find((t) => t.id === target)?.label})`)
   }
 
   const handleImportFile = async (file: File) => {
@@ -415,15 +425,25 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                 <FileJson />
                 主题包(.themd.json)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExportCss(false)}>
+              <DropdownMenuItem onClick={handleExportCss}>
                 <FileCode2 />
                 样式表(.css)
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleExportCss(true)}>
-                <Paintbrush />
-                Typora 主题(#write)
-              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="gap-2">
+                  <Luggage />
+                  可移植样式包(完整 CSS)
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {PORTABLE_TARGETS.map((t) => (
+                    <DropdownMenuItem key={t.id} onClick={() => handleExportPortable(t.id)}>
+                      <FileCode2 />
+                      {t.label}
+                      <span className="ml-auto text-xs text-muted-foreground">{t.hint}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuContent>
           </DropdownMenu>
           <WindowControls />
