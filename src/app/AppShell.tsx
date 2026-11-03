@@ -1,7 +1,7 @@
 import { type ReactElement, type ReactNode, useRef } from 'react'
 import { Columns2, Eye, FileCode2, FileSymlink, FileText, FileWarning, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Save, Settings, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Toaster } from '@/components/ui/sonner'
 import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Sidebar } from '@/components/Sidebar'
 import { SidebarResizeHandle } from '@/components/SidebarResizeHandle'
+import { GlowResizeHandle } from '@/components/GlowResizeHandle'
 import { SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from '@/app/workspace-preferences'
 import { WindowControls } from '@/components/WindowControls'
 import { SettingsSheet } from '@/components/SettingsSheet'
@@ -17,6 +18,7 @@ import { EditorPane } from '@/components/EditorPane'
 import { LiveEditorPane } from '@/components/LiveEditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
 import { fromNow } from '@/lib/time'
+import { cn } from '@/lib/utils'
 import { countImages, countWords } from '@/modules/notebook/domain/note'
 import { appEvents } from '@/shared/events/app-events'
 import type { Note } from '@/modules/notebook/domain/note'
@@ -24,6 +26,19 @@ import type { ThemeFile } from '@/lib/theme/schema'
 import type { EditorViewMode } from '@/store-editor'
 export type ViewMode = EditorViewMode
 const FOLLOW_GLOBAL = '__follow__'
+/* 视图分段控件:灰底轨道 + 选中浮起胶囊。选中态不能用 data-[state=on]: 写——
+   外层 IconTip 的 TooltipTrigger asChild 会把它的 data-state(closed/open)覆写到
+   按钮上,顶掉 Radix Toggle 的 on/off;本版 Toggle 也不设 aria-pressed。
+   故直接按受控的 view 条件加类 */
+const VIEW_ORDER: ViewMode[] = ['edit', 'split', 'live', 'preview']
+/* 尺寸与下方类名硬对应:item w-7(28px)+ spacing 1.5(6px) → 步长 34px,
+   供滑动胶囊算平移;改尺寸时两处同步 */
+const VIEW_ITEM_W = 28
+const VIEW_ITEM_STEP = 34
+const VIEW_ITEM_CLS = 'relative h-6 w-7 min-w-7 px-0 rounded text-muted-foreground hover:bg-transparent'
+const VIEW_ITEM_ON = 'text-foreground'
+/* 基类带 hover:text-foreground,未选中项不锁住的话 hover 会提亮图标 */
+const VIEW_ITEM_OFF = 'hover:text-muted-foreground'
 function IconTip({ label, children }: { label: string; children: ReactElement }) { return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent side="bottom">{label}</TooltipContent></Tooltip> }
 export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; fileMissing: boolean; onNoteSaveAs: () => void; onNoteDelete: () => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void; children?: ReactNode }
 export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, fileMissing, onNoteSaveAs, onNoteDelete, bindEditorScroller, bindPreviewScroller, children }: AppShellProps) {
@@ -97,29 +112,36 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   type="single"
                   variant="default"
                   size="sm"
-                  spacing={0}
+                  spacing={1.5}
+                  className="relative rounded-md bg-muted p-1"
                   value={view}
                   onValueChange={(v) => {
                     if (v) setView(v as ViewMode)
                   }}
                 >
+                  {/* 滑动胶囊:选中态的唯一视觉载体,按钮本身只换图标颜色 */}
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-1 left-1 rounded bg-background shadow-sm transition-transform duration-200 ease-out"
+                    style={{ width: VIEW_ITEM_W, transform: `translateX(${Math.max(0, VIEW_ORDER.indexOf(view)) * VIEW_ITEM_STEP}px)` }}
+                  />
                   <IconTip label="编辑视图">
-                    <ToggleGroupItem value="edit" aria-label="编辑视图">
+                    <ToggleGroupItem value="edit" aria-label="编辑视图" className={cn(VIEW_ITEM_CLS, view === 'edit' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
                       <PenLine className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                   <IconTip label="分屏视图">
-                    <ToggleGroupItem value="split" aria-label="分屏视图">
+                    <ToggleGroupItem value="split" aria-label="分屏视图" className={cn(VIEW_ITEM_CLS, view === 'split' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
                       <Columns2 className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                   <IconTip label="实时预览">
-                    <ToggleGroupItem value="live" aria-label="实时预览">
+                    <ToggleGroupItem value="live" aria-label="实时预览" className={cn(VIEW_ITEM_CLS, view === 'live' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
                       <Sparkles className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                   <IconTip label="预览视图">
-                    <ToggleGroupItem value="preview" aria-label="预览视图">
+                    <ToggleGroupItem value="preview" aria-label="预览视图" className={cn(VIEW_ITEM_CLS, view === 'preview' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
                       <Eye className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
@@ -318,7 +340,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
                   />
                 </ResizablePanel>
-                <ResizableHandle withHandle />
+                <GlowResizeHandle withHandle />
                 <ResizablePanel defaultSize="50%" minSize="20%">
                   <PreviewPane
                     content={previewText}
