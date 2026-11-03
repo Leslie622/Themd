@@ -29,8 +29,8 @@ const languageComp = new Compartment()
 /**
  * 字体/字号/行高吃主题令牌,与 theme-base 的 pre code 同一套 --t-code-*。
  * '&.cm-editor' 把特异性抬到 0-2-0:index.css 里 v1 全文编辑器的
- * `.cm-editor { font-size: var(--font-editor-size) }`(CodeMirror 时代遗产,
- * 第 5 步退役)会无差别命中代码块内嵌 CM,劫持主题字号——2026-11-03
+ * `.cm-editor { font-size: var(--font-editor-size) }`(分屏/纯编辑视图仍在用,
+ * 该规则不退役)会无差别命中代码块内嵌 CM,劫持主题字号——2026-11-03
  * 样式守门 harness 量出 13.5px vs 14px 的根因。回落链与 theme-base
  * `pre code` 逐字同源(双字体改造后的现链)。
  */

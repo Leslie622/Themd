@@ -45,7 +45,6 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { imagePlaceholder } from '@/lib/image-decorator'
-import { markdownLivePreview } from '@/lib/markdown-live-preview'
 import {
   copySelection,
   currentHeadingLevel,
@@ -215,7 +214,6 @@ export function EditorPane({
   onChange,
   bindScroller,
   noteDir,
-  livePreview = false,
 }: {
   value: string
   onChange: (value: string) => void
@@ -223,8 +221,6 @@ export function EditorPane({
   bindScroller?: (el: HTMLElement | null) => void
   /** 活动笔记(绑定磁盘文件时)的所在目录;插图落盘基准 */
   noteDir?: string | null
-  /** 实时预览模式:Typora 式边写边渲染(源码不变,纯显示层装饰) */
-  livePreview?: boolean
 }) {
   const isDark = useAppearance((s) => s.isDark)
   // CodeMirror view 引用:粘贴/拖拽/菜单插图都要在精确光标处 dispatch
@@ -466,17 +462,9 @@ export function EditorPane({
   )
 
   // 内嵌图片徽章:编辑器里把超长 base64 换成短占位(纯显示层,原文不动)
+  // (原实时预览装饰层 markdownLivePreview 已随 CM livePreview 路线退役,
+  //  实时预览固定走 TipTap LiveEditorPane——渲染统一第 5 步)
   const imageChipExt = useMemo(() => imagePlaceholder(), [])
-
-  // 实时渲染装饰层:与内嵌图片徽章二选一(二者都会 replace 图片标记范围,
-  // 叠加冲突);实时模式下图片整段标记由 live 层换成内联 <img>
-  const livePreviewExt = useMemo(() => markdownLivePreview(), [])
-  const liveComp = useMemo(() => new Compartment(), [])
-  useEffect(() => {
-    viewRef.current?.dispatch({
-      effects: liveComp.reconfigure(livePreview ? livePreviewExt : imageChipExt),
-    })
-  }, [livePreview, liveComp, livePreviewExt, imageChipExt])
 
   // 菜单/App 通过事件总线触发文件选择器(光标位置由 view 实时决定)
   useEffect(() => {
@@ -650,7 +638,7 @@ export function EditorPane({
           cmLineNumbers(),
           fontExt,
           imageExt,
-          liveComp.of(livePreview ? livePreviewExt : imageChipExt),
+          imageChipExt,
         ]}
       />
       <input

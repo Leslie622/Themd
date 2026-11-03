@@ -23,7 +23,8 @@ import katex from 'katex'
 import { getMarkdownManager } from '@/modules/live-editor/infrastructure/markdown-engine'
 import { liveExtensions } from '@/modules/live-editor/infrastructure/tiptap-setup'
 import { resolveImageSrcSync, imageContextSignature } from '@/lib/image-src'
-import { slug, highlightCode } from './markdown-renderer'
+import { slug } from './slug'
+import { highlightCode } from './code-highlight'
 import { titleHtml } from './gfm-alerts'
 
 const VOID_TAGS = new Set(['br', 'hr', 'img', 'input'])
@@ -71,8 +72,7 @@ export function renderStaticHtml(markdown: string): string {
     htmlCache.set(key, hit)
     return hit
   }
-  const json = sanitizeJson(getMarkdownManager().parse(markdown))
-  const doc = staticSchema().nodeFromJSON(json)
+  const doc = parseStaticDoc(markdown)
   const html = renderBlockChildren(doc)
   if (htmlCache.size >= HTML_CACHE_CAP) {
     const oldest = htmlCache.keys().next().value
@@ -80,6 +80,12 @@ export function renderStaticHtml(markdown: string): string {
   }
   htmlCache.set(key, html)
   return html
+}
+
+/** markdown → PM doc(与 renderStaticHtml 同一解析管线)。
+ *  大纲(outline)复用:TOC 锚点 id 与渲染 HTML 的 heading id 必然同源。 */
+export function parseStaticDoc(markdown: string): PMNode {
+  return staticSchema().nodeFromJSON(sanitizeJson(getMarkdownManager().parse(markdown)))
 }
 
 /** MarkdownManager.parse 产出的 JSON 可能含空文本节点(prosemirror 拒收),递归剔除 */

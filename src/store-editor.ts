@@ -39,12 +39,6 @@ const VIEW_MODES: readonly EditorViewMode[] = ['edit', 'split', 'live', 'preview
 interface EditorPrefsState {
   /** 主工作区视图模式(顶栏视图组,重启记住上次选择) */
   viewMode: EditorViewMode
-  /**
-   * 实时预览视图的引擎:codemirror = v1 装饰层(默认,过渡期兜底);
-   * prosemirror = v2 TipTap 渲染态编辑(方案见 docs/实时预览实施方案.md,
-   * P3 过全部红线后设为默认)。
-   */
-  liveEngine: 'prosemirror' | 'codemirror'
   /** CodeMirror 字号(px) */
   fontSize: number
   /** 界面西文字体:空 = system-ui(系统默认) */
@@ -84,7 +78,6 @@ interface EditorPrefsState {
   /** PicGo Server 上传接口地址(端口可在 PicGo 里改) */
   picgoUrl: string
   setViewMode: (mode: EditorViewMode) => void
-  setLiveEngine: (engine: 'prosemirror' | 'codemirror') => void
   setFontSize: (px: number) => void
   setUiFont: (western: string, cjk: string) => void
   setEditorFont: (western: string, cjk: string) => void
@@ -127,8 +120,6 @@ const applyFonts = (s: Pick<EditorPrefsState, 'uiFontWestern' | 'uiFontCjk' | 'e
 
 const DEFAULTS = {
   viewMode: 'split' as EditorViewMode,
-  /** P3 起默认 TipTap 渲染态编辑(红线已过);v1 装饰层保留为开关后备 */
-  liveEngine: 'prosemirror' as 'prosemirror' | 'codemirror',
   fontSize: 13.5,
   /** 空 = 西文不单独指定,由中文字体/通用族承担(中文字体通常自带拉丁字形) */
   uiFontWestern: '',
@@ -167,7 +158,6 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         set({ editorFontWestern: western, editorFontCjk: cjk })
       },
       setViewMode: (mode) => set({ viewMode: mode }),
-      setLiveEngine: (engine) => set({ liveEngine: engine }),
       setFoldEnabled: (v) => set({ foldEnabled: v }),
       setSyncScrollEnabled: (v) => set({ syncScrollEnabled: v }),
       setLineWrapEnabled: (v) => set({ lineWrapEnabled: v }),
@@ -178,9 +168,10 @@ export const useEditorPrefs = create<EditorPrefsState>()(
     }),
     {
       name: 'themd/ui-preferences/v1',
-      version: 9,
+      version: 10,
       migrate: (persisted, version) => {
-        const state = (persisted ?? {}) as Partial<EditorPrefsState>
+        // 存量数据可能带已退役字段(liveEngine),先按宽型读入再剔除
+        const state = (persisted ?? {}) as Partial<EditorPrefsState> & { liveEngine?: unknown }
         const next = { ...DEFAULTS, ...state }
         // v1 的空值表示“跟随界面”;v2 起编辑器字体落到具体默认值。
         // v3 界面中文字体落具体值(设置槽位可回显);西文保持空 = 不单独指定。
@@ -189,19 +180,11 @@ export const useEditorPrefs = create<EditorPrefsState>()(
         // v5 图床模式登场:imageMode 补 'remote' 合法值,上传配置落默认
         // v6 移除 SM.MS/s.ee 路线:存量 provider(含 smms)回落 github
         // v7 实时预览视图登场:viewMode 记住顶栏视图组的选择,非法值落 split
+        // v8/v9 实时预览引擎开关(升/降默认),v10 开关退役:
+        //   CM livePreview 装饰路线删除,实时预览固定 TipTap(渲染统一第 5 步)
+        delete next.liveEngine
         if (version < 7) {
           if (!VIEW_MODES.includes(next.viewMode)) next.viewMode = 'split'
-        }
-        // v8 实时预览引擎开关:非法值落 codemirror(v1 装饰层,过渡期默认)
-        if (version < 8) {
-          if (next.liveEngine !== 'prosemirror' && next.liveEngine !== 'codemirror') {
-            next.liveEngine = 'codemirror'
-          }
-        }
-        // v9 红线通过,默认引擎切 TipTap:存量 codemirror 一并翻转(此前的
-        // 值均来自默认而非显式选择);设置开关可再切回且选择被尊重
-        if (version < 9) {
-          if (next.liveEngine === 'codemirror') next.liveEngine = 'prosemirror'
         }
         if (version < 2) {
           if (!next.editorFontWestern?.trim()) next.editorFontWestern = 'JetBrains Mono'

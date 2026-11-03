@@ -16,7 +16,6 @@ import { SettingsSheet } from '@/components/SettingsSheet'
 import { EditorPane } from '@/components/EditorPane'
 import { LiveEditorPane } from '@/components/LiveEditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
-import { useEditorPrefs } from '@/store-editor'
 import { fromNow } from '@/lib/time'
 import { countImages, countWords } from '@/modules/notebook/domain/note'
 import { appEvents } from '@/shared/events/app-events'
@@ -29,8 +28,6 @@ function IconTip({ label, children }: { label: string; children: ReactElement })
 export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; fileMissing: boolean; onNoteSaveAs: () => void; onNoteDelete: () => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void; children?: ReactNode }
 export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, fileMissing, onNoteSaveAs, onNoteDelete, bindEditorScroller, bindPreviewScroller, children }: AppShellProps) {
   const imageCount = active ? countImages(active.content) : 0
-  // 实时视图引擎:P1-P3 过渡期 v1 装饰层为默认,TipTap 渲染态编辑经设置开关启用
-  const liveEngine = useEditorPrefs((s) => s.liveEngine)
   /* 侧栏容器:拖拽期间 SidebarResizeHandle 直改它的 style.width,绕开 React */
   const sidebarRef = useRef<HTMLDivElement | null>(null)
   /* 弹层内发生过指针按下 → 关闭时不让 Radix 把焦点还给触发器:
@@ -340,27 +337,15 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                 />
               </div>
             ) : view === 'live' ? (
-              liveEngine === 'prosemirror' ? (
-                <div className="min-h-0 flex-1">
-                  <LiveEditorPane
-                    key={active.id}
-                    value={active.content}
-                    onChange={(v) => updateNote(active.id, v)}
-                    noteThemeId={active.themeId}
-                    noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
-                  />
-                </div>
-              ) : (
-                <div className="min-h-0 flex-1">
-                  <EditorPane
-                    key={active.id}
-                    value={active.content}
-                    onChange={(v) => updateNote(active.id, v)}
-                    noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
-                    livePreview
-                  />
-                </div>
-              )
+              <div className="min-h-0 flex-1">
+                <LiveEditorPane
+                  key={active.id}
+                  value={active.content}
+                  onChange={(v) => updateNote(active.id, v)}
+                  noteThemeId={active.themeId}
+                  noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
+                />
+              </div>
             ) : (
               <div className="min-h-0 flex-1">
                 <PreviewPane content={previewText} noteThemeId={active.themeId} />
