@@ -4,7 +4,7 @@ import { ListTree, PanelRightClose } from 'lucide-react'
 
 import { ImageLightbox } from '@/components/ImageLightbox'
 import { collectLightboxState, type LightboxSlide } from '@/lib/image-lightbox-state'
-import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
+import { renderStaticHtml } from '@/modules/rendering/static-html'
 import { buildOutline, type OutlineItem } from '@/modules/rendering/outline'
 import { compileTokens } from '@/lib/theme/compile'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
@@ -34,7 +34,9 @@ export const PreviewPane = memo(function PreviewPane({
   /** 绑定滚动容器,用于编辑/预览同步滚动 */
   bindScroller?: (el: HTMLElement | null) => void
 }) {
-  const html = useMemo(() => renderMarkdown(content).html, [content])
+  // 渲染统一第 3 步:预览切 TipTap 静态管线(与实时编辑同源 schema,
+  // 守门 golden/golden-parity 与 md-it 冻结期望逐字节一致)
+  const html = useMemo(() => renderStaticHtml(content), [content])
   const outline = useMemo(() => buildOutline(content), [content])
 
   const activeId = useThemeStore((s) => s.activeId)

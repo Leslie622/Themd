@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-import { renderStaticHtml } from './static-html'
+import { renderStaticHtml } from '../static-html'
 
 /**
  * TipTap 静态渲染 × 金样语料 守门(第 2 步输出线,2026-11-03 全绿转常驻)。

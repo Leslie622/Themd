@@ -3,15 +3,17 @@
  *
  * 职责:markdown →(MarkdownManager.parse,schema 与编辑器同源)→ PM doc
  * → 规范 HTML 字符串。无 DOM、可在 node 环境跑,输出与 docs/渲染结构契约.md
- * 逐字节对齐——这是静态消费方(预览/工厂/导出)未来的唯一渲染函数。
+ * 逐字节对齐——静态消费方(预览/工厂/导出/复制)的统一渲染函数。
  *
  * 与 @tiptap/html 的 generateHTML 语义等价(走 schema toDOM),但自持
- * DOMOutputSpec 解释器:属性顺序/空白/转义完全受控,才可能字节级复现金样。
+ * DOMOutputSpec 解释器:属性顺序/空白/转义完全受控,才可能字节级复现金样
+ * (守门见 golden/golden-parity.test.ts)。
  * 契约特例(heading id/taskItem/mermaid/math/callout/表格对齐等)在此分派;
  * 未覆盖节点走 schema toDOM 兜底。
  *
- * 迁移态说明:本文件暂驻 golden/(随对答案测试演进),第 3 步切换消费方时
- * 晋升为 src/modules/rendering/static-html.ts 正式管线件。
+ * 环境相关行为:图片 src 经 resolveImageSrcSync 渲染期解析(与 md-it 旧管线
+ * 同一函数);测试环境未注入时为恒等,故金样语料(远程/data URI)不受影响
+ * (契约 §5:环境相关的 src 改写不冻结在语料里)。
  */
 import { getSchema } from '@tiptap/core'
 import type { JSONContent } from '@tiptap/core'
@@ -20,8 +22,9 @@ import katex from 'katex'
 
 import { getMarkdownManager } from '@/modules/live-editor/infrastructure/markdown-engine'
 import { liveExtensions } from '@/modules/live-editor/infrastructure/tiptap-setup'
-import { slug, highlightCode } from '../markdown-renderer'
-import { titleHtml } from '../gfm-alerts'
+import { resolveImageSrcSync, imageContextSignature } from '@/lib/image-src'
+import { slug, highlightCode } from './markdown-renderer'
+import { titleHtml } from './gfm-alerts'
 
 const VOID_TAGS = new Set(['br', 'hr', 'img', 'input'])
 
@@ -49,11 +52,34 @@ function staticSchema() {
   return schemaCache
 }
 
-/** markdown → 规范 HTML(顶层块以 \n 连接,与 markdown-it 输出一致) */
+/**
+ * markdown → 规范 HTML(顶层块以 \n 连接,与 markdown-it 输出一致)。
+ * LRU 缓存(容量 32):静态管线实测比 md.render 慢约 3.4×(36KB 文档
+ * 166ms vs 50ms),切回已看过的笔记/工厂样例重挂载走缓存零成本;
+ * 键 = 图片解析上下文签名 + 源文(src 解析是渲染期环境行为,上下文
+ * 变化即失效,见 lib/image-src 的 imageContextSignature)。
+ */
+const HTML_CACHE_CAP = 32
+const htmlCache = new Map<string, string>()
+
 export function renderStaticHtml(markdown: string): string {
+  const key = `${imageContextSignature()}\u0000${markdown}`
+  const hit = htmlCache.get(key)
+  if (hit !== undefined) {
+    // Map 迭代序=插入序,命中后移到末尾保持 LRU 语义
+    htmlCache.delete(key)
+    htmlCache.set(key, hit)
+    return hit
+  }
   const json = sanitizeJson(getMarkdownManager().parse(markdown))
   const doc = staticSchema().nodeFromJSON(json)
-  return renderBlockChildren(doc)
+  const html = renderBlockChildren(doc)
+  if (htmlCache.size >= HTML_CACHE_CAP) {
+    const oldest = htmlCache.keys().next().value
+    if (oldest !== undefined) htmlCache.delete(oldest)
+  }
+  htmlCache.set(key, html)
+  return html
 }
 
 /** MarkdownManager.parse 产出的 JSON 可能含空文本节点(prosemirror 拒收),递归剔除 */
@@ -235,7 +261,8 @@ function renderKatex(tex: string, displayMode: boolean): string {
 function renderImg(node: PMNode): string {
   const { src, alt, title } = node.attrs as Record<string, string | null>
   const attrs: Attrs = [
-    ['src', src ?? ''],
+    // 渲染期地址解析(桌面端 asset:// 协议),与 md-it 旧管线同一函数
+    ['src', resolveImageSrcSync(src ?? '')],
     ['alt', alt ?? ''],
   ]
   if (title) attrs.push(['title', title])

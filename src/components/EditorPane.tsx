@@ -68,7 +68,7 @@ import {
   toggleInline,
   toggleLinePrefix,
 } from '@/lib/markdown-commands'
-import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
+import { renderStaticHtml } from '@/modules/rendering/static-html'
 import { fileToAssetImage, fileToEmbeddedImage, fileToUploadedImage, insertImageMarkdown } from '@/lib/image'
 import { assetsPathToAbsolute } from '@/lib/image-src'
 import { platformServices } from '@/app/platform'
@@ -586,7 +586,7 @@ export function EditorPane({
     )
     if (!text) return
     navigator.clipboard
-      .writeText(renderMarkdown(text).html)
+      .writeText(renderStaticHtml(text))
       .then(() => v.focus())
       .catch(() => toast.error('复制失败'))
   }

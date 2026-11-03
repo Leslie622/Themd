@@ -59,7 +59,7 @@ import { TOKEN_VAR } from '@/lib/theme/tokens'
 import type { FieldDef } from '@/lib/theme/elements'
 import { resolveFallbackColors, resolveFallbackFonts } from '@/lib/theme/color-fallbacks'
 import { inspectElementId } from '@/lib/theme/inspect'
-import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
+import { renderStaticHtml } from '@/modules/rendering/static-html'
 import { SAMPLE_DOC } from '@/lib/theme/sample'
 import { setActiveNoteDir } from '@/lib/image-src'
 import type { ThemeFile } from '@/lib/theme/schema'
@@ -751,7 +751,8 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
   inspect?: boolean
   onInspect?: (elementId: string) => void
 }) {
-  const html = useMemo(() => renderMarkdown(content).html, [content])
+  // 渲染统一第 3 步:工厂样例切 TipTap 静态管线(与预览/实时编辑同一 HTML)
+  const html = useMemo(() => renderStaticHtml(content), [content])
   const isDark = useAppearance((s) => s.isDark)
   const cssVars = useMemo(
     () => compileTokens(theme.tokens, theme.dark, isDark),

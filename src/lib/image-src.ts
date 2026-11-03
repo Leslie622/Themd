@@ -51,6 +51,15 @@ function currentRoot(): string | null {
 }
 
 /**
+ * 渲染结果缓存键用:图片解析上下文签名。绑定目录/图片根/协议注入态
+ * 任一变化,同一源文的渲染结果即不同(相对路径解析到不同目标)——
+ * 静态渲染缓存(static-html)以 本签名+源文 为键,杜绝跨笔记串图。
+ */
+export function imageContextSignature(): string {
+  return `${activeNoteDir ?? ''}|${currentRoot() ?? ''}|${convertFileSrcFn ? '1' : '0'}`
+}
+
+/**
  * markdown-it 对图片/链接目的地做过 encodeURI 规范化,中文文件名到 renderer
  * 手里已是 `assets/%E5%B1%8F…`。拼文件系统路径前必须解码回真实文件名,
  * 否则磁盘上永远找不到 `%E5…png`;纯 ASCII 路径解码后原样,不受影响。

@@ -2,7 +2,7 @@ import hljsThemeCss from 'highlight.js/styles/github.css?raw'
 import katexCss from 'katex/dist/katex.min.css?raw'
 import themeBaseCss from '@/styles/theme-base.css?raw'
 
-import { md } from './markdown-renderer'
+import { renderStaticHtml } from './static-html'
 import { compileTokens, extraCssToStyle } from '@/lib/theme/compile'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
@@ -12,8 +12,8 @@ import type { Note } from '@/modules/notebook/domain/note'
 type ThemeSlice = ReturnType<typeof useThemeStore.getState>
 
 /**
- * 导出独立 HTML:复用预览的渲染管线(md.render + 主题令牌编译 + 附加 CSS),
- * 把预览的完整观感内联成单文件——离线可开、样式自包含、不依赖应用。
+ * 导出独立 HTML:复用预览的渲染管线(TipTap 静态序列化 + 主题令牌编译 +
+ * 附加 CSS),把预览的完整观感内联成单文件——离线可开、样式自包含、不依赖应用。
  * 打印/导出 PDF 的视觉与此一致(应用内打印走同一套 .themd-prose 样式)。
  */
 
@@ -88,7 +88,7 @@ ${extraCss ? `<style>\n${extraCss}\n</style>` : ''}
 </head>
 <body>
 <article class="themd-prose">
-${md.render(note.content)}
+${renderStaticHtml(note.content)}
 </article>
 </body>
 </html>
@@ -97,4 +97,37 @@ ${md.render(note.content)}
 
 
 export const renderStandaloneHtml = buildStandaloneHtml
+
+/**
+ * mermaid 导出预热:导出的独立 HTML 无运行时 JS,占位容器必须在写文件前
+ * 烤成已渲染的 SVG(代码哈希缓存命中零成本;渲染失败保留源码文本兜底,
+ * 与预览挂载后的降级行为一致)。保留 div.themd-mermaid 包装(样式钩子不变)。
+ */
+async function prewarmMermaid(html: string, isDark: boolean): Promise<string> {
+  if (!html.includes('class="themd-mermaid"')) return html
+  const { renderMermaidSvg } = await import('@/modules/live-editor/infrastructure/mermaid-render')
+  const re = /<div class="themd-mermaid" data-src="([^"]*)">[\s\S]*?<\/div>/g
+  let out = ''
+  let last = 0
+  for (const m of html.matchAll(re)) {
+    let inner = m[0].slice(m[0].indexOf('>') + 1, -'</div>'.length)
+    const src = decodeURIComponent(m[1] ?? '')
+    if (src) {
+      try {
+        inner = await renderMermaidSvg(src, isDark)
+      } catch {
+        // 保留源码文本兜底
+      }
+    }
+    out += `${html.slice(last, m.index)}<div class="themd-mermaid" data-src="${m[1]}">${inner}</div>`
+    last = (m.index ?? 0) + m[0].length
+  }
+  return out + html.slice(last)
+}
+
+/** 导出用:构建独立 HTML 并预热 mermaid(异步,写文件前完成) */
+export async function renderStandaloneHtmlForExport(note: Note): Promise<string> {
+  const isDark = useAppearance.getState().isDark
+  return prewarmMermaid(buildStandaloneHtml(note), isDark)
+}
 

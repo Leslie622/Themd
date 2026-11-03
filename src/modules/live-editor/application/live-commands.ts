@@ -11,7 +11,7 @@
 import type { Editor } from '@tiptap/core'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 
-import { renderMarkdown } from '@/modules/rendering/markdown-renderer'
+import { renderStaticHtml } from '@/modules/rendering/static-html'
 import { simplifyMarkdown } from '@/lib/markdown-commands'
 import { getMarkdownManager, parseBlockMarkdown } from '../infrastructure/markdown-engine'
 
@@ -249,7 +249,7 @@ export function copyAsMarkdown(editor: Editor): Promise<void> {
 
 /** 选区渲染为 HTML(复用预览管线) */
 export function copyAsHtml(editor: Editor): Promise<void> {
-  const html = renderMarkdown(selectedText(editor)).html
+  const html = renderStaticHtml(selectedText(editor))
   if (!html) return Promise.resolve()
   return navigator.clipboard.writeText(html).catch(() => toastCopyError())
 }
