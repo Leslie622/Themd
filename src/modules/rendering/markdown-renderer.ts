@@ -65,6 +65,22 @@ for (const [name, lang] of Object.entries({
   hljs.registerLanguage(name, lang)
 }
 
+/**
+ * 代码高亮(静态渲染共享):已注册语言返回 hljs 转义后的 HTML,
+ * 否则返回 ''(调用方自行转义)——markdown-it fence 与 TipTap 静态
+ * 序列化器(golden/static-html)走同一函数,保证字节同源。
+ */
+export function highlightCode(code: string, lang: string): string {
+  if (lang && hljs.getLanguage(lang)) {
+    try {
+      return hljs.highlight(code, { language: lang }).value
+    } catch {
+      // 高亮失败时回退为纯文本
+    }
+  }
+  return ''
+}
+
 export const md = new MarkdownIt({
   html: true,
   linkify: true,
@@ -72,16 +88,7 @@ export const md = new MarkdownIt({
   // 段内单个换行渲染为 <br>(Typora/Obsidian 同款)。CommonMark 默认把软换行
   // 折叠成空格,笔记场景里「敲了换行预览却不换」非常反直觉
   breaks: true,
-  highlight(code, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        return hljs.highlight(code, { language: lang }).value
-      } catch {
-        // 高亮失败时回退为纯文本
-      }
-    }
-    return '' // 空字符串 = 交给 markdown-it 自己转义输出
-  },
+  highlight: highlightCode,
 }).use(taskLists).use(katexPlugin).use(gfmAlerts)
 
 // ============================================================

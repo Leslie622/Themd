@@ -34,7 +34,12 @@ function alertTypeOf(token: MarkdownToken): GfmAlertType | null {
   return m ? (m[1].toLowerCase() as GfmAlertType) : null
 }
 
-/** 原地剥离首段文本里的标记行(正文保留),标记独占段落时移除整段 */
+/**
+ * 原地剥离首段标记行,正文保留在原段(与静态侧 gfm-alerts 的 hasRest 语义一致):
+ * 标记独占段落 → 整段移除;标记+正文同段 → 正文留作首段正文。
+ * breaks:true 下 marked 把段内换行拆成 text('[!NOTE]') + br 两个 token,
+ * 标记行剥除必须连 br 一起删,否则正文前残留 <br>(两种形态都处理)。
+ */
 function stripMarker(token: MarkdownToken): void {
   const first = token.tokens?.[0]
   if (!first) return
@@ -43,11 +48,22 @@ function stripMarker(token: MarkdownToken): void {
     token.tokens = token.tokens?.slice(1)
     return
   }
-  // 同段还有正文:text 子 token(含 \n 的整段文本)剥掉标记行
-  const inline = first.tokens?.[0]
-  if (inline?.type === 'text') {
-    inline.text = inline.text?.replace(ALERT_MARKER_RE, '')
-    inline.raw = inline.raw?.replace(ALERT_MARKER_RE, '')
+  const inlines = first.tokens ?? []
+  const head = inlines[0]
+  if (head?.type === 'text' && head.text && ALERT_MARKER_RE.test(head.text)) {
+    // breaks:true 形态:独立 text 恰为标记行,紧随 br → 连 br 一起删
+    if (!head.text.replace(ALERT_MARKER_RE, '').trim() && inlines[1]?.type === 'br') {
+      first.tokens = inlines.slice(2)
+      return
+    }
+    head.text = head.text.replace(ALERT_MARKER_RE, '')
+    head.raw = head.raw?.replace(ALERT_MARKER_RE, '')
+    return
+  }
+  // breaks:false 兜底:单 text token 含 \n,剥掉标记行
+  if (head?.type === 'text') {
+    head.text = head.text?.replace(ALERT_MARKER_RE, '')
+    head.raw = head.raw?.replace(ALERT_MARKER_RE, '')
   }
 }
 

@@ -13,10 +13,12 @@ import {
   TableRow,
   escapeTableCellPipes,
 } from '@tiptap/extension-table'
+import { BulletList, OrderedList } from '@tiptap/extension-list'
+import HardBreak from '@tiptap/extension-hard-break'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import Link from '@tiptap/extension-link'
-import type { JSONContent } from '@tiptap/core'
+import type { JSONContent, MarkdownParseHelpers, MarkdownToken } from '@tiptap/core'
 
 import { currentProfile } from './serialize-profile-state'
 import { MathBlock, MathInline } from './math-node'
@@ -24,6 +26,7 @@ import { FrontMatter } from './frontmatter-node'
 import { CodeBlockCm } from './codeblock-cm'
 import { LiveImage } from './live-image'
 import { CalloutBlockquote } from './callout-blockquote'
+import { RawHtmlBlock, RawHtmlInline } from './raw-html'
 import { LiveTableMenu } from './live-table-menu'
 
 /** MarkdownManager 渲染辅助器的最小面(官方 h 的子集,够表格用) */
@@ -122,19 +125,87 @@ const ProfileItalic = Italic.extend({
   },
 })
 
+/**
+ * breaks:true 政策(契约 §2)下软换行解析为 br,序列化须还原单 \n
+ * (Typora/Obsidian 同款语义,单 \n 往返即 br)。官方默认吐两空格硬断行
+ * `␣␣\n`,会把编辑过块里的软换行改写出字节漂移。
+ */
+const CanonicalHardBreak = HardBreak.extend({
+  renderMarkdown: () => '\n',
+})
+
+/**
+ * 契约 §3「紧凑/宽松两形态」:捕获 marked 列表 token 的 loose 进 tight 属性。
+ * 仅静态序列化器(rendering/golden/static-html)消费;renderHTML 置空、
+ * renderMarkdown 不读 = 编辑器 DOM 与字节保真协议零影响。
+ * bulletList 侧与官方逐字同构仅加 attrs;orderedList 侧以 helpers.parseChildren
+ * 平替官方内部 parseListItems(差异由金样对答案测试暴露)。
+ */
+function listTightAttrs(token: MarkdownToken): Record<string, unknown> {
+  return { tight: !(token as { loose?: boolean }).loose }
+}
+
+const CanonicalBulletList = BulletList.extend({
+  addAttributes() {
+    return { ...this.parent?.(), tight: { default: true, renderHTML: () => ({}) } }
+  },
+  parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers) => {
+    if (token.type !== 'list' || (token as { ordered?: boolean }).ordered) return []
+    return {
+      type: 'bulletList',
+      attrs: listTightAttrs(token),
+      content: token.items ? helpers.parseChildren(token.items) : [],
+    }
+  },
+})
+
+const CanonicalOrderedList = OrderedList.extend({
+  addAttributes() {
+    return { ...this.parent?.(), tight: { default: true, renderHTML: () => ({}) } }
+  },
+  parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers) => {
+    if (token.type !== 'list' || !(token as { ordered?: boolean }).ordered) return []
+    const attrs: Record<string, unknown> = listTightAttrs(token)
+    const start = (token as { start?: number }).start || 1
+    if (start !== 1) attrs.start = start
+    const typeMarker = (token as { typeMarker?: string }).typeMarker
+    if (typeMarker) attrs.type = typeMarker
+    return {
+      type: 'orderedList',
+      attrs,
+      content: token.items ? helpers.parseChildren(token.items) : [],
+    }
+  },
+})
+
 /** 实时编辑扩展集:编辑器 schema 与 markdown 解析/序列化的唯一装配点 */
 export function liveExtensions() {
   return [
     // bold/italic 换档案感知版、codeBlock 换 CM 内嵌版、blockquote 换 GFM Alerts
-    // 感知版(schema 均同型)
-    StarterKit.configure({ bold: false, italic: false, codeBlock: false, link: false, blockquote: false }),
+    // 感知版、bulletList/orderedList 换契约 tight 捕获版、hardBreak 换单 \n
+    // 序列化版(schema 均同型)
+    StarterKit.configure({
+      bold: false,
+      italic: false,
+      codeBlock: false,
+      link: false,
+      blockquote: false,
+      bulletList: false,
+      orderedList: false,
+      hardBreak: false,
+    }),
     // 链接点击禁止扩展自带的 window.open(Tauri WebView 无弹窗拦截,会把
     // 整个应用页面导航走);交互与 CM 版对齐:普通点击=定位光标,右键菜单打开
     Link.configure({ openOnClick: false }),
     ProfileBold,
     ProfileItalic,
+    CanonicalBulletList,
+    CanonicalOrderedList,
+    CanonicalHardBreak,
     LiveImage,
     CalloutBlockquote,
+    RawHtmlBlock,
+    RawHtmlInline,
     MathBlock,
     MathInline,
     FrontMatter,

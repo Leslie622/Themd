@@ -22,7 +22,12 @@ let manager: MarkdownManager | null = null
 
 /** 引擎单例:扩展装配唯一入口(tiptap-setup,与编辑器同源) */
 export function getMarkdownManager(): MarkdownManager {
-  manager ??= new MarkdownManager({ extensions: [...liveExtensions()] })
+  manager ??= new MarkdownManager({
+    extensions: [...liveExtensions()],
+    // 渲染结构契约 §2 解析策略:软换行→br(Typora/Obsidian 同款),
+    // 与 markdown-it 管线 breaks:true 对齐——同源装配,编辑器与静态渲染同策略
+    markedOptions: { breaks: true },
+  })
   return manager
 }
 
