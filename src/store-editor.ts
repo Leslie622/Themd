@@ -32,9 +32,9 @@ export function buildFontStack(western: string, cjk: string, fallback: string): 
 }
 
 /** 主工作区视图模式:纯编辑 / 分屏 / 实时预览(Typora 式) / 纯预览 */
-export type EditorViewMode = 'edit' | 'split' | 'live' | 'preview'
+export type EditorViewMode = 'live' | 'edit' | 'split' | 'preview'
 
-const VIEW_MODES: readonly EditorViewMode[] = ['edit', 'split', 'live', 'preview']
+const VIEW_MODES: readonly EditorViewMode[] = ['live', 'edit', 'split', 'preview']
 
 interface EditorPrefsState {
   /** 主工作区视图模式(顶栏视图组,重启记住上次选择) */
@@ -119,7 +119,7 @@ const applyFonts = (s: Pick<EditorPrefsState, 'uiFontWestern' | 'uiFontCjk' | 'e
 }
 
 const DEFAULTS = {
-  viewMode: 'split' as EditorViewMode,
+  viewMode: 'live' as EditorViewMode,
   fontSize: 13.5,
   /** 空 = 西文不单独指定,由中文字体/通用族承担(中文字体通常自带拉丁字形) */
   uiFontWestern: '',

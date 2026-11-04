@@ -30,7 +30,7 @@ const FOLLOW_GLOBAL = '__follow__'
    外层 IconTip 的 TooltipTrigger asChild 会把它的 data-state(closed/open)覆写到
    按钮上,顶掉 Radix Toggle 的 on/off;本版 Toggle 也不设 aria-pressed。
    故直接按受控的 view 条件加类 */
-const VIEW_ORDER: ViewMode[] = ['edit', 'split', 'live', 'preview']
+const VIEW_ORDER: ViewMode[] = ['live', 'edit', 'split', 'preview']
 /* 尺寸与下方类名硬对应:item w-7(28px)+ spacing 1.5(6px) → 步长 34px,
    供滑动胶囊算平移;改尺寸时两处同步 */
 const VIEW_ITEM_W = 28
@@ -107,7 +107,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
           <div className="flex shrink-0 items-center gap-2">
             {active && (
               <>
-                {/* —— 视图组(最左):编辑/分屏/实时/预览,纯图标减密度,悬停看含义 —— */}
+                {/* —— 视图组(最左):实时/编辑/分屏/预览,纯图标减密度,悬停看含义 —— */}
                 <ToggleGroup
                   type="single"
                   variant="default"
@@ -125,6 +125,11 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     className="pointer-events-none absolute inset-y-1 left-1 rounded bg-background shadow-sm transition-transform duration-200 ease-out"
                     style={{ width: VIEW_ITEM_W, transform: `translateX(${Math.max(0, VIEW_ORDER.indexOf(view)) * VIEW_ITEM_STEP}px)` }}
                   />
+                  <IconTip label="实时预览">
+                    <ToggleGroupItem value="live" aria-label="实时预览" className={cn(VIEW_ITEM_CLS, view === 'live' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
+                      <Sparkles className="size-4" />
+                    </ToggleGroupItem>
+                  </IconTip>
                   <IconTip label="编辑视图">
                     <ToggleGroupItem value="edit" aria-label="编辑视图" className={cn(VIEW_ITEM_CLS, view === 'edit' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
                       <PenLine className="size-4" />
@@ -133,11 +138,6 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   <IconTip label="分屏视图">
                     <ToggleGroupItem value="split" aria-label="分屏视图" className={cn(VIEW_ITEM_CLS, view === 'split' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
                       <Columns2 className="size-4" />
-                    </ToggleGroupItem>
-                  </IconTip>
-                  <IconTip label="实时预览">
-                    <ToggleGroupItem value="live" aria-label="实时预览" className={cn(VIEW_ITEM_CLS, view === 'live' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
-                      <Sparkles className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                   <IconTip label="预览视图">
