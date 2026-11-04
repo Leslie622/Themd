@@ -500,11 +500,11 @@
   font-family: var(--font-mono);
   white-space: pre-wrap;
 }
-.live-math.editing .live-math-src {
+.live-math-editing .live-math-src {
   display: block;
   min-width: 1px;
 }
-.live-math.editing .live-math-render {
+.live-math-editing .live-math-render {
   display: none;
 }
 .live-math-inline {
@@ -513,7 +513,8 @@
 .live-math-inline .live-math-src {
   display: none;
 }
-.live-math-inline.editing .live-math-src {
+/* 行内保持三类复合:压过上方 513 行 .live-math-inline .live-math-src 的 display:none */
+.live-math-inline.live-math-editing .live-math-src {
   display: inline;
 }
 .live-math-error {
@@ -565,10 +566,10 @@
   white-space: pre-wrap;
   margin-top: 4px;
 }
-.live-frontmatter.editing .live-frontmatter-label {
+.live-frontmatter-editing .live-frontmatter-label {
   display: none;
 }
-.live-frontmatter.editing .live-frontmatter-src {
+.live-frontmatter-editing .live-frontmatter-src {
   display: block;
 }
 /* mermaid 编辑面:容器挂规范类 .themd-mermaid(居中/限宽在 theme-base,
@@ -580,10 +581,10 @@
   white-space: pre-wrap;
   text-align: left;
 }
-.live-mermaid.editing .live-mermaid-src {
+.live-mermaid-editing .live-mermaid-src {
   display: block;
 }
-.live-mermaid.editing .live-mermaid-svg {
+.live-mermaid-editing .live-mermaid-svg {
   display: none;
 }
 .live-mermaid-error {

@@ -5,7 +5,7 @@
 import { Extension, mergeAttributes } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Node as PMNode } from '@tiptap/pm/model'
-import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Bold from '@tiptap/extension-bold'
 import Italic from '@tiptap/extension-italic'
@@ -296,6 +296,66 @@ const CanonicalOrderedList = OrderedList.extend({
   },
 })
 
+/**
+ * 选中态源码切换(decoration 驱动):光标落在节点内容内 / NodeSelection 选中
+ * → 给节点挂对应 -editing 类,CSS 据此切换「折叠状态条 ↔ 源码」。
+ *
+ * 机制说明:NodeView.selectNode 只在 NodeSelection 时回调,而「点击状态条把
+ * 光标放进内容」是 TextSelection——不触发任何 NodeView 回调。此前的
+ * selectNode/deselectNode 类名切换从未能覆盖点击路径(且 CSS 类名错位,三族
+ * 的源码编辑自落地起不可用)。此处统一按选区位置挂类,鼠标/键盘同源。
+ * front matter / 数学 / mermaid 三族共用。
+ */
+const EDITING_CLASS_BY_TYPE: Record<string, string> = {
+  frontMatter: 'live-frontmatter-editing',
+  mathBlock: 'live-math-editing',
+  mathInline: 'live-math-editing',
+}
+
+const SelectionEditingClass = Extension.create({
+  name: 'selectionEditingClass',
+  addProseMirrorPlugins() {
+    // 焦点门:装饰只在编辑器持焦时生效。否则打开笔记时初始光标落在首个
+    // textblock(front matter 是首块时即 YAML 内容内),未聚焦也会自动展开。
+    let viewRef: EditorView | null = null
+    return [
+      new Plugin({
+        view(view) {
+          viewRef = view
+          return { destroy() { viewRef = null } }
+        },
+        props: {
+          decorations(state) {
+            const view = viewRef
+            if (!view || !view.hasFocus()) return DecorationSet.empty
+            if (!state?.doc || !state.selection) return DecorationSet.empty
+            const { from, to } = state.selection
+            const decos: Decoration[] = []
+            try {
+              state.doc.descendants((node, pos) => {
+                if (!node?.type) return
+                let cls: string | undefined = EDITING_CLASS_BY_TYPE[node.type.name]
+                if (node.type.name === 'codeBlock' && (node.attrs.language as string)?.toLowerCase() === 'mermaid') {
+                  cls = 'live-mermaid-editing'
+                }
+                if (!cls) return
+                const end = pos + node.nodeSize
+                const selected = from === pos && to === end && to > from
+                const cursorInside = from > pos && from < end
+                if (selected || cursorInside) decos.push(Decoration.node(pos, end, { class: cls }))
+              })
+            } catch {
+              // 编辑器装配初态的瞬态探测不保证完整文档;装饰仅管视觉,失败即空
+              return DecorationSet.empty
+            }
+            return decos.length ? DecorationSet.create(state.doc, decos) : DecorationSet.empty
+          },
+        },
+      }),
+    ]
+  },
+})
+
 /** 实时编辑扩展集:编辑器 schema 与 markdown 解析/序列化的唯一装配点 */
 export function liveExtensions() {
   return [
@@ -335,6 +395,7 @@ export function liveExtensions() {
     CanonicalTaskList,
     CanonicalTaskItem,
     LiveTableMenu,
+    SelectionEditingClass,
     BaseShortcuts,
   ] as const
 }

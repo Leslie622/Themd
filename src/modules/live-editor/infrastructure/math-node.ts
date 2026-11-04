@@ -8,11 +8,12 @@
  *   ——Typora 的聚焦显码交互,纯 CSS 态切换实现
  * - 预览/导出侧:@mdit/plugin-katex(markdown-renderer.ts),三面同源
  */
-import { Node, type NodeViewRendererProps } from '@tiptap/core'
+import { Node, type Editor, type NodeViewRendererProps } from '@tiptap/core'
 import type { ViewMutationRecord } from '@tiptap/pm/view'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import { clickToContent } from './nodeview-click'
 
 /** 节点里的原始 TeX(内容为纯 text 子节点) */
 function texOf(node: { content?: Array<{ text?: string }> }): string {
@@ -37,7 +38,7 @@ class MathView {
   private displayMode: boolean
   private selected = false
 
-  constructor(node: PMNode, displayMode: boolean, className: string) {
+  constructor(node: PMNode, displayMode: boolean, className: string, editor: Editor, getPos: () => number | undefined) {
     this.node = node
     this.displayMode = displayMode
     // 块级公式外壳用规范形态 p.katex-block(静态侧 @mdit/plugin-katex 同型,
@@ -50,6 +51,7 @@ class MathView {
     this.contentDOM.className = 'live-math-src'
     this.contentDOM.spellcheck = false
     this.dom.append(this.render, this.contentDOM)
+    clickToContent(editor, getPos, this.dom, this.contentDOM)
     this.refresh()
   }
 
@@ -64,14 +66,14 @@ class MathView {
     return true
   }
 
+  // selected 只冻结渲染;光标进内容的展开类由 SelectionEditingClass 插件挂
+  // (tiptap-setup,NodeSelection 与 TextSelection 同源),NodeView 不自管类名
   selectNode(): void {
     this.selected = true
-    this.dom.classList.add('live-math-editing')
   }
 
   deselectNode(): void {
     this.selected = false
-    this.dom.classList.remove('live-math-editing')
     this.refresh()
   }
 
@@ -118,7 +120,7 @@ export const MathBlock = Node.create({
 
   addNodeView() {
     return (props: NodeViewRendererProps) =>
-      new MathView(props.node, true, 'live-math live-math-block')
+      new MathView(props.node, true, 'live-math live-math-block', props.editor, props.getPos)
   },
 })
 
@@ -151,6 +153,6 @@ export const MathInline = Node.create({
 
   addNodeView() {
     return (props: NodeViewRendererProps) =>
-      new MathView(props.node, false, 'live-math live-math-inline')
+      new MathView(props.node, false, 'live-math live-math-inline', props.editor, props.getPos)
   },
 })

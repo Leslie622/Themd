@@ -6,12 +6,14 @@
  * tokenizer 把它解析成单一 code 型节点,renderMarkdown 原样吐回,
  * 编辑过的块也保持 `---\n…\n---` 形状。
  *
- * NodeView:默认折叠为「Front Matter · N 行」状态条;选中(点击)展开
- * 显源码可编辑——与公式节点同一套 CSS 态切换。
+ * NodeView:默认折叠为「Front Matter · N 行」状态条;光标进入/节点选中时
+ * 展开源码可编辑(与公式/mermaid 同一套,类由 tiptap-setup 的
+ * SelectionEditingClass 插件按选区位置挂,NodeView 不自管类名)。
  */
-import { Node, type NodeViewRendererProps } from '@tiptap/core'
+import { Node, type Editor, type NodeViewRendererProps } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import type { ViewMutationRecord } from '@tiptap/pm/view'
+import { clickToContent } from './nodeview-click'
 
 function texOf(node: { content?: Array<{ text?: string }> }): string {
   return (node.content ?? []).map((c) => c.text ?? '').join('')
@@ -23,7 +25,7 @@ class FrontMatterView {
   private label: HTMLElement
   private node: PMNode
 
-  constructor(node: PMNode) {
+  constructor(node: PMNode, editor: Editor, getPos: () => number | undefined) {
     this.node = node
     this.dom = document.createElement('div')
     this.dom.className = 'live-frontmatter'
@@ -33,6 +35,7 @@ class FrontMatterView {
     this.contentDOM.className = 'live-frontmatter-src'
     this.contentDOM.spellcheck = false
     this.dom.append(this.label, this.contentDOM)
+    clickToContent(editor, getPos, this.dom, this.contentDOM)
     this.refresh()
   }
 
@@ -47,15 +50,6 @@ class FrontMatterView {
     this.node = node
     this.refresh()
     return true
-  }
-
-  selectNode(): void {
-    this.dom.classList.add('live-frontmatter-editing')
-  }
-
-  deselectNode(): void {
-    this.dom.classList.remove('live-frontmatter-editing')
-    this.refresh()
   }
 
   ignoreMutation(mutation: ViewMutationRecord): boolean {
@@ -98,6 +92,6 @@ export const FrontMatter = Node.create({
   },
 
   addNodeView() {
-    return (props: NodeViewRendererProps) => new FrontMatterView(props.node)
+    return (props: NodeViewRendererProps) => new FrontMatterView(props.node, props.editor, props.getPos)
   },
 })

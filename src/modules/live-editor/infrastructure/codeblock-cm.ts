@@ -10,7 +10,7 @@
  * - 事件分离:CM DOM 内的事件全归 CM(stopEvent),节点边缘/标签归 PM
  */
 import CodeBlock from '@tiptap/extension-code-block'
-import type { NodeViewRendererProps } from '@tiptap/core'
+import type { Editor, NodeViewRendererProps } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import type { EditorView as PMEditorView, ViewMutationRecord } from '@tiptap/pm/view'
 import { EditorState, Compartment, type Extension } from '@codemirror/state'
@@ -22,6 +22,7 @@ import { languages } from '@codemirror/language-data'
 
 import { useAppearance } from '@/store-appearance'
 import { renderMermaidSvg } from './mermaid-render'
+import { clickToContent } from './nodeview-click'
 
 /** 语言高亮 compartment(异步 load 完成后 reconfigure) */
 const languageComp = new Compartment()
@@ -180,7 +181,7 @@ class MermaidNodeView {
   private selected = false
   private lastText = ''
 
-  constructor(node: PMNode) {
+  constructor(node: PMNode, editor: Editor, getPos: () => number | undefined) {
     this.node = node
     this.dom = document.createElement('div')
     // 挂规范类 .themd-mermaid(居中/限宽吃 theme-base,与预览/导出同源)
@@ -191,6 +192,7 @@ class MermaidNodeView {
     this.contentDOM.className = 'live-mermaid-src'
     this.contentDOM.spellcheck = false
     this.dom.append(this.svgHost, this.contentDOM)
+    clickToContent(editor, getPos, this.dom, this.contentDOM)
     this.refresh()
   }
 
@@ -216,14 +218,14 @@ class MermaidNodeView {
     return true
   }
 
+  // selected 只冻结渲染;光标进内容的展开类由 SelectionEditingClass 插件挂
+  // (tiptap-setup),NodeView 不自管类名
   selectNode(): void {
     this.selected = true
-    this.dom.classList.add('live-mermaid-editing')
   }
 
   deselectNode(): void {
     this.selected = false
-    this.dom.classList.remove('live-mermaid-editing')
     this.lastText = '' // 强制重渲染(源码可能已改)
     this.refresh()
   }
@@ -240,7 +242,7 @@ export const CodeBlockCm = CodeBlock.extend({
     return (props: NodeViewRendererProps) => {
       // mermaid fence → 图表视图;其余语言 → CM 视图
       if ((props.node.attrs.language as string)?.toLowerCase() === 'mermaid') {
-        return new MermaidNodeView(props.node)
+        return new MermaidNodeView(props.node, props.editor, props.getPos)
       }
       return new CodeMirrorNodeView(props)
     }
