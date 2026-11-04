@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
-import { isFontAvailable } from './is-font-available'
+import { isFontAvailable, onFontAvailabilityChange, recheckFontAvailability } from './is-font-available'
 import { useLocalFontList } from './use-local-font-list'
 import { Check, ChevronDown, Copy, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
@@ -177,6 +177,15 @@ export function FontField({
   echoTitle?: string
 }) {
   const [open, setOpen] = useState(false)
+  // 打包字体(webfont)首测误报「未安装」的纠正:复测翻转后 bump 重渲染。
+  // 模块级单例广播,同值多字段(西文/中文/各级标题)一次全纠正
+  const [availTick, setAvailTick] = useState(0)
+  useEffect(() => onFontAvailabilityChange(() => setAvailTick((t) => t + 1)), [])
+  useEffect(() => {
+    void recheckFontAvailability()
+  }, [])
+  // availTick 仅作重渲染信号;eslint 禁空依赖数组引用它故保留此注释
+  void availTick
   const display = value.trim()
   // font-family 是逐族回落的栈值:任一「真实族名」可用即算已安装。
   // 通用关键字与浏览器私有前缀(-apple-system 等)不参与判断,
