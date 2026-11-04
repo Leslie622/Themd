@@ -435,14 +435,15 @@ export class NotebookController {
 
   /**
    * 把笔记绑定到磁盘文件:先写盘成功再设置 sourcePath(失败时状态不变,
-   * 调用方拿抛错提示用户);失联标记随重新绑定解除(「另存为」自救路径)。
+   * 调用方拿抛错提示用户);失联标记随重新绑定解除。
    */
   async bindNoteToFile(id: string, path: string): Promise<void> {
     if (!this.fileLink) throw new Error('当前环境不支持写入本地文件')
     const note = this.state.notes.find((n) => n.id === id)
     if (!note) return
-    // 绑定换目录:正文引用的 assets 图片随迁(统一入口,首绑/另存为/移动即绑定
-    // 都走到这里)。库内笔记 fromDir=null,来源回落全局图片根;同目录改绑跳过
+    // 绑定写盘:正文引用的 assets 图片随迁(新建笔记首绑走这里;移动换目录
+    // 的迁移在 moveNoteToFolder 内自做)。库内笔记 fromDir=null,来源回落全局
+    // 图片根;同目录改绑跳过
     const fromDir = noteDirOf(note.sourcePath)
     const toDir = noteDirOf(path)
     if (toDir && this.migrateAssets && !isSamePath(fromDir ?? '', toDir)) {

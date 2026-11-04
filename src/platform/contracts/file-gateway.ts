@@ -12,9 +12,9 @@ export interface FileGateway {
   pickImageFile(): Promise<{ path: string; name: string } | null>
   /** 写二进制文件(本地 assets 模式图片落盘),自动创建父目录 */
   writeBinaryFile(path: string, bytes: Uint8Array): Promise<void>
-  /** 读二进制文件(绑定/另存为时迁移正文引用的 assets 图片用) */
+  /** 读二进制文件(绑定写盘/移动时迁移正文引用的 assets 图片用) */
   readBinaryFile(path: string): Promise<Uint8Array>
-  /** 删除单个普通文件(另存为后可选清理原文件,须用户确认) */
+  /** 删除单个普通文件(通用文件删除能力,目录一律拒绝) */
   deleteFile(path: string): Promise<void>
   /** 平台默认的图片根目录(应用数据目录) */
   defaultAssetsRoot(): Promise<string>

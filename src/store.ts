@@ -29,7 +29,6 @@ export interface NotebookFacade {
   removeFolder: (id: string) => Promise<void>
   moveNoteToFolder: (id: string, folderId: string) => Promise<void>
   createNoteInFolder: (folderId: string) => Promise<string>
-  bindNoteToFile: (id: string, path: string) => Promise<void>
   flushNote: (id: string) => void
   flushAll: () => void
   reloadNoteFromDisk: (id: string) => Promise<void>
@@ -56,7 +55,6 @@ const facade: NotebookFacade = {
   removeFolder: controller.removeFolder.bind(controller),
   moveNoteToFolder: controller.moveNoteToFolder.bind(controller),
   createNoteInFolder: controller.createNoteInFolder.bind(controller),
-  bindNoteToFile: controller.bindNoteToFile.bind(controller),
   flushNote: controller.flushNote.bind(controller),
   flushAll: controller.flushAll.bind(controller),
   reloadNoteFromDisk: controller.reloadNoteFromDisk.bind(controller),

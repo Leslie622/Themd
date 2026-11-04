@@ -1,15 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { ThemeStudio } from '@/components/theme/ThemeStudio'
 import {
   Dialog,
@@ -66,8 +56,6 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewText, setPreviewText] = useState('')
   const [conflict, setConflict] = useState<{ noteId: string } | null>(null)
-  /** 另存为成功后仍留在原位置的原文件(弹确认框让用户决定删不删) */
-  const [staleOriginal, setStaleOriginal] = useState<{ path: string } | null>(null)
   const sidebarWidth = useWorkspacePrefs((state) => state.sidebarWidth)
   const setSidebarWidth = useWorkspacePrefs((state) => state.setSidebarWidth)
   const rememberedWorkspace = useWorkspacePrefs((state) => state.current)
@@ -110,55 +98,19 @@ export default function App() {
     setActiveNoteDir(active?.sourcePath)
   }, [activeId]) // eslint-disable-line react-hooks/exhaustive-deps -- 目录只取决于绑定路径,切笔记时更新即可
 
-  /**
-   * 主动另存为:当前内容写到所选新位置并重新绑定,assets 图片随迁。
-   * 两种场景同一动作——已绑定=迁到新位置重新绑定;失联笔记=自救重新落盘。
-   * 入口:导出菜单项与 Ctrl+Shift+S。
-   */
-  const handleNoteSaveAs = useCallback(async () => {
-    const { activeId, notes: current, fileMissingIds } = notebookController.getSnapshot()
-    if (!activeId) return
-    const note = current.find((n) => n.id === activeId)
-    if (!note) return
-    const path = await platformServices.files.chooseSavePath({
-      defaultName: `${note.title || '新笔记'}.md`,
-      filterName: 'Markdown 文档',
-      extensions: ['md', 'markdown', 'txt'],
-    })
-    if (!path) return
-    // 另存为是复制语义:原文件保留,成功后弹确认让用户决定是否删掉(=移动)。
-    // 失联笔记原文件已不在磁盘上,无需询问。
-    const previousPath = note.sourcePath
-    const wasMissing = fileMissingIds.has(activeId)
-    try {
-      // 图片随迁统一在 bindNoteToFile 内(老目录 → 新目录)
-      await notebookController.bindNoteToFile(activeId, path)
-      toast.success(`已另存并重新绑定: ${path}`)
-      if (previousPath && previousPath !== path && !wasMissing) setStaleOriginal({ path: previousPath })
-    } catch (error: unknown) {
-      console.error('另存失败:', error)
-      toast.error(`另存失败: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }, [])
-
   /** Ctrl+S:活动笔记立即写回(树=磁盘,保存即落盘) */
   const saveActiveNote = useCallback(() => {
     const { activeId } = notebookController.getSnapshot()
     if (activeId) notebookController.flushNote(activeId)
   }, [])
 
-  // 文件绑定双向同步的落盘时机:Ctrl+S 显式保存;Ctrl+Shift+S 另存为;
-  // 失焦/切后台/托盘退出前冲刷
+  // 文件绑定双向同步的落盘时机:Ctrl+S 显式保存;失焦/切后台/托盘退出前冲刷
   useEffect(() => {
     const flush = () => notebookController.flushAll()
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && !event.shiftKey) {
         event.preventDefault()
-        if (event.shiftKey) {
-          void handleNoteSaveAs()
-        } else {
-          saveActiveNote()
-        }
+        saveActiveNote()
       }
     }
     const onVisibility = () => {
@@ -178,7 +130,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisibility)
       offQuit?.()
     }
-  }, [handleNoteSaveAs, saveActiveNote])
+  }, [saveActiveNote])
 
   /** 编辑入口:直接更新(写回由 controller 防抖落盘) */
   const handleEditorChangeSync = (id: string, content: string) => {
@@ -238,7 +190,6 @@ export default function App() {
       exportPdf={exportPdf}
       exportNoteFile={exportNoteFile}
       fileMissing={activeFileMissing}
-      onNoteSaveAs={() => void handleNoteSaveAs()}
       onNoteDelete={() => {
           if (activeId)
             void removeNote(activeId).catch((error: unknown) => console.error('删除笔记失败:', error))
@@ -276,34 +227,6 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* 另存为后的原文件清理:另存为是复制语义,默认保留,用户确认后可删(=移动) */}
-      <AlertDialog open={staleOriginal !== null} onOpenChange={(open) => { if (!open) setStaleOriginal(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>删除原文件?</AlertDialogTitle>
-            <AlertDialogDescription>
-              已另存到新位置并重新绑定。原文件仍保留在原位置:
-              <span className="mt-1 block break-all font-mono text-xs">{staleOriginal?.path}</span>
-              要把它一并删除吗?(正文引用的图片已复制到新位置,原位置的图片不动)
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>保留原文件</AlertDialogCancel>
-            <AlertDialogAction variant="destructive"
-              onClick={() => {
-                const target = staleOriginal
-                setStaleOriginal(null)
-                if (!target) return
-                void platformServices.files.deleteFile(target.path)
-                  .then(() => toast.success(`已删除原文件: ${target.path}`))
-                  .catch((error: unknown) => toast.error(`删除原文件失败: ${error instanceof Error ? error.message : String(error)}`))
-              }}
-            >
-              删除原文件
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </AppShell>
   )
 }
