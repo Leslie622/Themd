@@ -1,290 +1,14 @@
 import type { ThemeFile } from './schema'
-import { TOKEN_VAR, type ThemeTokens, type TokenKey } from './tokens'
+import { type ThemeTokens, type TokenKey } from './tokens'
 
 /**
- * CSS 导入导出（P3）。
- * 导出：令牌解析为完整 .css 文本（选择器可切换 Typora 兼容的 #write）。
- * 导入：浏览器原生 CSSStyleSheet 解析规则 → 能映射的转为令牌，
- *       映射不了的（伪元素/复杂选择器）收进主题 extraCss 并做作用域包装。
+ * CSS 导入（P3）。
+ * 浏览器原生 CSSStyleSheet 解析规则 → 能映射的转为令牌，
+ * 映射不了的（伪元素/复杂选择器）收进主题 extraCss 并做作用域包装。
+ * CSS 导出走可移植样式包（portable-css.ts，令牌内联 + theme-base 全文），
+ * 旧的 exportThemeCss 平铺翻译已于 2026-11-04 退役。
  */
 
-export type CssScope = '.themd-prose' | '#write'
-
-/** 导出：令牌 → 完整 .css 文本。样式值直接来自令牌（差异集），未设置的项不输出。
- *  app.* 画布类令牌(画布背景)分流到 body 块——它们不属于正文选择器,
- *  Typora 侧即壁纸语义(body 背景)。 */
-export function exportThemeCss(theme: ThemeFile, scope: CssScope = '.themd-prose'): string {
-  const lines: string[] = [
-    `/* ${theme.name} — 由 Themd 主题工场导出 */`,
-    `/* 选择器作用域：${scope}（Typora 主题请用 #write 版本） */`,
-    '',
-  ]
-  const body: string[] = []
-  const appBody: string[] = []
-  // 列表组令牌按各自选择器分组导出,保持插入顺序
-  const scoped = new Map<string, string[]>()
-  for (const [key, varName] of Object.entries(TOKEN_VAR)) {
-    const value = theme.tokens[key as TokenKey]
-    if (value !== undefined && value !== '') {
-      const line = `  ${cssPropFor(key as TokenKey)}: ${value}; /* ${varName} */`
-      const suffix = EXPORT_LIST_SCOPE[key as TokenKey]
-      if (key.startsWith('app.')) {
-        appBody.push(line)
-      } else if (suffix) {
-        // 后缀可能是 'ul, ol' 复合选择器,逐段加作用域前缀
-        for (const part of suffix.split(',').map((s) => s.trim())) {
-          const sel = `${scope} ${part}`
-          if (!scoped.has(sel)) scoped.set(sel, [])
-          scoped.get(sel)!.push(line)
-        }
-      } else {
-        body.push(line)
-      }
-    }
-  }
-  // a.underline 策略展开
-  const underline = theme.tokens['a.underline']
-  if (underline === 'always') {
-    body.push('  text-decoration-line: underline;')
-    body.push('  & a:hover { text-decoration-line: underline; }')
-  } else if (underline === 'hover') {
-    body.push('  text-decoration-line: none;')
-    body.push('  & a:hover { text-decoration-line: underline; }')
-  } else if (underline === 'none') {
-    body.push('  text-decoration-line: none;')
-  }
-  lines.push(`${scope} {`)
-  lines.push(...body)
-  lines.push('}')
-  for (const [sel, ruleLines] of scoped) {
-    lines.push('', `${sel} {`)
-    lines.push(...ruleLines)
-    lines.push('}')
-  }
-  if (appBody.length > 0) {
-    lines.push('', 'body {')
-    lines.push(...appBody)
-    lines.push('}')
-  }
-  if (theme.extraCss?.trim()) {
-    lines.push('', '/* ── 附加自定义 CSS ── */', theme.extraCss)
-  }
-  return lines.join('\n')
-}
-
-/**
- * 列表组令牌的导出选择器后缀（scope 前缀之外还要落到具体列表元素）。
- * 平铺进根规则会污染正文整体（markerColor 变全文颜色、indent 变根容器内边距）；
- * 二级/三级必须落在对应嵌套深度,否则与一级的同名属性互相覆盖。
- */
-const EXPORT_LIST_SCOPE: Partial<Record<TokenKey, string>> = {
-  'list.indent': 'ul, ol',
-  'list.marginBottom': 'ul, ol',
-  'list.position': 'ul, ol',
-  'li.spacing': 'li',
-  'li.fontSize': 'li',
-  'li.leading': 'li',
-  'li.color': 'li',
-  'ul.markerShape': 'ul',
-  'ul.markerShape2': 'ul ul',
-  'ul.markerShape3': 'ul ul ul',
-  'ul.markerColor': 'ul li::marker',
-  'ul.markerColor2': 'ul ul li::marker',
-  'ul.markerColor3': 'ul ul ul li::marker',
-  'ul.markerText': 'ul li::marker',
-  'ul.markerText2': 'ul ul li::marker',
-  'ul.markerText3': 'ul ul ul li::marker',
-  'ul.markerSize': 'ul li::marker',
-  'ol.markerColor': 'ol li::marker',
-  'ol.markerSize': 'ol li::marker',
-  'ol.markerStyle': 'ol',
-  'ol.markerStyle2': 'ol ol',
-  'ol.markerStyle3': 'ol ol ol',
-  'ol.markerText': 'ol li::marker',
-  'ol.markerText2': 'ol ol li::marker',
-  'ol.markerText3': 'ol ol ol li::marker',
-  // 提示块五色:强调色在 CSS 端一色三用(边框/标题/背景 mix),导出只落边框一条
-  // 表格组:平铺进根规则会污染正文(padding/background/边框全变全局),落各自选择器
-  'table.borderColor': 'table, th, td',
-  'table.stripeBg': 'tbody tr:nth-child(2n)',
-  'table.radius': 'table',
-  'table.collapse': 'table',
-  'th.bg': 'thead th',
-  'th.weight': 'thead th',
-  'cell.rowLine': 'th, td',
-  'cell.colLine': 'th, td',
-  'cell.borderWidth': 'th, td',
-  'cell.padding': 'th, td',
-  'row.hoverBg': 'tbody tr:hover',
-  // 任务列表:自绘勾选框的部件导出为 CSS 自定义属性,落在 li 上由
-  // theme-base.css 的 checkbox 块消费(独立 HTML 导出内嵌该文件即可生效);
-  // doneColor 落 li 直接改变已勾项文字色
-  'task.accent': 'li.task-list-item',
-  'task.size': 'li.task-list-item',
-  'task.radius': 'li.task-list-item',
-  'task.borderWidth': 'li.task-list-item',
-  'task.borderColor': 'li.task-list-item',
-  'task.doneColor': 'li.task-list-item',
-  'callout.borderWidth': '.themd-callout',
-  'callout.radius': '.themd-callout',
-  'callout.padding': '.themd-callout',
-  'callout.note': '.themd-callout-note',
-  'callout.tip': '.themd-callout-tip',
-  'callout.important': '.themd-callout-important',
-  'callout.warning': '.themd-callout-warning',
-  'callout.caution': '.themd-callout-caution',
-}
-
-/** 令牌键 → CSS 属性名（与 theme-base.css 消费端一致） */
-function cssPropFor(key: TokenKey): string {
-  const map: Partial<Record<TokenKey, string>> = {
-    'root.fontLatin': 'font-family',
-    'root.size': 'font-size',
-    'root.leading': 'line-height',
-    'root.color': 'color',
-    'root.bg': 'background',
-    'app.bg': 'background',
-    'root.width': 'max-width',
-    'root.spacing': 'letter-spacing',
-    'p.marginBottom': 'margin-bottom',
-    'p.align': 'text-align',
-    'p.indent': 'text-indent',
-    'heading.fontLatin': 'font-family',
-    'heading.color': 'color',
-    'heading.weight': 'font-weight',
-    'heading.leading': 'line-height',
-    'heading.marginTop': 'margin-top',
-    'heading.marginBottom': 'margin-bottom',
-    'h1.fontLatin': 'font-family', 'h2.fontLatin': 'font-family', 'h3.fontLatin': 'font-family',
-    'h4.fontLatin': 'font-family', 'h5.fontLatin': 'font-family', 'h6.fontLatin': 'font-family',
-    'h1.size': 'font-size', 'h2.size': 'font-size', 'h3.size': 'font-size',
-    'h4.size': 'font-size', 'h5.size': 'font-size', 'h6.size': 'font-size',
-    'h1.color': 'color', 'h2.color': 'color', 'h3.color': 'color',
-    'h4.color': 'color', 'h5.color': 'color', 'h6.color': 'color',
-    'h1.borderWidth': 'border-bottom-width', 'h2.borderWidth': 'border-bottom-width',
-    'h1.borderColor': 'border-bottom-color', 'h2.borderColor': 'border-bottom-color',
-    'h1.paddingBottom': 'padding-bottom', 'h2.paddingBottom': 'padding-bottom',
-    'strong.fontLatin': 'font-family',
-    'strong.weight': 'font-weight',
-    'strong.color': 'color',
-    'strong.bg': 'background',
-    'strong.padding': 'padding',
-    'strong.margin': 'margin',
-    'em.style': 'font-style',
-    'em.fontLatin': 'font-family',
-    'em.weight': 'font-weight',
-    'em.color': 'color',
-    'em.bg': 'background',
-    'em.padding': 'padding',
-    'em.margin': 'margin',
-    'del.color': 'color',
-    'del.textColor': 'text-decoration-color',
-    'del.thickness': 'text-decoration-thickness',
-    'del.offset': 'text-underline-offset',
-    'del.fontLatin': 'font-family',
-    'del.weight': 'font-weight',
-    'del.bg': 'background',
-    'del.padding': 'padding',
-    'del.margin': 'margin',
-    'a.color': 'color',
-    'a.hoverColor': 'color',
-    'a.underlineColor': 'text-decoration-color',
-    'a.underlineHeight': 'text-decoration-thickness',
-    'a.hoverLineColor': 'text-decoration-color',
-    'a.transition': 'transition',
-    'a.fontLatin': 'font-family',
-    'a.weight': 'font-weight',
-    'a.bg': 'background',
-    'a.padding': 'padding',
-    'a.margin': 'margin',
-    'inlineCode.fontLatin': 'font-family',
-    'inlineCode.size': 'font-size',
-    'inlineCode.color': 'color',
-    'inlineCode.bg': 'background',
-    'inlineCode.padding': 'padding',
-    'inlineCode.margin': 'margin',
-    'inlineCode.weight': 'font-weight',
-    'inlineCode.radius': 'border-radius',
-    'inlineCode.borderWidth': 'border-width',
-    'inlineCode.borderColor': 'border-color',
-    'codeBlock.fontLatin': 'font-family',
-    'codeBlock.bg': 'background',
-    'codeBlock.size': 'font-size',
-    'codeBlock.leading': 'line-height',
-    'codeBlock.padding': 'padding',
-    'codeBlock.radius': 'border-radius',
-    'codeBlock.borderWidth': 'border-width',
-    'codeBlock.borderColor': 'border-color',
-    'list.indent': 'padding-left',
-    'list.marginBottom': 'margin-bottom',
-    'list.position': 'list-style-position',
-    'li.spacing': 'margin-top',
-    'li.fontSize': 'font-size',
-    'li.leading': 'line-height',
-    'li.color': 'color',
-    'ul.markerColor': 'color',
-    'ul.markerColor2': 'color',
-    'ul.markerColor3': 'color',
-    'ul.markerShape': 'list-style-type',
-    'ul.markerShape2': 'list-style-type',
-    'ul.markerShape3': 'list-style-type',
-    'ul.markerText': 'content',
-    'ul.markerText2': 'content',
-    'ul.markerText3': 'content',
-    'ul.markerSize': 'font-size',
-    'ol.markerColor': 'color',
-    'ol.markerSize': 'font-size',
-    'ol.markerStyle': 'list-style-type',
-    'ol.markerStyle2': 'list-style-type',
-    'ol.markerStyle3': 'list-style-type',
-    'ol.markerText': 'content',
-    'ol.markerText2': 'content',
-    'ol.markerText3': 'content',
-    // 任务列表:自绘勾选框的部件没有单一对应属性(消费点在 task 段选择器块里),
-    // 与 callout.bgOpacity 同理导出为自定义属性——独立 HTML 导出内嵌 theme-base.css
-    // (含 .themd-prose input.task-list-item-checkbox 块)即可生效
-    'task.accent': '--t-task-accent',
-    'task.size': '--t-task-size',
-    'task.radius': '--t-task-radius',
-    'task.borderWidth': '--t-task-border-width',
-    'task.borderColor': '--t-task-border-color',
-    'task.doneColor': '--t-task-done-color',
-    'quote.borderWidth': 'border-left-width',
-    'quote.borderColor': 'border-left-color',
-    'quote.bg': 'background',
-    'quote.color': 'color',
-    'quote.radius': 'border-radius',
-    'quote.padding': 'padding',
-    'quote.style': 'font-style',
-    'callout.borderWidth': 'border-left-width',
-    'callout.radius': 'border-radius',
-    'callout.padding': 'padding',
-    // 背景深浅没有独立 CSS 属性(消费点在 color-mix 里),导出为自定义属性——
-    // 配合 theme-base.css(独立 HTML 导出整体内嵌)即可生效,值本身也是合法声明
-    'callout.bgOpacity': '--t-callout-bg-opacity',
-    'callout.note': 'border-left-color',
-    'callout.tip': 'border-left-color',
-    'callout.important': 'border-left-color',
-    'callout.warning': 'border-left-color',
-    'callout.caution': 'border-left-color',
-    'table.borderColor': 'border-color',
-    'table.stripeBg': 'background',
-    'th.bg': 'background',
-    'th.weight': 'font-weight',
-    'cell.rowLine': 'border-top-style',
-    'cell.colLine': 'border-right-style',
-    'cell.borderWidth': 'border-width',
-    'cell.padding': 'padding',
-    'hr.color': 'background',
-    'hr.thickness': 'height',
-    'img.maxWidth': 'max-width',
-    'img.radius': 'border-radius',
-    'img.borderWidth': 'border-width',
-    'img.borderColor': 'border-color',
-    'img.shadow': 'box-shadow',
-  }
-  return map[key] ?? key.split('.')[1].replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)
-}
 
 // ============================================================
 // 导入：CSS → 令牌 + extraCss
@@ -304,13 +28,13 @@ const SELECTOR_MAP: { keys: TokenKey[]; test: RegExp }[] = [
   { keys: ['ol.markerColor', 'ol.markerSize'], test: /(^|[\s,#.>])ol$/ },
   { keys: ['list.indent', 'list.marginBottom', 'list.position'], test: /(^|[\s,#.>])(ul|ol)$/ },
   { keys: ['li.spacing', 'li.fontSize', 'li.leading', 'li.color'], test: /(^|[\s,#.>])li$/ },
-  { keys: ['task.accent', 'task.size', 'task.radius', 'task.borderWidth', 'task.borderColor', 'task.doneColor'], test: /(^|[\s,#.>])input$/i },
-  { keys: ['task.doneColor'], test: /(^|[\s,#.>])li\.task-list-item$/i },
+  { keys: ['task.accent', 'task.size', 'task.radius', 'task.borderWidth', 'task.borderColor', 'task.doneColor', 'task.todoColor'], test: /(^|[\s,#.>])input$/i },
+  { keys: ['task.doneColor', 'task.todoColor'], test: /(^|[\s,#.>])li\.task-list-item$/i },
   { keys: ['table.borderColor'], test: /(^|[\s,#.>])(table|th|td)$/ },
   { keys: ['th.bg', 'th.weight'], test: /(^|[\s,#.>])th$/ },
   { keys: ['cell.padding'], test: /(^|[\s,#.>])(th|td)$/ },
   { keys: ['hr.color', 'hr.thickness'], test: /(^|[\s,#.>])hr$/ },
-  { keys: ['img.radius'], test: /(^|[\s,#.>])img$/ },
+  { keys: ['img.radius', 'img.margin'], test: /(^|[\s,#.>])img$/ },
   // 根（body/#write/.markdown-body/.themd-prose 自身）
   { keys: ['root.fontLatin'], test: /^(body|html|#write|\.markdown-body|\.themd-prose|\.md-content)$/i },
 ]
@@ -367,6 +91,7 @@ const PROP_MAP: Record<string, Record<string, TokenKey>> = {
   },
   'img.*': {
     'max-width': 'img.maxWidth', 'border-radius': 'img.radius', 'box-shadow': 'img.shadow',
+    'margin': 'img.margin', 'margin-block': 'img.margin',
   },
   'root.*': {
     'font-family': 'root.fontLatin', 'font-size': 'root.size', 'line-height': 'root.leading',

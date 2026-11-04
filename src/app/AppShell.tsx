@@ -231,10 +231,10 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                       </Button>
                     </DropdownMenuTrigger>
                   </IconTip>
-                  {/* 基类把菜单宽度锁在触发按钮宽度,导出条目文本长,抬个下限防换行 */}
+                  {/* 基类把菜单宽度锁在触发按钮宽度(w-(--radix-dropdown-menu-trigger-width));导出条目文本长,这里松绑为随内容自适应,tailwind-merge 会覆盖掉基类 w */}
                   <DropdownMenuContent
                     align="end"
-                    style={{ minWidth: '12rem' }}
+                    className="w-fit"
                     onPointerDown={() => {
                       exportMenuPointerDown.current = true
                     }}

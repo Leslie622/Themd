@@ -74,7 +74,7 @@ import { LiveEditorPane } from '@/components/LiveEditorPane'
 import { NotePicker } from '@/components/theme/NotePicker'
 import { useExtraCss } from '@/components/theme/useExtraCss'
 import { compileTokens, } from '@/lib/theme/compile'
-import { exportThemeCss, importThemeCss } from '@/lib/theme/css-io'
+import { importThemeCss } from '@/lib/theme/css-io'
 import { PORTABLE_TARGETS, buildPortableCss, portableCssFileName, type PortableCssTarget } from '@/lib/theme/portable-css'
 import { ELEMENTS, ELEMENT_GROUPS, elementTokenKeys } from '@/lib/theme/elements'
 import { FOCUSED_SAMPLES } from '@/lib/theme/element-samples'
@@ -113,13 +113,10 @@ function IconTip({ label, children }: { label: string; children: React.ReactElem
   )
 }
 
-function downloadFile(name: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = name
-  a.click()
-  URL.revokeObjectURL(a.href)
+/** 导出走平台 saveText:原生保存对话框选目录 + 落盘(浏览器 blob 下载在 Tauri webview 静默无效) */
+async function downloadFile(input: { defaultName: string; contents: string; filterName: string; extensions: string[] }) {
+  const result = await platformServices.files.saveText(input)
+  if (result.kind === 'saved') toast.success(`已保存到 ${result.path}`)
 }
 
 /** 中栏预览模式:专注样例跟随左侧选中元素;全内容样例是标准完整文档;导入 = 工作区笔记副本(可编辑) */
@@ -319,21 +316,22 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
       null,
       2,
     )
-    downloadFile(`${editing.name}.themd.json`, content, 'application/json')
-    toast.success(`已导出「${editing.name}」主题包`)
-  }
-
-  const handleExportCss = () => {
-    const css = exportThemeCss(editing, '.themd-prose')
-    downloadFile(`${editing.name}.css`, css, 'text/css')
-    toast.success('已导出 CSS')
+    void downloadFile({
+      defaultName: `${editing.name}.themd.json`,
+      contents: content,
+      filterName: '主题包',
+      extensions: ['json'],
+    })
   }
 
   // 可移植样式包:theme-base 全文 + 令牌内联,贴到 Typora/VSCode/GitHub 复现观感
   const handleExportPortable = (target: PortableCssTarget) => {
-    const css = buildPortableCss(editing, target)
-    downloadFile(portableCssFileName(editing.name, target), css, 'text/css')
-    toast.success(`已导出可移植 CSS(${PORTABLE_TARGETS.find((t) => t.id === target)?.label})`)
+    void downloadFile({
+      defaultName: portableCssFileName(editing.name, target),
+      contents: buildPortableCss(editing, target),
+      filterName: 'CSS',
+      extensions: ['css'],
+    })
   }
 
   const handleImportFile = async (file: File) => {
@@ -350,6 +348,9 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
         tokens: target.tokens,
         extraCss: target.extraCss,
       })
+      // 导入即激活:带进来的是成品样式,意图就是使用;只挂列表会造成
+      // 「预览已是它、徽章还钉在旧主题」的割裂(导入者视角=已在使用)
+      setActive(id)
       setEditId(id)
       toast.success(
         `导入完成:映射 ${report.mapped} 条声明,附加 CSS ${report.extra} 条,跳过 ${report.skipped} 条`,
@@ -359,6 +360,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     }
     const id = importTheme(text)
     if (id) {
+      setActive(id)
       setEditId(id)
       toast.success(`已导入「${file.name.replace(/\.themd\.json$/i, '')}」`)
     } else {
@@ -432,7 +434,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
           <DropdownMenu>
             {/* IconTip 必须包在 DropdownMenu 内、套住 Trigger:DropdownMenu Root 是
                 纯 Context 不渲染 DOM,包在外面 TooltipTrigger 的 asChild 会静默失效 */}
-            <IconTip label="导出主题包 / CSS / Typora 主题">
+            <IconTip label="导出主题包 / 可移植样式包">
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="size-8" aria-label="导出">
                   {/* FileSymlink:主页导出笔记同款(箭头穿出文件),与 FileInput 构成一对 */}
@@ -440,14 +442,11 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                 </Button>
               </DropdownMenuTrigger>
             </IconTip>
-            <DropdownMenuContent align="end">
+            {/* 基类把菜单宽度锁在触发按钮宽度,导出条目文本长,抬个下限防换行(同 AppShell) */}
+            <DropdownMenuContent align="end" className="min-w-56">
               <DropdownMenuItem onClick={handleExportJson}>
                 <FileJson />
                 主题包(.themd.json)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportCss}>
-                <FileCode2 />
-                样式表(.css)
               </DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="gap-2">
