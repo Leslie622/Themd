@@ -168,13 +168,15 @@ function NavButton({ side }: { side: 'prev' | 'next' }) {
   // active:translate-y-px 会覆盖 translate 变量,导致按钮按压时下坠半个屏高
   const isPrev = side === 'prev'
   return (
-    <div className={cn('absolute inset-y-0 flex items-center', isPrev ? 'left-4' : 'right-4')}>
+    // wrapper 只做垂直定位,不接收指针:inset-y-0 全高竖条会盖住工具栏按钮
+    // (DOM 里 navigation 在 toolbar 之后,不关 pointer-events 时关闭钮左半 hover/点击全被吞)
+    <div className={cn('pointer-events-none absolute inset-y-0 flex items-center', isPrev ? 'left-4' : 'right-4')}>
       <Button
         variant="ghost"
         size="icon-lg"
         aria-label={isPrev ? '上一张' : '下一张'}
         title={isPrev ? '上一张' : '下一张'}
-        className={cn('size-10', buttonScrim)}
+        className={cn('pointer-events-auto size-10', buttonScrim)}
         disabled={isPrev ? prevDisabled : nextDisabled}
         onClick={() => (isPrev ? prev() : next())}
       >
