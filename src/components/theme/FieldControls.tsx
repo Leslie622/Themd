@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { FieldDef } from '@/lib/theme/elements'
 import { placeholderOf } from '@/lib/theme/elements'
+import { cssColorToRgba, oklchToRgba } from '@/lib/theme/css-color'
 import { cn } from '@/lib/utils'
 
 /**
@@ -65,7 +66,7 @@ export const FieldRow = memo(function FieldRow({
       <Button
         variant="ghost"
         size="icon"
-        className={cn('size-6 shrink-0', value === undefined && 'invisible')}
+        className={cn('mt-1 size-6 shrink-0', value === undefined && 'invisible')}
         onClick={unset}
         aria-label={`重置${field.section ?? ""}${field.label}`}
         title="恢复默认"
@@ -107,22 +108,22 @@ function FieldControl({
           onCommit={onCommit}
         />
       )
+    case 'percent':
+      return <PercentInput value={value} onChange={onChange} placeholder={placeholder} />
     case 'size':
       return <SizeInput value={value} onChange={onChange} unit={field.unit} placeholder={placeholder} />
     case 'box':
       return <BoxInput value={value} onChange={onChange} unit={field.unit} placeholder={placeholder} />
     case 'number':
       return (
-        <Input
-          type="number"
-          inputMode="decimal"
+        <NumberCell
+          value={value ?? ''}
+          onChange={onChange}
+          placeholder={placeholder}
+          className="h-8 text-xs"
+          step={field.step}
           min={field.min}
           max={field.max}
-          step={field.step}
-          value={value ?? ''}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-8 text-xs"
         />
       )
     case 'font-weight':
@@ -239,18 +240,16 @@ function ShadowInput({
   const cell = (i: number, labelText: string) => (
     <label className="flex min-w-0 flex-1 items-center gap-1">
       <span className="w-3 shrink-0 text-center text-[10px] text-muted-foreground">{labelText}</span>
-      <Input
-        type="number"
-        inputMode="decimal"
+      <NumberCell
         value={nums[i]}
         placeholder="0"
-        aria-label={['X 偏移', 'Y 偏移', '模糊', '扩散'][i]}
-        onChange={(e) => {
+        ariaLabel={['X 偏移', 'Y 偏移', '模糊', '扩散'][i]}
+        onChange={(n) => {
           const next = [...nums]
-          next[i] = e.target.value
+          next[i] = n
           emit(next, color)
         }}
-        className="h-7 min-w-0 flex-1 px-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="h-7 min-w-0 flex-1 px-1 text-center text-xs"
       />
     </label>
   )
@@ -418,7 +417,7 @@ function FieldHint({ hint }: { hint?: string }) {
       <Button
         variant="ghost"
         size="icon"
-        className={cn('size-6 shrink-0', value === undefined && 'invisible')}
+        className={cn('mt-1 size-6 shrink-0', value === undefined && 'invisible')}
         onClick={unset}
         aria-label={`重置${field.section ?? ""}${field.label}`}
         title="恢复默认"
@@ -452,9 +451,15 @@ function ColorInput({
   onLivePreview?: (field: FieldDef, v: string) => void
   onCommit?: (field: FieldDef, v: string) => void
 }) {
-  // 取色器是受控面板:hex 与 rgba() 串都能精确回流;其他值(oklch/named)
-  // 取色器从黑起步,色块仍显示真实色
-  const safe = value && (/^#[0-9a-fA-F]{3,8}$/.test(value) || /^rgba?\(/i.test(value)) ? value : '#000000'
+  // 取色器是受控面板,种子按可解析度逐级回落:值本身可回流(hex/rgba/oklch/
+  // canvas 兜底)用值;未设置或不可解析时用回落色(未设置时色块显示的就是它,
+  // 面板指针与实际观感一致);都解析不了才黑起步,色块仍显示真实色
+  const safe =
+    value && parseColorValue(value)
+      ? value
+      : fallbackColor && parseColorValue(fallbackColor)
+        ? fallbackColor
+        : '#000000'
   // 色块本地实时色:拖动期间直接写 DOM,不进 React state
   const swatchRef = useRef<HTMLSpanElement>(null)
   // 始终持有最新回调(effect 内同步,避免渲染期写 ref)
@@ -552,12 +557,15 @@ const PRESET_COLORS = [
  * 项目自有样式 —— 原 Sketch 整包的内联白底、下划线输入、3px 小色板不复存在。
  *
  * 受控语义与原 Sketch 一致:内部持有 hsva,外部 color prop 回流同步
- * (hex 回流;rgba 串只在 a≠1 时出现,同样解析回流),拖动中 onChange
- * 连续回调,调用方决定直写或节流。
+ * (hex/rgba 精确回流;oklch/named 等经 parseColorValue 转换回流,面板指针
+ * 同样落到真实色),拖动中 onChange 连续回调,调用方决定直写或节流。
  */
 function ColorPanel({ color, onChange }: { color: string; onChange: (v: string) => void }) {
-  // 内部 hsva 状态:拖动中自持;外部 color 变化时回流
-  const [hsva, setHsva] = useState<HsvaColor>(() => hexToHsva(color))
+  // 内部 hsva 状态:拖动中自持;外部 color 变化时回流。
+  // 初始化必须走 parseColorValue 而非 hexToHsva:种子可能是 oklch/named 串
+  // (hexToHsva 对它们返回垃圾);且 prevColor 初始即等于 color,下面的回流
+  // 分支对初值不生效,初始化是唯一入口
+  const [hsva, setHsva] = useState<HsvaColor>(() => parseColorValue(color) ?? hexToHsva('#000000'))
   const change = (next: HsvaColor) => {
     setHsva(next)
     onChange(hsvaColorToValue(next))
@@ -659,7 +667,11 @@ function ColorPanel({ color, onChange }: { color: string; onChange: (v: string) 
   )
 }
 
-/** color prop( hex 或 rgba() 串)→ hsva;非法值返回 null(回流时保持原状) */
+/**
+ * color prop → hsva,四级解析:hex / rgb() 精确直解;oklch 数学转换
+ * (css-color 库);其余浏览器认识格式(named/color()/百分号 rgb)canvas
+ * 兜底。都失败返回 null(回流时保持原状)。
+ */
 function parseColorValue(v: string): HsvaColor | null {
   if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return hexToHsva(v)
   const m = v.match(/^rgba?\(([^)]+)\)$/i)
@@ -669,7 +681,8 @@ function parseColorValue(v: string): HsvaColor | null {
       return rgbaToHsva({ r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 1 })
     }
   }
-  return null
+  const rgba = oklchToRgba(v) ?? cssColorToRgba(v)
+  return rgba ? rgbaToHsva(rgba) : null
 }
 
 /** 拖动回流守卫:hsva 各分量都在浮点噪声容差内视为相等,避免 setHsva 抖动 */
@@ -833,7 +846,8 @@ function BackgroundInput({
   // 色块即预览:颜色/图片都是 background 值,直接渲染到色块上;未设置 = 透明棋盘格
   const swatchStyle: React.CSSProperties = value ? { background: value } : { background: TRANSPARENT_SWATCH }
   const swatchRef = useRef<HTMLSpanElement>(null)
-  const safe = value && (/^#[0-9a-fA-F]{3,8}$/.test(value) || /^rgba?\(/i.test(value)) ? value : '#ffffff'
+  // 种子链与 ColorInput 同款:值可回流用值(oklch 也同步),图片值/非法值白起步
+  const safe = value && parseColorValue(value) ? value : '#ffffff'
   // 回调 ref(effect 内同步,避免渲染期写 ref)
   const cbRef = useRef({ onChange, onLivePreview, onCommit, field })
   const onChangeRef = useRef(onChange)
@@ -993,14 +1007,12 @@ function BoxInput({
   const cell = (i: number) => (
     <label className="flex min-w-0 flex-1 items-center gap-1">
       <span className="w-3 shrink-0 text-center text-[10px] text-muted-foreground">{['上', '右', '下', '左'][i]}</span>
-      <Input
-        type="number"
-        inputMode="decimal"
+      <NumberCell
         value={base[i][0]}
         placeholder={placeholders[i]}
-        aria-label={['上', '右', '下', '左'][i]}
-        onChange={(e) => emit(i, e.target.value)}
-        className="h-7 min-w-0 flex-1 px-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        ariaLabel={['上', '右', '下', '左'][i]}
+        onChange={(n) => emit(i, n)}
+        className="h-7 min-w-0 flex-1 px-1 text-center text-xs"
       />
     </label>
   )
@@ -1066,12 +1078,10 @@ function SizeInput({
   }
   return (
     <div className="flex items-center gap-1">
-      <Input
-        type="number"
-        inputMode="decimal"
+      <NumberCell
         value={num}
         placeholder={placeholder}
-        onChange={(e) => emit(e.target.value, curUnit)}
+        onChange={(n) => emit(n, curUnit)}
         className="h-8 min-w-0 flex-1 text-xs"
       />
       <Select
@@ -1092,6 +1102,128 @@ function SizeInput({
           </SelectContent>
       </Select>
     </div>
+  )
+}
+
+/** 百分比：纯数字输入,固定 % 单位(比例类字段如背景深浅,px/em/rem 无意义,无单位下拉)。
+    存值约定与 SizeInput 一致:带单位字符串('8%'),清空发 '' 删令牌回落默认 */
+function PercentInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string | undefined
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  // % 后缀可省(容忍历史裸数字存值)
+  const m = value?.match(/^(-?[\d.]+)%?$/)
+  return (
+    <NumberCell
+      value={m?.[1] ?? ''}
+      onChange={(n) => onChange(n === '' ? '' : `${n}%`)}
+      placeholder={placeholder}
+      className="h-8 min-w-0 flex-1 text-xs"
+    />
+  )
+}
+
+/**
+ * 数字格共用输入件,替代受控的 type=number——number 输入的三宗罪:
+ * "0." 中间态 badInput 把小数点吞掉;空值被上层「空边回落 0」规范化后受控重渲染
+ * 盖写回框,格子一旦有值永远清不空(backspace 无效);原生 ↑↓ 步进与受控值打架会清值。
+ * - text + inputMode=decimal,输入时只放行数字/一个小数点/前导负号(全角数字顺手转半角)
+ * - 聚焦全选:点进已有值的格子输入即替换,不会追加成 "01"
+ * - 焦点内显示草稿:空串/尾点等过渡态原样保留不回弹;每次按键仍向父层报合法值(尾点折掉/空串)
+ * - 失焦规范化:parseFloat 清前导零("01"→"1"),按 min/max 收敛
+ * - ↑↓ 手动步进补回 number 原生行为(±step,Shift=±10×step);value 恒为裸数字
+ */
+function NumberCell({
+  value,
+  onChange,
+  placeholder,
+  className,
+  ariaLabel,
+  step = 1,
+  min,
+  max,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  className?: string
+  ariaLabel?: string
+  step?: number
+  min?: number
+  max?: number
+}) {
+  // 焦点内的显示草稿;null = 未聚焦,展示受控值
+  const [draft, setDraft] = useState<string | null>(null)
+  const clamp = (n: number) => {
+    let v = n
+    if (min !== undefined) v = Math.max(min, v)
+    if (max !== undefined) v = Math.min(max, v)
+    return v
+  }
+  // 入库值:过渡态(尾点/孤立负号/空串)折成合法值,避免预览吃到 "1.em" 这类非法 CSS
+  const clean = (s: string) => {
+    if (s === '' || s === '-') return ''
+    if (s.endsWith('.')) return s.slice(0, -1)
+    return s
+  }
+  const commit = (s: string) => {
+    setDraft(s)
+    const c = clean(s)
+    if (c !== value) onChange(c)
+  }
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      value={draft ?? value}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      className={className}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => {
+        // 只放行数字/一个点/前导负号;全角数字、全角点转半角
+        let out = ''
+        let dot = false
+        for (const ch of e.target.value.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))) {
+          const c = ch === '．' ? '.' : ch
+          if (c >= '0' && c <= '9') out += c
+          else if (c === '.' && !dot) {
+            out += c
+            dot = true
+          } else if (c === '-' && out === '') out += c
+        }
+        commit(out)
+      }}
+      onBlur={() => {
+        const d = draft
+        setDraft(null)
+        if (d !== null && d !== '' && d !== '-') {
+          const n = parseFloat(d)
+          if (!Number.isNaN(n)) {
+            const s = String(clamp(n))
+            if (s !== d && s !== value) onChange(s)
+          }
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+        e.preventDefault()
+        const shown = draft ?? value
+        const cur = parseFloat(shown === '' || shown === '-' ? '0' : shown)
+        if (Number.isNaN(cur)) return
+        // 浮点尾差收敛:按 step 与当前值中小数位较多者四舍五入
+        // (1.1-1=0.10000000000000009 → 0.1;0.1+1=1.1 不被 step=1 的整数精度砍成 1)
+        const decimalsOf = (n: number) => (String(n).split('.')[1] ?? '').length
+        const decimals = Math.max(decimalsOf(cur), decimalsOf(step))
+        const next = Number((cur + (e.key === 'ArrowUp' ? 1 : -1) * step * (e.shiftKey ? 10 : 1)).toFixed(decimals))
+        commit(String(clamp(next)))
+      }}
+    />
   )
 }
 
