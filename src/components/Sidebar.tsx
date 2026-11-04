@@ -15,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react'
 
+import { ThemdLogo } from '@/components/ThemdLogo'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -387,13 +388,8 @@ export function Sidebar() {
           data-tauri-drag-region
           className="flex h-10 items-center justify-between text-foreground"
         >
-          {/* 桌面端无原生标题栏,logo 行即窗口左上角的拖拽区 */}
-          <img
-            src="/themd-logo.png"
-            alt="Themd"
-            data-tauri-drag-region
-            className="h-4 w-auto shrink-0"
-          />
+          {/* 桌面端无原生标题栏,logo 行即窗口左上角的拖拽区;SVG 设 pointer-events-none,点击穿透到带拖拽属性的行容器 */}
+          <ThemdLogo className="h-4 w-auto shrink-0 pointer-events-none" />
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>

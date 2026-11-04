@@ -122,8 +122,8 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
-    /* 界面强调色(黑白 shadcn 基调下的唯一彩色):分割线高光、主题工厂分区标题蓝竖条共用 */
-    --chrome-accent: oklch(0.62 0.12 255);
+    /* 界面强调色 = 品牌蓝(#0231FA,与 logo 点阵 T 同源):分割线高光、主题工厂分区标题竖条/使用中 badge、logo 共用,黑白基调下唯一彩色 */
+    --chrome-accent: #0231FA;
 }
 
 .dark {
@@ -158,7 +158,8 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
-    --chrome-accent: oklch(0.78 0.11 255);
+    /* 同品牌蓝 hue(264)提亮,暗底上不发暗 */
+    --chrome-accent: oklch(0.72 0.21 264);
 }
 
 @layer base {
