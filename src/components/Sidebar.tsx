@@ -342,7 +342,7 @@ export function Sidebar() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
+                      className="size-6 shrink-0 opacity-0 duration-400 focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
                       aria-label={`文件夹 ${f.name} 操作`}
                     >
                       <MoreHorizontal className="size-4" />
@@ -909,7 +909,7 @@ function NoteItem({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                className="size-6 shrink-0 opacity-0 duration-400 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                 aria-label={`笔记 ${note.title} 操作`}
               >
                 <MoreHorizontal className="size-4" />

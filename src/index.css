@@ -654,12 +654,8 @@
   outline-offset: 2px;
 }
 
-/* 列表行 hover 背景:左→右擦入、移出向右擦走(荧光笔节奏)。
-   伪元素铺 6% 前景底色,行内容绘制在其上;border-radius 继承行的圆角。
-   用 width/left 动画而非 scaleX 缩放:缩放会把圆角一起压扁(动画中变直角),
-   width 动画下矩形两端始终是完整圆角;方向不对称靠进入/移出各自的
-   transition 清单实现——进入只动 width(left 零宽瞬移不可见),
-   移出 width+left 同动(右缘钉在行右端,底色向右塌缩擦走) */
+/* 列表行 hover 背景:整体淡入淡出,过渡时长 400ms(无方向性擦入)。
+   伪元素铺 6% 前景底色,行内容绘制在其上;border-radius 继承行的圆角 */
 .list-row-wipe {
   position: relative;
   isolation: isolate;
@@ -667,19 +663,13 @@
 .list-row-wipe::before {
   content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 100%; /* 隐藏态:零宽贴右端 */
-  width: 0;
+  inset: 0;
   z-index: -1;
   border-radius: inherit;
   background: color-mix(in oklch, var(--foreground) 6%, transparent);
-  transition:
-    left 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-    width 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
+  transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .list-row-wipe:hover::before {
-  left: 0;
-  width: 100%;
-  transition: width 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 1;
 }

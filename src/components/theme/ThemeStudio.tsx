@@ -948,7 +948,7 @@ function ThemeLibrary(props: {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-6 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                        className="size-6 shrink-0 opacity-0 duration-400 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                         aria-label={`主题 ${t.name} 操作`}
                       >
                         <MoreHorizontal className="size-4" />
