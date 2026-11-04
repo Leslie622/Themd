@@ -256,7 +256,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={exportPdf}>
                       <Printer />
-                      导出 PDF(打印)…
+                      导出 PDF
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

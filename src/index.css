@@ -288,34 +288,76 @@
 }
 
 /* ---------- 打印 / 导出 PDF ----------
- * 只打印笔记正文(.themd-prose):visibility 方案不动布局,正文绝对定位后
- * 从页首完整流动分页;主题令牌/hljs/附加 CSS 随 DOM 原样输出。
- * 颜色不做白纸转换:所见即所得,暗色主题(如暗色终端)导出即黑底。
- * WebView2 PrintToPdf 默认打印背景图形;系统打印对话框则依赖用户勾选
- * 「背景图形」——勾掉时暗色主题只有文字色,底色靠 body 的显式背景兜底。
- * unlayered 规则优先级高于 Tailwind utilities 层,可直接压过 px-6/py-8。
+ * 只打印笔记正文(.themd-prose),两步走:
+ * 1) :has 把不含正文的骨架枝干整枝摘除(display:none 不占位——visibility 方案
+ *    只是隐身仍占布局,侧栏/大纲的宽度留成白带,是「导出左半边白」的根因);
+ * 2) 正文祖先链拍平为普通块级流:释放 flex/百分比宽度、高度链与滚动裁剪。
+ *    绝对定位元素在 Chromium 打印里不跨页分页(超出首页整体裁掉),
+ *    overflow:hidden 祖先也会拦腰裁剪——两者都是「导出只有一页」的根因,
+ *    拍平后正文从页首随文档流自然分页。
+ * 颜色不做白纸转换:所见即所得,暗色主题(如暗色终端)导出即黑底;
+ * 页边距在 Rust 侧(PrintToPdf)置 0,纸张留白由正文自身 px-6/py-8 承担,
+ * 根元素背景才能铺满整张纸(打印机边距区域文档画不到,会露白)。
+ * unlayered 规则优先级高于 Tailwind utilities 层,可直接压过工具类。
  */
 @media print {
-  body * {
-    visibility: hidden !important;
+  /* 不含正文的骨架枝干整枝摘除(display:none 不占位)。
+     三个 :not 缺一不可:正文本身、正文祖先(靠 :has 放行)、正文内部元素
+     (它们既非正文本身也不「包含」正文,不加会整篇被藏掉) */
+  body :not(.themd-prose):not(:has(.themd-prose)):not(.themd-prose *) {
+    display: none !important;
   }
-  .themd-prose,
-  .themd-prose * {
-    visibility: visible !important;
+  /* 正文祖先链拍平:块级、无裁剪、无定位、尺寸归 auto,内容自然流动。
+     body/#root 基础样式 height:100% 也在链上,一并归 auto,
+     否则长文仍被 100% 视口高度框住 */
+  body,
+  #root,
+  body :has(.themd-prose) {
+    display: block !important;
+    overflow: visible !important;
+    position: static !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    /* 链上画布色(预览视口的 app-bg 内联背景)退场,纸张色只留给正文与根元素 */
+    background: none !important;
   }
   .themd-prose {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    margin: 0 auto;
-    padding: 0;
+    /* 面板宽度约束退场后正文全幅铺开:底色铺满纸面不留白边。
+       A4 宽 794px vs 主题列宽 48rem=768px 只差 26px,全幅几乎不损失观感,
+       却是暗色主题整页黑底的关键——居中窄列会在纸的两侧露出画布色/白边 */
+    width: 100%;
+    max-width: none;
     /* 暗色主题下 prose 自身底色即纸张色;min-height 保证内容不足一页也铺满首页 */
     background: var(--t-root-bg, transparent);
     min-height: 100vh;
     print-color-adjust: exact;
+    /* 每页克隆内边距:py-8 原本只在元素开头生效一次,续页内容贴纸边;
+       clone 让每个分页碎片各自带上 px-6/py-8 与背景——续页有呼吸空间,
+       暗色底色仍铺满整页(留白画在背景内,不是页边距露白)。
+       Chromium 130+ 支持块级碎片克隆;旧内核回落为仅首页有留白 */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
-  /* 全链路吃掉浏览器打印时的默认白底假设:正文底色铺满每页 */
+  /* 整体块不拦腰切:提示块/引用块/代码块/表格/图片/块级公式/mermaid 图
+     骑在页边界时整块挪到下一页。块高超过一整页时浏览器忽略此规则照切
+     (否则永远放不下),属合理退化 */
+  .themd-prose :is(.themd-callout, blockquote, pre, table, img, .katex-block, .themd-mermaid) {
+    break-inside: avoid;
+  }
+  /* 标题不孤悬页尾:页底放不下「标题+至少一行正文」就整体挪下一页 */
+  .themd-prose :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+  }
+  /* 列表项尽量整项流动,不在项中间切 */
+  .themd-prose li {
+    break-inside: avoid;
+  }
+  /* 全链路吃掉浏览器打印时的默认白底假设:每页纸张色由根元素铺满 */
   html,
   body {
     background: var(--t-root-bg, transparent) !important;
@@ -469,7 +511,7 @@
       center calc(var(--glow-y, -9999px) - 80px) / 100% 160px no-repeat;
 }
 /* 把手默认灰,光带纵向扫到它时(--glow-knob 非零)才混入强调色。
-   混色必须用 oklab:oklch 下蓝(色相 255)与灰(色相 0)插值会绕经粉/红区。
+   混色必须用 oklab:oklch 下蓝(色相 264)与灰(色相 0)插值会绕经粉/红区。
    过渡与光带同档:变量是逐帧直写的,离开时一步归零,没过渡会闪断 */
 .divider-glow > div {
   background: color-mix(in oklab, var(--chrome-accent) calc(var(--glow-knob, 0) * 100%), var(--border));

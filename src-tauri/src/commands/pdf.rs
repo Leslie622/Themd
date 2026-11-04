@@ -36,6 +36,12 @@ pub(crate) async fn export_pdf(app: tauri::AppHandle, path: String) -> Result<()
                         .map_err(|e| e.to_string())?;
                     settings.SetPageWidth(8.27).map_err(|e| e.to_string())?;
                     settings.SetPageHeight(11.69).map_err(|e| e.to_string())?;
+                    // 页边距置 0:留白由正文自身 px-6/py-8 承担(所见即所得),
+                    // 打印机边距区域文档画不到——非 0 时暗色主题四周会露白边
+                    settings.SetMarginLeft(0.0).map_err(|e| e.to_string())?;
+                    settings.SetMarginRight(0.0).map_err(|e| e.to_string())?;
+                    settings.SetMarginTop(0.0).map_err(|e| e.to_string())?;
+                    settings.SetMarginBottom(0.0).map_err(|e| e.to_string())?;
                     let core7: ICoreWebView2_7 = core.cast().map_err(|e| {
                         format!("不支持的 WebView2 运行时: {e}")
                     })?;
