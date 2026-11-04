@@ -40,8 +40,9 @@ describe('gfm-alerts 规则', () => {
     expect(html).toContain('正文第二行')
   })
 
-  it('小写/未知类型降级为普通引用块', () => {
-    expect(renderMarkdown('> [!note]\n> x').html).toContain('<blockquote>')
+  it('标记不分大小写:小写/混合大小写均识别,未知类型仍降级', () => {
+    expect(renderMarkdown('> [!note]\n> x').html).toContain('themd-callout-note')
+    expect(renderMarkdown('> [!Warning]\n> x').html).toContain('themd-callout-warning')
     expect(renderMarkdown('> [!CUSTOM]\n> x').html).toContain('<blockquote>')
   })
 

@@ -24,7 +24,7 @@ import type { Node as PMNode } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { titleInnerHtml, type GfmAlertType } from '@/modules/rendering/gfm-alerts'
 
-const ALERT_MARKER_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:\n|$)/
+const ALERT_MARKER_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:\n|$)/i
 
 /** marked 的 blockquote token:首段标记时返回类型 */
 function alertTypeOf(token: MarkdownToken): GfmAlertType | null {

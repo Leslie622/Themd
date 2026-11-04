@@ -40,8 +40,8 @@ export function titleHtml(type: GfmAlertType): string {
   return `<p class="themd-callout-title">${titleInnerHtml(type)}</p>`
 }
 
-/** 匹配 blockquote 首段的 [!TYPE] 标记(大小写敏感,GitHub 同款只认大写) */
-const ALERT_MARKER = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:\n|$)/
+/** 匹配 blockquote 首段的 [!TYPE] 标记(不分大小写,类型归一化见下方 toLowerCase) */
+const ALERT_MARKER = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:\n|$)/i
 
 /**
  * core 规则:块级解析完成后遍历 token 流找 alert 引用块。
