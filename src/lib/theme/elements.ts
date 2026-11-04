@@ -21,6 +21,7 @@ export type FieldType =
   | 'color'        // 取色器 + hex 输入
   | 'size'         // 字号/间距：数字 + 单位（px/em/rem/%）
   | 'number'       // 纯数字（如行高倍数）
+  | 'percent'      // 百分比：纯数字输入,固定 % 单位(比例类字段,长度单位无意义)
   | 'font-weight'  // 字重下拉 100–900
   | 'font-family'  // 字体：预设列表 + 自定义输入
   | 'select'       // 枚举下拉
@@ -322,6 +323,7 @@ export const ELEMENTS: ElementDef[] = [
       { key: 'task.borderWidth', label: '边框粗细', type: 'size', unit: 'px' },
       { key: 'task.borderColor', label: '边框颜色', type: 'color' },
       { key: 'task.doneColor', label: '完成文字颜色', type: 'color', hint: '已勾选项的文字颜色;未设置时与正文一致' },
+      { key: 'task.todoColor', label: '未完成文字颜色', type: 'color', hint: '未勾选项的文字颜色;未设置时与正文一致' },
     ],
   },
   {
@@ -351,12 +353,12 @@ export const ELEMENTS: ElementDef[] = [
       { key: 'callout.borderWidth', label: '左边框粗细', type: 'size', unit: 'px', section: '共用' },
       { key: 'callout.radius', label: '圆角', type: 'size', unit: 'px', section: '共用' },
       { key: 'callout.padding', label: '内边距', type: 'box', unit: 'em', section: '共用' },
-      { key: 'callout.bgOpacity', label: '背景深浅', type: 'size', unit: '%', section: '共用', hint: '强调色混合进背景的比例，0 = 无背景' },
-      { key: 'callout.note', label: 'Note 蓝', type: 'color', section: '颜色', hint: '> [!NOTE] 的强调色：边框/标题/背景同源' },
-      { key: 'callout.tip', label: 'Tip 绿', type: 'color', section: '颜色' },
-      { key: 'callout.important', label: 'Important 紫', type: 'color', section: '颜色' },
-      { key: 'callout.warning', label: 'Warning 黄', type: 'color', section: '颜色' },
-      { key: 'callout.caution', label: 'Caution 红', type: 'color', section: '颜色' },
+      { key: 'callout.bgOpacity', label: '背景深浅', type: 'percent', section: '共用', hint: '强调色混合进背景的比例，0 = 无背景' },
+      { key: 'callout.note', label: 'Note', type: 'color', section: '颜色', hint: '> [!NOTE] 的强调色：边框/标题/背景同源' },
+      { key: 'callout.tip', label: 'Tip', type: 'color', section: '颜色' },
+      { key: 'callout.important', label: 'Important', type: 'color', section: '颜色' },
+      { key: 'callout.warning', label: 'Warning', type: 'color', section: '颜色' },
+      { key: 'callout.caution', label: 'Caution', type: 'color', section: '颜色' },
     ],
   },
   {
@@ -427,6 +429,7 @@ export const ELEMENTS: ElementDef[] = [
         { value: 'auto', label: '居中' },
         { value: '0 auto', label: '右' },
       ] },
+      { key: 'img.margin', label: '外边距', type: 'size', unit: 'em', hint: '图片上下的留白;左右间距由水平对齐决定' },
       { key: 'img.radius', label: '圆角', type: 'size', unit: 'px' },
       { key: 'img.borderWidth', label: '边框粗细', type: 'size', unit: 'px' },
       { key: 'img.borderColor', label: '边框颜色', type: 'color' },

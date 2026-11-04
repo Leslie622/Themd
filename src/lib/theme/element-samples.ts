@@ -1,10 +1,10 @@
 /**
- * 示例图片(480×120 灰底占位 PNG)。
- * 注意 markdown-it 默认只放行 gif/png/jpeg/webp 的 data: 链接,
- * svg data URL 会被当纯文本渲染,所以这里用 base64 PNG。
+ * 示例图片(主题工场样例用),放 public/ 由 Vite 按根路径分发,
+ * 开发端走 dev server、打包端走 Tauri 内置资源,桌面/Web 都能加载。
+ * 相对路径两类解析(assets/ 全局根、绑定笔记目录)都不匹配 `/` 开头
+ * 的绝对路径,resolveImageSrcSync 原样放行,不会被渲染管线改写。
  */
-export const SAMPLE_IMAGE =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAeAAAAB4CAIAAACl9LZYAAABcklEQVR42u3UMQ0AIBAEwfevgQ4Br+pDgQlUkFwxySjYYmvtBiBQSQAQPeg5F4AQBg1g0AAYNIBBA2DQAAYNgEEDYNAABg2AQQMYNAAGDYBBAxg0AAYNYNAAGDSAQcsBYNAAGDSAQQNg0AAGDYBBA2DQAAYNgEEDGDQABg1g0AYNYNAAGDSAQQNg0AAGDYBBA2DQAAYNgEEDGDQABg1g0AYNYNAAGDSAQQNg0AAGDYBBA2DQAAYNgEEDGDQABg2AQQMYNAAGDWDQABg0gEErAmDQABg0gEEDYNAABg2AQQNg0AAGDYBBAxg0AAYNYNAGDWDQABg0gEEDYNAABg2AQQNg0AAGDYBBAxg0AAYNYNAGDWDQABg0gEEDYNAABg2AQQNg0AAGDYBBAxg0AAYNYNAGDWDQABg0gEEDYNAABg2AQQNg0AAGDYBBAxg0AAYNgEEDGDQABg1g0AAYNIBBKwJg0AAYNIBBA2DQAAYNgEEDYNAABg2AQQMYNAAGDWDQBg1g0AAYNIBBA/Bz0ACkMWiAUA9iFKqGFeC1mwAAAABJRU5ErkJggg=='
+export const SAMPLE_IMAGE = '/themd-sample.jpg'
 
 /**
  * 元素级专注样例:中栏「专注样例」模式只渲染当前选中元素对应的一段 md,
@@ -87,7 +87,7 @@ Themd 把这些排印参数做成令牌，你在右侧调整的每一项都会�
    2. 再调行高与颜色
       1. 嵌套编号会换成小写字母
 3. 导出 CSS，应用到你的文档`,
-  task: `勾选框是自绘的:形状、边框、圆角、大小与勾选底色都可在右侧调整,已勾项文字还能单独配色:
+  task: `勾选框是自绘的:形状、边框、圆角、大小与勾选底色都可在右侧调整,已勾/未勾项文字还能分别配色:
 
 - [x] 选定正文字体
 - [x] 调整标题层级
@@ -150,5 +150,5 @@ applyTheme({ 'root.size': '17px', 'strong.color': '#b91c1c' })
 分割线下方的段落。分割线的颜色与粗细可在右侧调整；想要更轻的分隔感，把颜色调浅、粗细保持 1px 即可。`,
   img: `![主题工场的示例图片](${SAMPLE_IMAGE})
 
-图片的最大宽度、圆角、边框与阴影都是可定制的；配一张说明文字，更能看出图与文的间距关系。点击预览里的图片可以打开灯箱放大查看。`,
+图片的最大宽度、上下外边距、圆角、边框与阴影都是可定制的；配一张说明文字，更能看出图与文的间距关系。点击预览里的图片可以打开灯箱放大查看。`,
 }

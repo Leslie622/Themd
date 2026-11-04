@@ -156,6 +156,7 @@ export const TOKEN_VAR = {
   'task.borderWidth': '--t-task-border-width',
   'task.borderColor': '--t-task-border-color',
   'task.doneColor': '--t-task-done-color',
+  'task.todoColor': '--t-task-todo-color',
   // 引用
   'quote.borderWidth': '--t-quote-border-width',
   'quote.borderColor': '--t-quote-border-color',
@@ -200,6 +201,7 @@ export const TOKEN_VAR = {
   'img.borderWidth': '--t-img-border-width',
   'img.borderColor': '--t-img-border-color',
   'img.shadow': '--t-img-shadow',
+  'img.margin': '--t-img-margin',
   // 画布背景:预览区整体(正文那张「纸」之外)。值为完整 CSS background
   // (颜色/渐变/url(...) center / cover no-repeat),消费点是预览滚动容器
   'app.bg': '--t-app-bg',

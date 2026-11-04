@@ -303,6 +303,11 @@
   background-position: center;
   background-repeat: no-repeat;
 }
+/* 未勾项文字色:todoColor 未设置时不变(保持正文色) */
+.themd-prose li.task-list-item:has(> input:not(:checked)),
+.themd-prose li.task-list-item:has(> p > input:not(:checked)) {
+  color: var(--t-task-todo-color, inherit);
+}
 /* 已勾项文字完成态:doneColor 未设置时不变(保持正文色) */
 .themd-prose li.task-list-item:has(> input:checked),
 .themd-prose li.task-list-item:has(> p > input:checked) {
@@ -466,6 +471,8 @@
   max-width: var(--t-img-max-width, 100%);
   width: var(--t-img-width, auto);
   height: var(--t-img-height, auto);
+  /* 上下外边距:留白独立可调;左右间距由水平对齐(margin-inline)接管,互不干扰 */
+  margin-block: var(--t-img-margin, 0);
   /* 图片是块级(preflight),水平对齐走 margin-inline:左 0 / 中 auto / 右 0 auto */
   margin-inline: var(--t-img-align, 0);
   border-radius: var(--t-img-radius, 4px);
