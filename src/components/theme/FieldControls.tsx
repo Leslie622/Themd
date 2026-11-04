@@ -1021,7 +1021,7 @@ function BoxInput({
           emitSides(base.map((s) => [s[0], u] as [string, string]))
         }}
       >
-        <SelectTrigger size="sm" className="w-16 shrink-0">
+        <SelectTrigger size="sm" className="w-20 shrink-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -1078,7 +1078,7 @@ function SizeInput({
         value={curUnit}
         onValueChange={(u) => emit(num || '0', u)}
       >
-        <SelectTrigger size="sm" className="w-16 shrink-0">
+        <SelectTrigger size="sm" className="w-20 shrink-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
