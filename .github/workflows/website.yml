@@ -43,7 +43,11 @@ jobs:
           exit $EXIT
       - name: Build
         working-directory: website
-        run: npx vite build
+        run: |
+          npx vite build 2>&1 | tee /tmp/vite.log
+          EXIT=${PIPESTATUS[0]}
+          grep -iE "^error|Error:|ERROR" /tmp/vite.log | sed 's/^/::error /' || true
+          exit $EXIT
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
