@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://leslie622.github.io/Themd/sitemap.xml
