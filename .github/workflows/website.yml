@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -48,6 +48,20 @@ jobs:
           EXIT=${PIPESTATUS[0]}
           grep -iE "^error|Error:|ERROR" /tmp/vite.log | sed 's/^/::error /' || true
           exit $EXIT
+      # 排查用:失败时把日志推到 ci-log-dump 分支,raw 匿名可读
+      - name: Dump logs
+        if: failure()
+        run: |
+          git config user.name "ci-log-bot"
+          git config user.email "ci-log-bot@users.noreply.github.com"
+          git fetch origin ci-log-dump 2>/dev/null || true
+          git checkout -B ci-log-dump
+          cp /tmp/vite.log build-vite.log 2>/dev/null || true
+          cp /tmp/tsc.log build-tsc.log 2>/dev/null || true
+          cp /tmp/npm*.log build-npm.log 2>/dev/null || true
+          git add -f build-*.log 2>/dev/null || true
+          git commit -m "ci log dump run ${{ github.run_id }}" || true
+          git push https://x-access-token:${{ github.token }}@github.com/${{ github.repository }} ci-log-dump --force
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
