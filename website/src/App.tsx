@@ -1,4 +1,5 @@
 import { ThemeProvider } from "@/components/theme-provider"
+import { LangProvider } from "@/lib/i18n/i18n-context"
 import LandingPage from "@/app/landing/page"
 
 function App() {
@@ -8,7 +9,9 @@ function App() {
       style={{ fontFamily: "var(--font-inter)" }}
     >
       <ThemeProvider defaultTheme="system" storageKey="themd-website-ui-theme">
-        <LandingPage />
+        <LangProvider storageKey="themd-website-ui-lang">
+          <LandingPage />
+        </LangProvider>
       </ThemeProvider>
     </div>
   )

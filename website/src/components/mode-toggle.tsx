@@ -3,6 +3,7 @@ import { Moon, Sun } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useTheme } from "@/components/theme-provider"
+import { useLang } from "@/lib/i18n/i18n-context"
 
 interface ModeToggleProps {
   variant?: "outline" | "ghost" | "default"
@@ -10,6 +11,7 @@ interface ModeToggleProps {
 
 export function ModeToggle({ variant = "outline" }: ModeToggleProps) {
   const { theme, setTheme } = useTheme()
+  const { t } = useLang()
 
   const [isDarkMode, setIsDarkMode] = React.useState(false)
 
@@ -43,7 +45,7 @@ export function ModeToggle({ variant = "outline" }: ModeToggleProps) {
       size="icon"
       onClick={handleToggle}
       className="cursor-pointer"
-      aria-label={isDarkMode ? "切换到亮色模式" : "切换到暗色模式"}
+      aria-label={isDarkMode ? t.common.toggleToLight : t.common.toggleToDark}
     >
       {isDarkMode ? (
         <Sun className="size-[1.2rem]" />
@@ -51,7 +53,7 @@ export function ModeToggle({ variant = "outline" }: ModeToggleProps) {
         <Moon className="size-[1.2rem]" />
       )}
       <span className="sr-only">
-        切换到{isDarkMode ? "亮色" : "暗色"}模式
+        {isDarkMode ? t.common.toggleToLight : t.common.toggleToDark}
       </span>
     </Button>
   )

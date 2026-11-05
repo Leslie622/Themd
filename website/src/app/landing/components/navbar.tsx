@@ -16,16 +16,11 @@ import {
 } from "@/components/ui/sheet"
 import { ThemdLogo } from "@/components/ThemdLogo"
 import { ModeToggle } from "@/components/mode-toggle"
+import { LanguageToggle } from "@/components/language-toggle"
+import { useLang } from "@/lib/i18n/i18n-context"
 
 const GITHUB_URL = "https://github.com/Leslie622/Themd"
 const DOWNLOAD_URL = "https://github.com/Leslie622/Themd/releases"
-
-const navigationItems = [
-  { name: "功能", href: "#features" },
-  { name: "主题工场", href: "#studio" },
-  { name: "下载", href: "#download" },
-  { name: "常见问题", href: "#faq" },
-]
 
 // Smooth scroll function
 const smoothScrollTo = (targetId: string) => {
@@ -41,6 +36,7 @@ const smoothScrollTo = (targetId: string) => {
 }
 
 function GithubButton({ className }: { className?: string }) {
+  const { t } = useLang()
   return (
     <Button
       variant="ghost"
@@ -48,7 +44,7 @@ function GithubButton({ className }: { className?: string }) {
       className={className}
       nativeButton={false}
       render={
-        <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="GitHub 仓库" />
+        <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label={t.common.githubRepo} />
       }
     >
       <Github className="size-5" />
@@ -58,46 +54,51 @@ function GithubButton({ className }: { className?: string }) {
 
 export function LandingNavbar() {
   const [isOpen, setIsOpen] = useState(false)
+  const { t } = useLang()
+  const navigationItems = t.nav.items
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <a
-            href="#hero"
-            onClick={(e) => {
-              e.preventDefault()
-              smoothScrollTo("#hero")
-            }}
-            className="flex items-center gap-2 cursor-pointer"
-            aria-label="Themd 首页"
-          >
-            <ThemdLogo className="h-7 w-auto" />
-          </a>
-        </div>
+        {/* Left: Logo + Navigation */}
+        <div className="flex items-center gap-2 md:gap-8">
+          <div className="flex items-center gap-2">
+            <a
+              href="#hero"
+              onClick={(e) => {
+                e.preventDefault()
+                smoothScrollTo("#hero")
+              }}
+              className="flex items-center gap-2 cursor-pointer"
+              aria-label={t.common.home}
+            >
+              <ThemdLogo className="h-7 w-auto" />
+            </a>
+          </div>
 
-        {/* Desktop Navigation */}
-        <NavigationMenu className="hidden md:flex">
-          <NavigationMenuList>
-            {navigationItems.map((item) => (
-              <NavigationMenuItem key={item.name}>
-                <NavigationMenuLink
-                  className="group inline-flex h-10 w-max items-center justify-center px-4 py-2 text-sm font-medium transition-colors hover:text-primary focus:text-primary focus:outline-none cursor-pointer"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    smoothScrollTo(item.href)
-                  }}
-                >
-                  {item.name}
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-            ))}
-          </NavigationMenuList>
-        </NavigationMenu>
+          {/* Desktop Navigation */}
+          <NavigationMenu className="hidden md:flex">
+            <NavigationMenuList className="flex-none justify-start">
+              {navigationItems.map((item) => (
+                <NavigationMenuItem key={item.name}>
+                  <NavigationMenuLink
+                    className="group inline-flex h-10 w-max items-center justify-center px-4 py-2 text-sm font-medium transition-colors hover:text-primary focus:text-primary focus:outline-none cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      smoothScrollTo(item.href)
+                    }}
+                  >
+                    {item.name}
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              ))}
+            </NavigationMenuList>
+          </NavigationMenu>
+        </div>
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-2">
+          <LanguageToggle variant="ghost" />
           <ModeToggle variant="ghost" />
           <GithubButton />
           <Button
@@ -107,7 +108,7 @@ export function LandingNavbar() {
               <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer" />
             }
           >
-            免费下载
+            {t.nav.download}
           </Button>
         </div>
 
@@ -120,7 +121,7 @@ export function LandingNavbar() {
             }
           >
             <Menu className="size-5" />
-            <span className="sr-only">打开菜单</span>
+            <span className="sr-only">{t.common.openMenu}</span>
           </SheetTrigger>
           <SheetContent
             side="right"
@@ -133,6 +134,7 @@ export function LandingNavbar() {
                 <div className="flex items-center gap-2">
                   <ThemdLogo className="h-6 w-auto" />
                   <div className="ml-auto flex items-center gap-2">
+                    <LanguageToggle variant="ghost" />
                     <ModeToggle variant="ghost" />
                     <GithubButton />
                     <Button
@@ -177,7 +179,7 @@ export function LandingNavbar() {
                     <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer" />
                   }
                 >
-                  免费下载 Windows 版
+                  {t.nav.downloadWindows}
                 </Button>
               </div>
             </div>

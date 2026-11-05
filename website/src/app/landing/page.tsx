@@ -7,6 +7,7 @@ import { DownloadSection } from "./components/download-section"
 import { FaqSection } from "./components/faq-section"
 import { LandingFooter } from "./components/footer"
 import { AboutSection } from "./components/about-section"
+import { ShareSection } from "./components/share-section"
 
 export default function LandingPage() {
   return (
@@ -20,6 +21,7 @@ export default function LandingPage() {
         <StatsSection />
         <FeaturesSection />
         <AboutSection />
+        <ShareSection />
         <DownloadSection />
         <FaqSection />
         <CTASection />
