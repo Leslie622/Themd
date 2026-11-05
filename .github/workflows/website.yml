@@ -33,9 +33,12 @@ jobs:
         if: runner.os == 'Linux'
         working-directory: website
         run: npm ls @rollup/rollup-linux-x64-gnu --depth=0 2>/dev/null || npm i --no-save @rollup/rollup-linux-x64-gnu
+      - name: Type check
+        working-directory: website
+        run: npx tsc -b --pretty false
       - name: Build
         working-directory: website
-        run: npm run build
+        run: npx vite build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
