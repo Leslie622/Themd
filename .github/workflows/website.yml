@@ -27,7 +27,12 @@ jobs:
           node-version: 22
       - name: Install dependencies
         working-directory: website
-        run: npm ci
+        run: npm ci --include=optional
+      # Windows 上生成的 lockfile 在 Linux 可能缺 rollup 原生可选依赖,缺了就补装
+      - name: Ensure Linux rollup native binary
+        if: runner.os == 'Linux'
+        working-directory: website
+        run: npm ls @rollup/rollup-linux-x64-gnu --depth=0 2>/dev/null || npm i --no-save @rollup/rollup-linux-x64-gnu
       - name: Build
         working-directory: website
         run: npm run build
