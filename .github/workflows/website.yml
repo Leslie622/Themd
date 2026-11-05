@@ -35,7 +35,12 @@ jobs:
         run: npm ls @rollup/rollup-linux-x64-gnu --depth=0 2>/dev/null || npm i --no-save @rollup/rollup-linux-x64-gnu
       - name: Type check
         working-directory: website
-        run: npx tsc -b --pretty false
+        run: |
+          npx tsc -b --pretty false 2>&1 | tee /tmp/tsc.log
+          EXIT=${PIPESTATUS[0]}
+          # 把错误行转成 GitHub 注解,便于匿名 API 排查
+          grep -E "error TS" /tmp/tsc.log | sed 's/^/::error /' || true
+          exit $EXIT
       - name: Build
         working-directory: website
         run: npx vite build
