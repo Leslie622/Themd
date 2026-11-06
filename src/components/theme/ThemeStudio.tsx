@@ -83,6 +83,8 @@ import type { FieldDef } from '@/lib/theme/elements'
 import { resolveFallbackColors, resolveFallbackFonts } from '@/lib/theme/color-fallbacks'
 import { inspectElementId } from '@/lib/theme/inspect'
 import { renderStaticHtml } from '@/modules/rendering/static-html'
+import { buildCodeButtons } from '@/modules/rendering/codeblock-chrome'
+import { useEditorPrefs } from '@/store-editor'
 import { SAMPLE_DOC } from '@/lib/theme/sample'
 import { setActiveNoteDir } from '@/lib/image-src'
 import type { ThemeFile } from '@/lib/theme/schema'
@@ -801,6 +803,30 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
   )
   useExtraCss(theme.id, theme.extraCss)
 
+  // 代码块 header 交互层按钮注入(与 PreviewPane 同款后处理):
+  // 工厂预览也是「应用内」消费方,复制/换行按钮照常可用
+  const articleRef = useRef<HTMLElement | null>(null)
+  const codeCopyEnabled = useEditorPrefs((s) => s.codeCopyButtonEnabled)
+  const codeWrapBtnEnabled = useEditorPrefs((s) => s.codeWrapButtonEnabled)
+  useEffect(() => {
+    const container = articleRef.current
+    if (!container) return
+    for (const el of container.querySelectorAll<HTMLElement>('.themd-code')) {
+      if (el.dataset.themdChrome) continue
+      el.dataset.themdChrome = '1'
+      const lang = el.querySelector<HTMLElement>('.themd-code-lang')
+      if (!lang) continue
+      lang.appendChild(
+        buildCodeButtons(
+          {
+            onToggleWrap: (wrapped) => el.classList.toggle('themd-code-wrap', wrapped),
+          },
+          { copyButton: codeCopyEnabled, wrapButton: codeWrapBtnEnabled },
+        ),
+      )
+    }
+  }, [html, codeCopyEnabled, codeWrapBtnEnabled])
+
   // 图片灯箱:一次收集预览全部图片,可在灯箱里左右切换;
   // inspect(选择元素)模式下点击仍走元素拾取
   const [lightbox, setLightbox] = useState<{ slides: LightboxSlide[]; index: number } | null>(null)
@@ -850,6 +876,7 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
       } as React.ComponentPropsWithoutRef<'div'>}
     >
       <article
+        ref={articleRef}
         className="themd-prose mx-auto px-6 py-8"
         style={cssVars as React.CSSProperties}
         dangerouslySetInnerHTML={{ __html: html }}

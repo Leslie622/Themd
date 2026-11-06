@@ -111,6 +111,12 @@ export function SettingsSheet({
   const setImageMode = useEditorPrefs((s) => s.setImageMode)
   const assetsRoot = useEditorPrefs((s) => s.assetsRoot)
   const setAssetsRoot = useEditorPrefs((s) => s.setAssetsRoot)
+  const codeHeaderEnabled = useEditorPrefs((s) => s.codeHeaderEnabled)
+  const setCodeHeaderEnabled = useEditorPrefs((s) => s.setCodeHeaderEnabled)
+  const codeCopyButtonEnabled = useEditorPrefs((s) => s.codeCopyButtonEnabled)
+  const setCodeCopyButtonEnabled = useEditorPrefs((s) => s.setCodeCopyButtonEnabled)
+  const codeWrapButtonEnabled = useEditorPrefs((s) => s.codeWrapButtonEnabled)
+  const setCodeWrapButtonEnabled = useEditorPrefs((s) => s.setCodeWrapButtonEnabled)
   const themeList = useThemeStore((s) => s.themes)
   const themeActiveId = useThemeStore((s) => s.activeId)
   const setActiveTheme = useThemeStore((s) => s.setActive)
@@ -359,6 +365,34 @@ export function SettingsSheet({
                 checked={lineWrapEnabled}
                 onCheckedChange={setLineWrapEnabled}
                 aria-label="切换自动换行"
+              />
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-3 text-sm font-semibold">预览</h3>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">代码块语言标签</span>
+              <Switch
+                checked={codeHeaderEnabled}
+                onCheckedChange={setCodeHeaderEnabled}
+                aria-label="切换代码块语言标签行"
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">代码块复制按钮</span>
+              <Switch
+                checked={codeCopyButtonEnabled}
+                onCheckedChange={setCodeCopyButtonEnabled}
+                aria-label="切换代码块复制按钮"
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">代码块换行按钮</span>
+              <Switch
+                checked={codeWrapButtonEnabled}
+                onCheckedChange={setCodeWrapButtonEnabled}
+                aria-label="切换代码块换行按钮"
               />
             </div>
           </section>

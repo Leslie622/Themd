@@ -6,6 +6,7 @@ import { ImageLightbox } from '@/components/ImageLightbox'
 import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
 import { collectLightboxState, type LightboxSlide } from '@/lib/image-lightbox-state'
 import { renderStaticHtml } from '@/modules/rendering/static-html'
+import { buildCodeButtons } from '@/modules/rendering/codeblock-chrome'
 import { buildOutline, type OutlineItem } from '@/modules/rendering/outline'
 import { compileTokens } from '@/lib/theme/compile'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
@@ -158,6 +159,30 @@ export const PreviewPane = memo(function PreviewPane({
       cancelled = true
     }
   }, [html, isDark])
+
+  // 代码块 header 交互层注入:规范 HTML 只含观感层(.themd-code-lang),
+  // 复制/换行按钮在此按偏好追加(应用内装饰,导出产物天然不带)。
+  // data-themd-chrome 标记防重复注入(html 变更后 DOM 重建,标记随旧 DOM 消失)
+  const codeCopyEnabled = useEditorPrefs((s) => s.codeCopyButtonEnabled)
+  const codeWrapBtnEnabled = useEditorPrefs((s) => s.codeWrapButtonEnabled)
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container) return
+    for (const el of container.querySelectorAll<HTMLElement>('.themd-code')) {
+      if (el.dataset.themdChrome) continue
+      el.dataset.themdChrome = '1'
+      const lang = el.querySelector<HTMLElement>('.themd-code-lang')
+      if (!lang) continue
+      lang.appendChild(
+        buildCodeButtons(
+          {
+            onToggleWrap: (wrapped) => el.classList.toggle('themd-code-wrap', wrapped),
+          },
+          { copyButton: codeCopyEnabled, wrapButton: codeWrapBtnEnabled },
+        ),
+      )
+    }
+  }, [html, codeCopyEnabled, codeWrapBtnEnabled])
 
   const jumpTo = useCallback((id: string) => {
     const container = scrollRef.current

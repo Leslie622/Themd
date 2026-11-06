@@ -67,6 +67,80 @@ for (const [name, lang] of Object.entries({
   hljs.registerLanguage(name, lang)
 }
 
+/**
+ * 代码块语言选择清单(语言选择浮层数据源,与高亮注册表同一批语言名)。
+ * mermaid 不入清单——它有独立图表视图,不该从语言菜单进。
+ */
+export const CODE_LANGUAGES: ReadonlyArray<string> = [
+  'bash', 'c', 'cpp', 'csharp', 'css', 'diff', 'dockerfile', 'go', 'ini',
+  'java', 'javascript', 'json', 'kotlin', 'lua', 'markdown', 'php',
+  'plaintext', 'python', 'ruby', 'rust', 'scss', 'shell', 'sql', 'swift',
+  'typescript', 'xml', 'yaml',
+]
+
+/**
+ * 语言显示名(浮层/header 标签用,fence 值仍小写——源码兼容不变)。
+ */
+const DISPLAY_NAMES: Record<string, string> = {
+  bash: 'Bash',
+  c: 'C',
+  cpp: 'C++',
+  csharp: 'C#',
+  css: 'CSS',
+  diff: 'Diff',
+  dockerfile: 'Dockerfile',
+  go: 'Go',
+  ini: 'INI',
+  java: 'Java',
+  javascript: 'JavaScript',
+  json: 'JSON',
+  kotlin: 'Kotlin',
+  lua: 'Lua',
+  markdown: 'Markdown',
+  php: 'PHP',
+  plaintext: 'Text',
+  python: 'Python',
+  ruby: 'Ruby',
+  rust: 'Rust',
+  scss: 'SCSS',
+  shell: 'Shell',
+  sql: 'SQL',
+  swift: 'Swift',
+  typescript: 'TypeScript',
+  xml: 'XML',
+  yaml: 'YAML',
+}
+
+/** fence 语言值 → 显示名;常用缩写别名先归一,清单外语言原样返回(首字母大写兜底) */
+export function displayLanguage(lang: string): string {
+  const lower = lang.toLowerCase()
+  const aliased = ALIAS_TO_CANON[lower]
+  if (aliased) return DISPLAY_NAMES[aliased]
+  const known = DISPLAY_NAMES[lower]
+  if (known) return known
+  if (!lang) return 'text'
+  return lang.charAt(0).toUpperCase() + lang.slice(1)
+}
+
+/** 常用 fence 缩写 → 清单规范名(存量笔记里 ```ts/```js 这类写法的显示归一) */
+const ALIAS_TO_CANON: Record<string, string> = {
+  ts: 'typescript',
+  js: 'javascript',
+  py: 'python',
+  rb: 'ruby',
+  sh: 'shell',
+  yml: 'yaml',
+  md: 'markdown',
+  rs: 'rust',
+  golang: 'go',
+  docker: 'dockerfile',
+  'c++': 'cpp',
+  'c#': 'csharp',
+  kt: 'kotlin',
+  text: 'plaintext',
+  txt: 'plaintext',
+}
+
 export function highlightCode(code: string, lang: string): string {
   if (lang && hljs.getLanguage(lang)) {
     try {

@@ -168,6 +168,14 @@
 
 /* ---------- 代码块 ---------- */
 
+/* 规范包装(契约 §3 本家形态):div.themd-code > 语言标签行 + pre>code。
+ * header 行样式全部从既有 --t-code-* 令牌派生,不新增主题令牌;
+ * 类名属本家命名空间(可移植 CSS 包公开面,贴到无此 DOM 的目标端自然休眠)。 */
+.themd-prose .themd-code {
+  position: relative;
+  margin-bottom: 1.25em;
+}
+/* 非 pre 直接子的 pre(老结构兜底,理论上不再出现)保持独立间距 */
 .themd-prose pre {
   background: var(--t-code-bg, oklch(0.97 0 0));
   padding: var(--t-code-padding, 1em 1.25em);
@@ -175,6 +183,83 @@
   border: var(--t-code-border-width, 0) solid var(--t-code-border-color, oklch(0.9 0 0));
   overflow-x: auto;
   margin-bottom: 1.25em;
+}
+.themd-prose .themd-code pre {
+  margin-bottom: 0;
+}
+.themd-prose .themd-code-lang {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  font-family: var(--font-ui-sans, sans-serif);
+  font-size: 0.7em;
+  line-height: 1.4;
+  color: color-mix(in oklch, currentColor 45%, transparent);
+  padding: 0.5em 0.9em;
+  border: var(--t-code-border-width, 0) solid var(--t-code-border-color, oklch(0.9 0 0));
+  border-bottom: none;
+  background: color-mix(in oklch, var(--t-code-bg, oklch(0.97 0 0)) 60%, transparent);
+  border-radius: var(--t-code-radius, 8px) var(--t-code-radius, 8px) 0 0;
+  user-select: none;
+}
+/* 左侧品牌图标(官方色,不受文字色影响);两侧同构:svg 是 header 直接子 */
+.themd-prose .themd-code-lang > svg {
+  flex: none;
+  display: block;
+  border-radius: 2px;
+}
+/* 按钮区推到最右:语言(图标+名)贴左 */
+.themd-prose .themd-code-lang .themd-code-actions {
+  margin-left: auto;
+}
+.themd-prose .themd-code-lang-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  cursor: pointer;
+  position: relative;
+}
+.themd-prose .themd-code-lang-name:hover {
+  color: color-mix(in oklch, currentColor 80%, transparent);
+}
+/* Popover 锚点:绝对定位铺满语言文本(display:contents 无布局框,Radix 量不到位置) */
+.themd-prose .themd-code-lang-anchor {
+  position: absolute;
+  inset: 0;
+}
+/* pre 的圆角让给 header:包装有 border 时 pre 顶角必须方,否则露底 */
+.themd-prose .themd-code:has(> .themd-code-lang) pre {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+/* header 按钮区(交互层,应用内注入,规范 HTML 不含) */
+.themd-prose .themd-code-lang .themd-code-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+}
+.themd-prose .themd-code-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9em;
+  height: 1.9em;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: color-mix(in oklch, currentColor 70%, transparent);
+  cursor: pointer;
+  opacity: 0.8;
+}
+.themd-prose .themd-code-btn:hover {
+  opacity: 1;
+  background: color-mix(in oklch, currentColor 10%, transparent);
+}
+.themd-prose .themd-code-btn-active,
+.themd-prose .themd-code-btn-done {
+  opacity: 1;
+  color: var(--chrome-accent, var(--primary));
 }
 .themd-prose pre code {
   font-family: var(--t-code-font, ui-monospace, 'Cascadia Mono', Consolas, monospace);
@@ -190,6 +275,20 @@
 .themd-prose pre code.hljs {
   background: transparent;
   padding: 0;
+}
+/* 换行临时态(header 按钮切换,不持久化;默认不折行横向滚动) */
+.themd-prose .themd-code.themd-code-wrap pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: hidden;
+}
+/* header 总开关(设置/导出复用):类挂容器根,只藏观感层 */
+.themd-code-chrome-off .themd-prose .themd-code-lang {
+  display: none;
+}
+.themd-code-chrome-off .themd-prose .themd-code:has(> .themd-code-lang) pre {
+  border-top-left-radius: var(--t-code-radius, 8px);
+  border-top-right-radius: var(--t-code-radius, 8px);
 }
 
 /* ---------- 列表 ---------- */

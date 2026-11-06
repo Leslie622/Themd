@@ -24,8 +24,9 @@ import { getMarkdownManager } from '@/modules/live-editor/infrastructure/markdow
 import { liveExtensions } from '@/modules/live-editor/infrastructure/tiptap-setup'
 import { resolveImageSrcSync, imageContextSignature } from '@/lib/image-src'
 import { slug } from './slug'
-import { highlightCode } from './code-highlight'
+import { highlightCode, displayLanguage } from './code-highlight'
 import { titleHtml } from './gfm-alerts'
+import { languageIconSvg } from './language-icon-svg'
 
 const VOID_TAGS = new Set(['br', 'hr', 'img', 'input'])
 
@@ -258,7 +259,13 @@ function renderCodeBlock(node: PMNode): string {
   }
   const highlighted = highlightCode(code, lang)
   const inner = highlighted || escapeHtml(code)
-  return `<pre><code${lang ? ` class="language-${lang}"` : ''}>${inner}</code></pre>`
+  // 规范包装(契约 §3 本家形态):div.themd-code > (语言标签行 + pre>code)。
+  // 语言行 = 官方品牌图标(simple-icons,无品牌图省略)+ 显示名;观感层进
+  // 规范 HTML,随导出带到独立 HTML/PDF。无语言时文本恒为 text。
+  // 不带尾换行——块间分隔由 renderBlockChildren 的补 \n 机制承担。
+  const iconSvg = languageIconSvg(lang)
+  const iconHtml = iconSvg ?? ''
+  return `<div class="themd-code"${lang ? ` data-lang="${escapeHtml(lang)}"` : ''}><div class="themd-code-lang">${iconHtml}<span class="themd-code-lang-name">${escapeHtml(displayLanguage(lang))}</span></div><pre><code${lang ? ` class="language-${escapeHtml(lang)}"` : ''}>${inner}</code></pre></div>`
 }
 
 function renderKatex(tex: string, displayMode: boolean): string {

@@ -6,6 +6,7 @@ import { renderStaticHtml } from './static-html'
 import { compileTokens, extraCssToStyle } from '@/lib/theme/compile'
 import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
+import { useEditorPrefs } from '@/store-editor'
 import type { Note } from '@/modules/notebook/domain/note'
 
 /** store 的主题切片形状(themes + activeId) */
@@ -50,6 +51,8 @@ export function buildStandaloneHtml(note: Note): string {
   const extraCss = theme.extraCss?.trim()
     ? extraCssToStyle(theme.id, theme.extraCss)
     : ''
+  // 语言标签行跟随偏好(观感层,导出同步);按钮本就不在规范 HTML,无需处理
+  const headerOff = !useEditorPrefs.getState().codeHeaderEnabled
 
   return `<!doctype html>
 <html lang="zh-CN" data-color-scheme="${isDark ? 'dark' : 'light'}">
@@ -86,7 +89,7 @@ ${katexCss}
 </style>
 ${extraCss ? `<style>\n${extraCss}\n</style>` : ''}
 </head>
-<body>
+<body${headerOff ? ' class="themd-code-chrome-off"' : ''}>
 <article class="themd-prose">
 ${renderStaticHtml(note.content)}
 </article>

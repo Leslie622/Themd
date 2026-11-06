@@ -10,7 +10,8 @@ import taskLists from 'markdown-it-task-lists'
 import { katex as katexPlugin } from '@mdit/plugin-katex'
 import { gfmAlerts } from './gfm-alerts'
 import { resolveImageSrcSync } from '@/lib/image-src'
-import { highlightCode } from './code-highlight'
+import { highlightCode, displayLanguage } from './code-highlight'
+import { languageIconSvg } from './language-icon-svg'
 import { slug } from './slug'
 
 export const md = new MarkdownIt({
@@ -67,14 +68,27 @@ md.renderer.rules.heading_open = (tokens, idx, options, _env, self) => {
 
 // mermaid fence → 占位容器(渲染期同步输出源码兜底,PreviewPane 挂载后
 // 异步渲染 SVG 并替换;实时编辑侧经 codeblock-cm 的图表视图走同一渲染模块)
-const defaultFence = md.renderer.rules.fence
-md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+// 其余 fence → 规范包装(契约 §3 本家形态,与 static-html renderCodeBlock 同型):
+// div.themd-code > (语言标签行 + pre>code);无语言时标签文本恒为 text。
+// info 串切分/`<pre` 前缀特判与默认 fence 规则同构,仅输出壳不同。
+// md-it 块规则自带尾换行责任(默认 fence 带尾 \n,块间纯拼接)——wrapper
+// 同样补尾 \n;static-html 侧靠块间补 \n 机制收敛到同字节。
+md.renderer.rules.fence = (tokens, idx) => {
   const token = tokens[idx]
   if (token.info.trim().toLowerCase() === 'mermaid') {
     const code = md.utils.escapeHtml(token.content)
     return `<div class="themd-mermaid" data-src="${encodeURIComponent(token.content)}">${code}</div>`
   }
-  return defaultFence ? defaultFence(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)
+  const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
+  const langName = info ? info.split(/\s+/, 1)[0] : ''
+  const langAttrs = info ? info.split(/\s+/).slice(1).join(' ') : ''
+  const highlighted =
+    md.options.highlight?.(token.content, langName, langAttrs) || md.utils.escapeHtml(token.content)
+  if (highlighted.startsWith('<pre')) return `${highlighted}\n`
+  const langAttr = langName ? ` data-lang="${md.utils.escapeHtml(langName)}"` : ''
+  const classAttr = langName ? ` class="language-${md.utils.escapeHtml(langName)}"` : ''
+  const iconSvg = languageIconSvg(langName) ?? ''
+  return `<div class="themd-code"${langAttr}><div class="themd-code-lang">${iconSvg}<span class="themd-code-lang-name">${md.utils.escapeHtml(displayLanguage(langName))}</span></div><pre><code${classAttr}>${highlighted}</code></pre></div>\n`
 }
 
 // 图片:懒加载 + 异步解码(内嵌 base64 的截图可能很大,预览首屏别被拖住)。

@@ -58,6 +58,18 @@ const CROSS_PAIRS: ReadonlyArray<{
     // (2026-11-03 几何探针已证行为一致),折行行为由 wrapProbe 长行几何把关
     props: ['font-family', 'font-size', 'line-height', 'color'],
   },
+  {
+    // 2026-11-06 代码块 header 改版:语言标签行是观感层,进规范 HTML
+    // (NodeView header 镀层 ↔ 静态 .themd-code-lang,两侧同构)
+    label: '代码块 header 行(.themd-code-lang ↔ .themd-code-lang)',
+    liveSel: '.themd-code > .themd-code-lang',
+    staticSel: '.themd-code-lang',
+  },
+  {
+    label: '代码块规范包装(.themd-code ↔ .themd-code)',
+    liveSel: '.themd-code.live-codeblock-wrapper',
+    staticSel: '.themd-code',
+  },
 ]
 
 /** 标记类职责属性:只比该标记自己负责的样式,继承来的不比 */
