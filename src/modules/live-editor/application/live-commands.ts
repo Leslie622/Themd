@@ -196,8 +196,9 @@ export function pasteClipboard(editor: Editor): Promise<void> {
       editor.commands.focus()
     })
     .catch(() => {
-      // readText 权限被拒(常见于 WebView),回落浏览器原生粘贴
-      document.execCommand('paste')
+      // readText 失败如实提示(execCommand('paste') 在 Chromium 已被禁用,
+      // 回落只会静默无效;系统 Ctrl+V 走编辑器原生粘贴管线不受影响)
+      toastPasteError()
       editor.commands.focus()
     })
 }
@@ -210,7 +211,7 @@ export function pasteAsPlainText(editor: Editor): Promise<void> {
       if (text) editor.chain().focus().command(({ tr }) => (tr.insertText(text), true)).run()
     })
     .catch(() => {
-      document.execCommand('paste')
+      toastPasteError()
       editor.commands.focus()
     })
 }
@@ -263,4 +264,8 @@ export function copySimplified(editor: Editor): Promise<void> {
 
 function toastCopyError(): void {
   import('sonner').then(({ toast }) => toast.error('剪贴板操作失败'))
+}
+
+function toastPasteError(): void {
+  import('sonner').then(({ toast }) => toast.error('读取剪贴板失败,可直接 Ctrl+V 粘贴'))
 }

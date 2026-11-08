@@ -336,14 +336,11 @@ function renderInlines(parent: PMNode): string {
         break
       default:
         if (child.isLeaf) {
-          const spec = (child.type.spec as NodeSpec).toDOM?.(child)
-          if (Array.isArray(spec)) {
-            const tag = spec[0] as string
-            parts.push(element(tag, [], typeof spec[1] === 'object' ? '' : ''))
-          }
-        } else {
-          parts.push(renderInlines(child))
+          // 渲染结构契约:行内叶子必须显式分派(上方各 case)。走到这里说明
+          // schema 新加了行内节点而静态渲染没跟上——响亮失败,不许静默吞内容
+          throw new Error(`static-html: 未处理的行内节点 ${child.type.name}`)
         }
+        parts.push(renderInlines(child))
     }
   })
   return parts.join('')

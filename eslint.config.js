@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'src-tauri/target', 'src-tauri/gen']),
+  // website/ 是独立 Vite 项目(自己的 eslint.config.js 与 npm scripts),零共享代码,
+  // 桌面端规则不适用;toggle-preview.tsx 是提交在库里的开发预览实验台(无导出的
+  // 单文件组件,不进打包图),react-refresh 的单文件约束对它无意义
+  globalIgnores(['dist', 'website', 'src/toggle-preview.tsx', 'src-tauri/target', 'src-tauri/gen']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

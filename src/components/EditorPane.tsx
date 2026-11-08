@@ -128,11 +128,13 @@ async function insertImageFiles(
   const useAssets = imageMode === 'assets'
   const useRemote = imageMode === 'remote'
   const uploaderConfig = { provider: uploaderProvider, githubRepo, githubToken, picgoUrl }
-  const root = useAssets && noteDir
-    ? `${noteDir.replace(/[\\/]+$/, '')}\\assets`
-    : useAssets && assetsRoot.trim()
-      ? assetsRoot.trim()
-      : await platformServices.files.defaultAssetsRoot()
+  // root 仅 assets 分支消费:remote/embed 模式不去查平台默认根(免一次无用 IPC);
+  // 三元按需求值,defaultAssetsRoot 只在「绑定目录与自定义根都没有」时调用
+  const root = useAssets
+    ? noteDir
+      ? `${noteDir.replace(/[\\/]+$/, '')}\\assets`
+      : assetsRoot.trim() || (await platformServices.files.defaultAssetsRoot())
+    : ''
   let at = pos
   let ok = 0
   for (const file of files) {
@@ -152,6 +154,11 @@ async function insertImageFiles(
   }
   if (ok) toast.success(`已插入 ${ok} 张图片`)
   return true
+}
+
+/** 行文本命中的 assets/ 图片链接(Ctrl+点击与 hover 浮层共用一条正则) */
+function assetLinkMatch(lineText: string): string | null {
+  return /\]\((assets\/[^\s)]+\.[\w]+)\)/.exec(lineText)?.[1] ?? null
 }
 
 /** 光标文档位置命中的 assets/ 图片链接;未命中返回 null */
@@ -302,8 +309,7 @@ export function EditorPane({
 
   // GitHub 语法配色;背景/活动行透明化,行号槽给淡色实体背景(用户感知为
   // 「行号区应有底色」)。settings 值直接写 CSS 表达式,var() 合法。
-  // 注意:这里的样式模块在 style 表中晚于下方 chromeExt,同特异性下后者写的
-  // gutter 属性会被这里覆盖——gutter 背景只在此处声明,避免双写打架。
+  // gutter 背景只在此处声明:下方 chromeExt 不写 gutterBackground,避免双写打架。
   const themeExt = useMemo(
     () =>
       isDark
@@ -410,8 +416,8 @@ export function EditorPane({
             event.clientX <= bounds.right
           if (inside) {
             const line = view.state.doc.lineAt(block.from)
-            const match = /\]\((assets\/[^\s)]+\.[\w]+)\)/.exec(line.text)
-            if (match) {
+            const assetPath = assetLinkMatch(line.text)
+            if (assetPath) {
               // 默认悬在鼠标上方;所在行贴近编辑器可视顶部时翻到行下,
               // 避免浮层顶出可视区。水平以鼠标为中心,收进视口防截断
               const aboveTop = lineTop - HOVER_BTN_HEIGHT - HOVER_BTN_GAP
@@ -420,7 +426,7 @@ export function EditorPane({
               const target: AssetHoverTarget = {
                 x,
                 top: below ? lineTop + block.height + HOVER_BTN_GAP : aboveTop,
-                path: match[1],
+                path: assetPath,
                 below,
                 lineEdgeY: below ? lineTop + block.height : lineTop,
               }
@@ -578,8 +584,9 @@ export function EditorPane({
   // 编辑器区域右键走自定义菜单(shadcn ContextMenu),压掉 WebView2 原生菜单;
   // trigger 自带 select-none,这里用 select-text 覆盖回来,保证编辑器可选中
 
-  /** 右键时递增:强制重算菜单内的选择区相关状态(禁用态/段落勾选) */
-  const [menuTick, setMenuTick] = useState(0)
+  /** 右键时快照当前 EditorView:菜单内的选择区状态(禁用态/段落勾选)
+   *  按打开瞬间计算;存 state 而非渲染期读 ref */
+  const [menuView, setMenuView] = useState<EditorView | null>(null)
 
   /** 菜单命令统一入口:拿到当前 EditorView 才执行;编辑器已卸载则忽略 */
   const runView = (fn: (view: EditorView) => void) => {
@@ -587,10 +594,8 @@ export function EditorPane({
     if (view) fn(view)
   }
 
-  // 菜单打开瞬间计算的选择区快照:menuTick 变化触发重渲染时取值
-  const view = viewRef.current
-  const selEmpty = menuTick >= 0 && (!view || view.state.selection.main.empty)
-  const headingLevel = menuTick >= 0 && view ? currentHeadingLevel(view) : 0
+  const selEmpty = !menuView || menuView.state.selection.main.empty
+  const headingLevel = menuView ? currentHeadingLevel(menuView) : 0
 
   const copyAsHtml = (v: EditorView) => {
     const text = v.state.sliceDoc(
@@ -621,7 +626,7 @@ export function EditorPane({
       <ContextMenuTrigger asChild>
         <div
           ref={rootRef}
-          onContextMenu={() => setMenuTick((t) => t + 1)}
+          onContextMenu={() => setMenuView(viewRef.current)}
           className="relative h-full overflow-hidden text-sm select-text"
         >
           <CodeMirror

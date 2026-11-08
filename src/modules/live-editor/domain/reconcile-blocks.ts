@@ -48,7 +48,7 @@ export interface ReconcileOptions {
 }
 
 /** 块尾终止符(与原文保持同型:\r\n / \n / 无) */
-export function terminatorOf(text: string): string {
+function terminatorOf(text: string): string {
   if (text.endsWith('\r\n')) return '\r\n'
   if (text.endsWith('\n')) return '\n'
   return ''

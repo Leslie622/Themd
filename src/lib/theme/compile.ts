@@ -133,19 +133,6 @@ function joinFontStack(latin: string | undefined, cjk: string | undefined, fallb
   return families.map((f) => (/\s/.test(f) ? `'${f}'` : f)).join(', ')
 }
 
-/** 导出用：令牌解析为 CSS 变量声明文本 */
-export function tokensToCss(tokens: ThemeTokens): string {
-  return Object.entries(TOKEN_VAR)
-    .map(([key, varName]) => {
-      const value = tokens[key as TokenKey]
-      return value !== undefined && value !== ''
-        ? `${varName}: ${value};`
-        : null
-    })
-    .filter((line): line is string => line !== null)
-    .join('\n')
-}
-
 /**
  * 附加 CSS（extraCss）作用域包装。
  * 用户/导入的 CSS 按约定写元素选择器（strong { … }），

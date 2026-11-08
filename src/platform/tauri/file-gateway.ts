@@ -1,17 +1,9 @@
 import { open, save } from '@tauri-apps/plugin-dialog'
-import type { FileGateway, ImportedFile } from '../contracts'
+import type { FileGateway } from '../contracts'
 import { invoke } from './commands'
-
-const noteFilters = [{ name: 'Markdown 文档', extensions: ['md', 'markdown', 'txt'] }]
 
 export function createTauriFileGateway(): FileGateway {
   return {
-    async pickFiles() {
-      const selected = await open({ multiple: true, filters: noteFilters })
-      const paths = selected ? (Array.isArray(selected) ? selected : [selected]) : []
-      if (!paths.length) return []
-      return invoke<ImportedFile[]>('read_text_files', { paths })
-    },
     async chooseSavePath(input) {
       return (await save({ defaultPath: input.defaultName, filters: [{ name: input.filterName, extensions: input.extensions }] })) ?? null
     },
@@ -39,9 +31,6 @@ export function createTauriFileGateway(): FileGateway {
     },
     async readBinaryFile(path) {
       return invoke<number[]>('read_binary_file', { path }).then((bytes) => Uint8Array.from(bytes))
-    },
-    async deleteFile(path) {
-      await invoke('delete_file', { path })
     },
     async defaultAssetsRoot() {
       // 语义 = 图片文件的最终存放目录(不再在其下拼 assets/ 子层,

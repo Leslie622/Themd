@@ -66,8 +66,10 @@ fn watch_workspace_blocking(app: AppHandle, root: Option<String>) -> Result<(), 
             Duration::from_millis(DEBOUNCE_MS),
             None,
             move |result: notify_debouncer_full::DebounceEventResult| {
-                if let Ok(events) = result {
-                    emit_fs_events(&app_handle, events);
+                match result {
+                    Ok(events) => emit_fs_events(&app_handle, events),
+                    // watch 句柄失效(目录整树被删、网络盘断开等):留痕不静默
+                    Err(errors) => eprintln!("fs 监听错误: {errors:?}"),
                 }
             },
         )
@@ -81,7 +83,10 @@ fn watch_workspace_blocking(app: AppHandle, root: Option<String>) -> Result<(), 
 
     let debouncer = state.debouncer.as_mut().expect("debouncer just created");
     if let Some(old) = &state.watched_root {
-        let _ = debouncer.unwatch(Path::new(old));
+        // 旧根退订失败只留痕:换根语义由 watched_root 字段兜住,不让它阻断新根订阅
+        if let Err(errors) = debouncer.unwatch(Path::new(old)) {
+            eprintln!("退订旧监听根失败 {old}: {errors:?}");
+        }
     }
     let root_path = root.expect("root checked non-none above");
     debouncer

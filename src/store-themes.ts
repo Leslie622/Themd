@@ -1,4 +1,8 @@
-/** Compatibility facade over the theme application controller. */
+/**
+ * 主题状态的 React 绑定层:useThemeStore(selector) 订阅 ThemeController 快照,
+ * 命令经 themeController 直连;resolveActiveTheme/listAllThemes 是消费方共用的
+ * 主题解析(内置 + 用户主题合并视图)。ThemeController 是主题事实来源。
+ */
 import { useSyncExternalStore } from 'react'
 import { BUILTIN_THEMES } from '@/lib/theme/builtin'
 import type { ThemeFile, ThemeState } from '@/lib/theme/schema'
@@ -38,4 +42,13 @@ export function resolveActiveTheme(state: ThemeSelection): ThemeFile {
   return BUILTIN_THEMES.find((theme) => theme.id === state.activeId) ?? state.themes.find((theme) => theme.id === state.activeId) ?? BUILTIN_THEMES[0]
 }
 export function listAllThemes(state: ThemeSelection): ThemeFile[] { return [...BUILTIN_THEMES, ...state.themes] }
+
+/** 解析笔记生效主题:笔记级覆盖 > 全局激活;覆盖 id 失效(主题已删)回落全局 */
+export function resolveNoteTheme(state: ThemeSelection, noteThemeId: string | undefined | null): ThemeFile {
+  if (noteThemeId) {
+    const overridden = listAllThemes(state).find((t) => t.id === noteThemeId)
+    if (overridden) return overridden
+  }
+  return resolveActiveTheme(state)
+}
 export { controller as themeController }

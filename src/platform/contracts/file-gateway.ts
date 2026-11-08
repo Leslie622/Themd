@@ -3,7 +3,6 @@ export interface SaveTextInput { defaultName: string; contents: string; filterNa
 export interface SavePathInput { defaultName: string; filterName: string; extensions: string[] }
 export type SaveResult = { kind: 'canceled' } | { kind: 'saved'; path: string }
 export interface FileGateway {
-  pickFiles(): Promise<ImportedFile[]>
   chooseSavePath(input: SavePathInput): Promise<string | null>
   saveText(input: SaveTextInput): Promise<SaveResult>
   /** 选择目录返回绝对路径(本地图片根目录);取消返回 null */
@@ -14,8 +13,6 @@ export interface FileGateway {
   writeBinaryFile(path: string, bytes: Uint8Array): Promise<void>
   /** 读二进制文件(绑定写盘/移动时迁移正文引用的 assets 图片用) */
   readBinaryFile(path: string): Promise<Uint8Array>
-  /** 删除单个普通文件(通用文件删除能力,目录一律拒绝) */
-  deleteFile(path: string): Promise<void>
   /** 平台默认的图片根目录(应用数据目录) */
   defaultAssetsRoot(): Promise<string>
   /** 用系统默认方式打开文件/目录(资源管理器、图片查看器等) */

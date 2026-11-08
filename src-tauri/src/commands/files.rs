@@ -6,37 +6,19 @@ pub(crate) struct ImportedNoteFile {
     pub(crate) folder_path: String,
     pub(crate) title: String,
     pub(crate) content: String,
-    /// 来源文件绝对路径(文件绑定/双向同步用)。仅内容为合法 UTF-8 时给出:
-    /// 非 UTF-8 文件读入已 lossy 降质,绑定后写回会毁掉原文件,故不绑定。
+    /// 来源文件绝对路径(文件绑定/双向同步用)。
     #[serde(rename = "filePath", skip_serializing_if = "Option::is_none")]
     pub(crate) file_path: Option<String>,
 }
 
-/// 读文件并 lossy 解码;返回 (内容, 是否合法 UTF-8)
-fn read_note_lossy(path: &Path) -> (String, bool) {
-    match std::fs::read(path) {
-        Ok(bytes) => match String::from_utf8(bytes) {
-            Ok(text) => (text, true),
-            Err(err) => (String::from_utf8_lossy(err.as_bytes()).to_string(), false),
-        },
-        Err(_) => (String::new(), false),
-    }
-}
-
-/// 导入文件夹的单个笔记文件,字段语义与前端 readFolder(webkitdirectory)对齐
-/// 桌面端原生导入文件夹:递归读全部 .md/.markdown/.txt。
-/// folderPath = 相对根的父目录路径且含根目录名本身(如 rootName/sub),分隔符统一 '/';
-/// 非 UTF-8 内容按 lossy 解码,与网页 file.text() 行为一致。上限 5000 文件防呆。
-/// async + spawn_blocking:遍历大目录(如整个桌面)不能占主线程,否则 UI 卡死。
-/// with_content=false 为懒加载扫描:只回文件名元数据不读正文(Typora 语义,
-/// 打开工作区秒开,点开笔记才读内容)。
+/// 懒加载扫描工作区:递归列出全部 .md/.markdown/.txt 的元数据(文件名/路径),
+/// 不读正文(Typora 语义:打开工作区秒开,点开笔记才读内容)。
+/// folderPath = 相对根的父目录路径且含根目录名本身(如 rootName/sub),分隔符统一 '/'。
+/// 上限 5000 文件防呆。async + spawn_blocking:遍历大目录(如整个桌面)
+/// 不能占主线程,否则 UI 卡死。
 #[tauri::command]
-pub(crate) async fn read_folder_notes(
-    root: String,
-    with_content: Option<bool>,
-) -> Result<Vec<ImportedNoteFile>, String> {
-    let with_content = with_content.unwrap_or(true);
-    tauri::async_runtime::spawn_blocking(move || scan_folder_notes(root, with_content))
+pub(crate) async fn read_folder_notes(root: String) -> Result<Vec<ImportedNoteFile>, String> {
+    tauri::async_runtime::spawn_blocking(move || scan_folder_notes(root))
         .await
         .map_err(|e| format!("扫描目录失败: {e}"))?
 }
@@ -49,7 +31,7 @@ fn should_skip_dir(name: &str) -> bool {
         || matches!(lower.as_str(), "node_modules" | "target" | "dist" | "build" | "out")
 }
 
-fn scan_folder_notes(root: String, with_content: bool) -> Result<Vec<ImportedNoteFile>, String> {
+fn scan_folder_notes(root: String) -> Result<Vec<ImportedNoteFile>, String> {
     let root_path = PathBuf::from(&root);
     if !root_path.is_dir() {
         return Err(format!("目录不存在: {}", root));
@@ -103,54 +85,14 @@ fn scan_folder_notes(root: String, with_content: bool) -> Result<Vec<ImportedNot
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
-            let (content, is_utf8) = if with_content {
-                read_note_lossy(&path)
-            } else {
-                // 元数据模式:不读正文,视为可绑定(绑定后按需读取时才校验编码)
-                (String::new(), true)
-            };
+            // 元数据模式:不读正文,视为可绑定(绑定后按需读取时才校验编码)
             out.push(ImportedNoteFile {
                 folder_path,
                 title,
-                content,
-                file_path: is_utf8.then(|| path.to_string_lossy().to_string()),
+                content: String::new(),
+                file_path: Some(path.to_string_lossy().to_string()),
             });
         }
-    }
-    Ok(out)
-}
-
-/// 桌面端原生导入多个文本文件。async + spawn_blocking:批量读文件不占主线程。
-#[tauri::command]
-pub(crate) async fn read_text_files(paths: Vec<String>) -> Result<Vec<ImportedNoteFile>, String> {
-    tauri::async_runtime::spawn_blocking(move || read_many_text_files(paths))
-        .await
-        .map_err(|e| format!("读取文件失败: {e}"))?
-}
-
-fn read_many_text_files(paths: Vec<String>) -> Result<Vec<ImportedNoteFile>, String> {
-    let mut out = Vec::new();
-    for raw_path in paths.into_iter().take(5000) {
-        let path = PathBuf::from(&raw_path);
-        if !path.is_file() {
-            continue;
-        }
-        let is_note = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| matches!(e.to_ascii_lowercase().as_str(), "md" | "markdown" | "txt"))
-            .unwrap_or(false);
-        if !is_note {
-            continue;
-        }
-        let title = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        let (content, is_utf8) = read_note_lossy(&path);
-        out.push(ImportedNoteFile {
-            folder_path: String::new(),
-            title,
-            content,
-            file_path: is_utf8.then(|| path.to_string_lossy().to_string()),
-        });
     }
     Ok(out)
 }
@@ -201,17 +143,6 @@ pub(crate) fn write_image_file(path: String, bytes: Vec<u8>) -> Result<(), Strin
 #[tauri::command]
 pub(crate) fn read_binary_file(path: String) -> Result<Vec<u8>, String> {
     std::fs::read(&path).map_err(|e| format!("读取失败: {}", e))
-}
-
-/// 删除单个普通文件(另存为后可选清理原文件,是否删除由用户确认)。
-/// 仅限普通文件:目录等一律拒绝,防止误删整棵子树。
-#[tauri::command]
-pub(crate) fn delete_file(path: String) -> Result<(), String> {
-    let p = std::path::Path::new(&path);
-    if !p.is_file() {
-        return Err(format!("不是普通文件: {}", path));
-    }
-    std::fs::remove_file(p).map_err(|e| format!("删除失败: {}", e))
 }
 
 /// 过滤 Windows 文件名非法字符(与前端 sanitizeFileName 语义一致)
@@ -296,6 +227,10 @@ pub(crate) fn rename_note_file(src: String, new_name: String) -> Result<String, 
         .ok_or_else(|| format!("路径缺少父目录: {}", src))?
         .to_string_lossy().to_string();
     let dest = resolve_unique_path(&dir, &new_name);
+    // 重命名成当前同名(净化后):目标就是源文件自己,原样返回不再加 -2 后缀
+    if dest == src_path {
+        return Ok(src);
+    }
     std::fs::rename(src_path, &dest).map_err(|e| format!("文件重命名失败: {}", e))?;
     Ok(dest.to_string_lossy().to_string())
 }

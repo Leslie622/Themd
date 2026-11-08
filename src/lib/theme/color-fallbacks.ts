@@ -177,11 +177,11 @@ export function resolveFallbackFonts(
       else result[key] = isFontAvailable('PingFang SC') ? 'PingFang SC' : 'Microsoft YaHei'
       continue
     }
-    // 西文端:第一族是通用族(system-ui 等)时穿透报真实渲染族
-    // (Windows 上 system-ui = Segoe UI);具体族照实报
+    // 西文端:第一族是通用族(system-ui/monospace 等关键字)时穿透报真实渲染族
+    // (Windows 上 system-ui = Segoe UI、ui-monospace = Cascadia 类);具体族照实报
     const first = families[0]
     if (!first) continue
-    result[key] = /^(system-ui|sans-serif|serif|inherit)$/i.test(first)
+    result[key] = /^(system-ui|sans-serif|serif|monospace|ui-monospace|inherit)$/i.test(first)
       ? (isFontAvailable('Segoe UI') ? 'Segoe UI' : first)
       : first
   }

@@ -56,12 +56,7 @@ export function HeroSection() {
               size="lg"
               className="h-10 text-base leading-none cursor-pointer"
               nativeButton={false}
-              render={
-                <a href="#features" onClick={(e) => {
-                  e.preventDefault()
-                  document.querySelector("#features")?.scrollIntoView({ behavior: "smooth" })
-                }} />
-              }
+              render={<a href="#features" />}
             >
               {t.hero.explore}
               <ArrowRight data-icon="inline-end" />

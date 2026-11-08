@@ -65,10 +65,6 @@ export function LandingNavbar() {
           <div className="flex items-center gap-2">
             <a
               href="#hero"
-              onClick={(e) => {
-                e.preventDefault()
-                smoothScrollTo("#hero")
-              }}
               className="flex items-center gap-2 cursor-pointer"
               aria-label={t.common.home}
             >
@@ -82,11 +78,8 @@ export function LandingNavbar() {
               {navigationItems.map((item) => (
                 <NavigationMenuItem key={item.name}>
                   <NavigationMenuLink
+                    href={item.href}
                     className="group inline-flex h-10 w-max items-center justify-center px-4 py-2 text-sm font-medium transition-colors hover:text-primary focus:text-primary focus:outline-none cursor-pointer"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      smoothScrollTo(item.href)
-                    }}
                   >
                     {item.name}
                   </NavigationMenuLink>

@@ -73,7 +73,6 @@ import { Tip } from '@/components/Tip'
 import { WindowControls } from '@/components/WindowControls'
 import { CssEditorPanel } from '@/components/theme/CssEditorPanel'
 import { FieldRow } from '@/components/theme/FieldControls'
-import { ColorFieldRow } from '@/components/theme/FieldControls'
 import { LiveEditorPane } from '@/components/LiveEditorPane'
 import { NotePicker } from '@/components/theme/NotePicker'
 import { useExtraCss } from '@/components/theme/useExtraCss'
@@ -352,19 +351,27 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     [],
   )
 
+  // 内置主题不可变,改动落到自动副本;副本立即接管「使用中」,编辑对象
+  // (=使用中主题)无缝跟随到副本,预览/徽章不出现分叉
+  const applyToEditing = (action: (id: string) => string) => {
+    const realId = action(editing.id)
+    if (realId !== editing.id) setActive(realId)
+    return realId
+  }
+
   const setToken = (key: TokenKey, value: string | undefined) => {
     const next: ThemeTokens = { ...editing.tokens }
     if (value === undefined) delete next[key]
     else next[key] = value
-    const realId = updateTokens(editing.id, next)
-    // 内置主题不可变,改动落到自动副本;副本立即接管「使用中」,编辑对象
-    // (=使用中主题)无缝跟随到副本,预览/徽章不出现分叉
-    if (realId !== editing.id) setActive(realId)
+    applyToEditing((id) => updateTokens(id, next))
   }
 
-  // 稳定回调:memo 化的 FieldRow/ColorFieldRow 依赖引用相等跳过重渲染,
-  // 每次渲染新建函数会让 memo 失效(拖动取色器时 80+ 控件全量重渲染 = 卡顿主因)
+  // 稳定回调:memo 化的 FieldRow 依赖引用相等跳过重渲染,
+  // 每次渲染新建函数会让 memo 失效(拖动取色器时 80+ 控件全量重渲染 = 卡顿主因)。
+  // 稳定门面:本体只在事件回调里执行,初始化箭头不在渲染期读 ref
+  // (react-hooks/refs 对此模式保守误报,显式豁免)
   const setTokenRef = useRef(setToken)
+  // eslint-disable-next-line react-hooks/refs
   const setTokenStable = useRef((key: TokenKey, value: string | undefined) =>
     setTokenRef.current(key, value),
   ).current
@@ -391,19 +398,17 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const resetElement = () => {
     const next: ThemeTokens = { ...editing.tokens }
     for (const k of elementTokenKeys(element.id)) delete next[k]
-    const realId = updateTokens(editing.id, next)
-    // 同 setToken:内置主题的恢复默认也落到自动副本并接管「使用中」
-    if (realId !== editing.id) setActive(realId)
+    applyToEditing((id) => updateTokens(id, next))
   }
 
   const applyExtraCss = (css: string) => {
-    const realId = setExtraCss(editing.id, css)
-    if (realId !== editing.id) setActive(realId)
+    applyToEditing((id) => setExtraCss(id, css))
   }
 
   const handleExportJson = () => {
+    // 导出全量字段(tokens/dark/extraCss):importTheme 按同一结构解析,往返零丢失
     const content = JSON.stringify(
-      { version: 1, id: editing.id, name: editing.name, tokens: editing.tokens, extraCss: editing.extraCss },
+      { version: 1, id: editing.id, name: editing.name, tokens: editing.tokens, dark: editing.dark, extraCss: editing.extraCss },
       null,
       2,
     )
@@ -731,29 +736,19 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                         {g.section}
                       </FieldLegend>
                     )}
-                    {g.fields.map((f) =>
-                      f.type === 'color' ? (
-                        <ColorFieldRow
-                          key={f.key}
-                          field={f}
-                          value={activeTokens[f.key]}
-                          fallbackColor={fallbackColors[f.key]}
-                          onChange={(v) => setTokenStable(f.key, v)}
-                          onLivePreview={livePreviewColor}
-                          onCommit={commitColor}
-                        />
-                      ) : (
-                        <FieldRow
-                          key={f.key}
-                          field={f}
-                          value={activeTokens[f.key]}
-                          fallbackFont={fallbackFonts[f.key]}
-                          onChange={(v) => setTokenStable(f.key, v)}
-                          onLivePreview={f.type === 'background' ? livePreviewColor : undefined}
-                          onCommit={f.type === 'background' ? commitColor : undefined}
-                        />
-                      ),
-                    )}
+                    {g.fields.map((f) => (
+                      <FieldRow
+                        key={f.key}
+                        field={f}
+                        value={activeTokens[f.key]}
+                        fallbackColor={fallbackColors[f.key]}
+                        fallbackFont={fallbackFonts[f.key]}
+                        onChange={(v) => setTokenStable(f.key, v)}
+                        // 颜色/背景类走拖动实时预览管线(零渲染直写);其他类型忽略
+                        onLivePreview={f.type === 'color' || f.type === 'background' ? livePreviewColor : undefined}
+                        onCommit={f.type === 'color' || f.type === 'background' ? commitColor : undefined}
+                      />
+                    ))}
                   </FieldSet>
                 ))
               })()}
@@ -778,7 +773,6 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                 <div className="px-4 pb-4">
                   <CssEditorPanel
                     key={editing.id}
-                    themeId={editing.id}
                     value={editing.extraCss}
                     onSave={applyExtraCss}
                   />
@@ -927,7 +921,14 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
         onInspect?.(inspectElementId(target))
       }
     : (e: React.MouseEvent) => {
-        handleLinkClick(e)
+        // 灯箱内部点击冒泡回这里会误开新灯箱/重置导航,先豁免(与 PreviewPane 同款)
+        if ((e.target as HTMLElement).closest('.yarl__root')) return
+        // 命中链接只开 URL 并收尾:图链 [![img](i)](url) 不再既开浏览器又弹灯箱
+        const anchor = (e.target as HTMLElement).closest('a[href]')
+        if (anchor) {
+          handleLinkClick(e)
+          return
+        }
         handleImageClick(e)
       }
 

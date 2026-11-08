@@ -32,12 +32,10 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::fonts::list_system_fonts,
             commands::files::read_folder_notes,
-            commands::files::read_text_files,
             commands::files::read_text_file,
             commands::files::write_text_file,
             commands::files::write_image_file,
             commands::files::read_binary_file,
-            commands::files::delete_file,
             commands::files::trash_file,
             commands::files::move_note_file,
             commands::files::rename_note_file,

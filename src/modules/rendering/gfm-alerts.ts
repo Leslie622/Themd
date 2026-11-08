@@ -9,8 +9,8 @@ import type { MarkdownIt, StateCore } from 'markdown-it'
  * 源码层面零改动——导出的 .md 与输入完全一致，Typora/Obsidian 按各自实现渲染同一源码。
  */
 
-const ALERT_TYPES = ['note', 'tip', 'important', 'warning', 'caution'] as const
-export type GfmAlertType = (typeof ALERT_TYPES)[number]
+/** 五类提示块(GitHub 惯例,降级 = 普通引用块) */
+export type GfmAlertType = 'note' | 'tip' | 'important' | 'warning' | 'caution'
 
 export const ALERT_LABELS: Record<GfmAlertType, string> = {
   note: 'Note',

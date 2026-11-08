@@ -9,6 +9,8 @@ const CONTAINER_TARGETS: { id: ElementDef['id']; match: (el: Element) => boolean
   { id: 'task', match: (el) => el.classList.contains('task-list-item') },
   { id: 'codeBlock', match: (el) => el.tagName === 'PRE' || (el.tagName === 'CODE' && el.closest('pre') !== null) },
   { id: 'quote', match: (el) => el.tagName === 'BLOCKQUOTE' },
+  // GFM 提示块:容器 div.themd-callout-<type>,标题行 p.themd-callout-title 同属一组
+  { id: 'callout', match: (el) => el.className.includes('themd-callout') },
   { id: 'table', match: (el) => ['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD'].includes(el.tagName) },
   { id: 'ul', match: (el) => el.tagName === 'UL' || (el.tagName === 'LI' && el.closest('ul') !== null) },
   { id: 'ol', match: (el) => el.tagName === 'OL' || (el.tagName === 'LI' && el.closest('ol') !== null) },
@@ -19,7 +21,8 @@ const CONTAINER_TARGETS: { id: ElementDef['id']; match: (el: Element) => boolean
 const INLINE_TARGETS: { id: ElementDef['id']; match: (el: Element) => boolean }[] = [
   { id: 'strong', match: (el) => el.tagName === 'STRONG' },
   { id: 'em', match: (el) => el.tagName === 'EM' },
-  { id: 'del', match: (el) => el.tagName === 'DEL' },
+  // 渲染管线统一输出 <s>(TipTap Strike 与 markdown-it 15 一致);<del> 兼容旧内容
+  { id: 'del', match: (el) => el.tagName === 'S' || el.tagName === 'DEL' },
   { id: 'a', match: (el) => el.tagName === 'A' },
   { id: 'inlineCode', match: (el) => el.tagName === 'CODE' },
   { id: 'h1', match: (el) => el.tagName === 'H1' },

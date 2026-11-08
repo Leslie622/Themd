@@ -22,7 +22,7 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 
 import { compileTokens } from '@/lib/theme/compile'
-import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
+import { resolveNoteTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
 import { useExtraCss } from '@/components/theme/useExtraCss'
 import { assetsPathToAbsolute } from '@/lib/image-src'
@@ -174,7 +174,6 @@ export const LiveEditorPane = memo(function LiveEditorPane({
   const lastEmittedRef = useRef(value)
   const editorRef = useRef<ReturnType<typeof useEditor> | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const containerRef = useRef<HTMLDivElement | null>(null)
 
   /** 图片插入统一入口:文件 → markdown 字符串 → 解析插入(渲染态直接成图) */
   const insertImages = async (files: File[]) => {
@@ -314,27 +313,24 @@ export const LiveEditorPane = memo(function LiveEditorPane({
   // ── 主题令牌(与 PreviewPane 同链路:笔记覆盖 > 全局) ──────────────────
   const activeId = useThemeStore((s) => s.activeId)
   const themes = useThemeStore((s) => s.themes)
-  const theme = useMemo(() => {
-    if (noteThemeId) {
-      const overridden = listAllThemes({ themes, activeId }).find((t) => t.id === noteThemeId)
-      if (overridden) return overridden
-    }
-    return resolveActiveTheme({ themes, activeId })
-  }, [themes, activeId, noteThemeId])
+  const theme = useMemo(
+    () => resolveNoteTheme({ themes, activeId }, noteThemeId),
+    [themes, activeId, noteThemeId],
+  )
   const isDark = useAppearance((s) => s.isDark)
   const cssVars = useMemo(() => compileTokens(theme.tokens, theme.dark, isDark), [theme, isDark])
   useExtraCss(theme.id, theme.extraCss)
 
   // ── 右键菜单状态:打开瞬间取选择区快照(与 EditorPane 的 menuTick 同法) ──
-  const [menuTick, setMenuTick] = useState(0)
+  const [, setMenuTick] = useState(0)
   /** 右键目标上下文:图片(markdown 原始 src,已在 PM 中选中)或链接 href */
   const [ctxImage, setCtxImage] = useState<string | null>(null)
   const [ctxLink, setCtxLink] = useState<string | null>(null)
   const ed = editor
-  const selEmpty = menuTick >= 0 && (!ed || selectionEmpty(ed))
+  const selEmpty = !ed || selectionEmpty(ed)
   // 节点选区(右键图片等):行内 mark/标题类命令不适用,格式按钮禁用
-  const nodeSel = menuTick >= 0 && !!ed && ed.state.selection instanceof NodeSelection
-  const headingLevel = menuTick >= 0 && ed ? currentHeadingLevel(ed) : 0
+  const nodeSel = !!ed && ed.state.selection instanceof NodeSelection
+  const headingLevel = ed ? currentHeadingLevel(ed) : 0
   const runEditor = (fn: (target: NonNullable<typeof ed>) => void) => {
     if (ed) fn(ed)
   }
@@ -375,9 +371,11 @@ export const LiveEditorPane = memo(function LiveEditorPane({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <AutoHideScrollArea
-          ref={containerRef}
           className="h-full"
           viewportProps={{
+            // data 标记供工场取色直写定位画布容器(app.bg 的消费点不是
+            // .themd-prose 而是滚动容器;工场「导入笔记」模式经它走零渲染快写)
+            'data-app-canvas': '',
             style: { ...cssVars, background: 'var(--t-app-bg, transparent)' },
             onContextMenu: handleContextMenu,
             onMouseMove: onMouseMove,
@@ -386,7 +384,7 @@ export const LiveEditorPane = memo(function LiveEditorPane({
               // 等待区内不隐藏,与 CM 版 EditorPane 同款处理
               if (!inHoverKeep(e.clientX, e.clientY)) hideHover()
             },
-          }}
+          } as React.ComponentPropsWithoutRef<'div'>}
         >
           <EditorContent editor={editor} className="live-editor-shell" />
         </AutoHideScrollArea>

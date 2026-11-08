@@ -39,9 +39,11 @@ async function bootstrap() {
     return
   }
 
-  // 主窗口:预取 assets 根目录与路径转换函数,图片相对路径渲染零异步
+  // 主窗口:预取 assets 根目录与路径转换函数,图片相对路径渲染零异步。
+  // 非 Tauri 环境(dev 直开页面)取不到应用数据目录,静默跳过——
+  // resolver 注入前 resolveImageSrcSync 原样放行,预览显示相对路径
   const { initImageSrcResolver } = await import('@/lib/image-src')
-  void initImageSrcResolver()
+  void initImageSrcResolver().catch(() => {})
   const { default: App } = await import('./App')
   createRoot(root).render(
     <StrictMode>

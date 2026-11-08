@@ -24,6 +24,7 @@ import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { countImages, countWords } from '@/modules/notebook/domain/note'
 import { appEvents } from '@/shared/events/app-events'
+import { noteDirOf } from '@/shared/paths'
 import type { Note } from '@/modules/notebook/domain/note'
 import type { ThemeFile } from '@/lib/theme/schema'
 import type { EditorViewMode } from '@/store-editor'
@@ -49,6 +50,8 @@ function IconTip({ label, children }: { label: string; children: ReactElement })
 export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; fileMissing: boolean; onNoteDelete: () => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void; children?: ReactNode }
 export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, fileMissing, onNoteDelete, bindEditorScroller, bindPreviewScroller, children }: AppShellProps) {
   const imageCount = active ? countImages(active.content) : 0
+  /* 活动笔记所在目录:三个编辑器视图共用的插图落盘基准(paths 工具单一来源) */
+  const activeNoteDir = active ? noteDirOf(active.sourcePath) : null
   /* 侧栏折叠动画(motion 命令式,与拖拽架构共生):
      clipWidth = 外层裁剪窗宽,折叠/展开由 animate() 补间;
      contentWidth = 内层内容宽,滑出前冻结一次,动画过程内容不逐帧重排。
@@ -391,7 +394,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     value={active.content}
                     onChange={(v) => updateNote(active.id, v)}
                     bindScroller={bindEditorScroller}
-                    noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
+                    noteDir={activeNoteDir}
                   />
                 </ResizablePanel>
                 <GlowResizeHandle withHandle />
@@ -409,7 +412,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   key={active.id}
                   value={active.content}
                   onChange={(v) => updateNote(active.id, v)}
-                  noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
+                  noteDir={activeNoteDir}
                 />
               </div>
             ) : view === 'live' ? (
@@ -419,7 +422,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   value={active.content}
                   onChange={(v) => updateNote(active.id, v)}
                   noteThemeId={active.themeId}
-                  noteDir={active.sourcePath ? active.sourcePath.replace(/[\\/][^\\/]*$/, '') : null}
+                  noteDir={activeNoteDir}
                 />
               </div>
             ) : (

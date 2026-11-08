@@ -56,7 +56,6 @@ export class ThemeController {
   retrySave = () => { this.scheduleSave() }
 
   async hydrate() { try { const saved = await this.repository.load(); if (saved) this.state = { ...saved, themes: saved.themes.filter((theme) => !theme.builtin) } } catch (error) { console.error('主题存储水合失败:', error) } this.listeners.forEach((listener) => listener()) }
-  importSnapshot(snapshot: ThemeSnapshot) { this.publish({ ...snapshot, themes: snapshot.themes.filter((theme) => !theme.builtin) }) }
   upsertTheme(theme: ThemeFile) { this.publish({ ...this.state, themes: this.state.themes.some((t) => t.id === theme.id) ? this.state.themes.map((t) => t.id === theme.id ? theme : t) : [...this.state.themes, theme] }) }
   private source(id: string) { return BUILTIN_THEMES.find((t) => t.id === id) ?? this.state.themes.find((t) => t.id === id) }
   private copy(id: string, patch: Partial<ThemeFile> = {}): string { const source = this.source(id); if (!source) return id; const copy = { ...source, id: crypto.randomUUID(), name: `${source.name} 副本`, builtin: false, tokens: { ...source.tokens }, ...patch }; this.publish({ ...this.state, themes: [...this.state.themes, copy] }); return copy.id }
@@ -67,5 +66,24 @@ export class ThemeController {
   duplicateTheme(id: string) { return this.source(id) ? this.copy(id) : null }
   removeTheme(id: string) { this.publish({ ...this.state, themes: this.state.themes.filter((t) => t.id !== id), activeId: this.state.activeId === id ? 'default' : this.state.activeId }) }
   setActive(id: string) { this.publish({ ...this.state, activeId: id }) }
-  importTheme(raw: string) { try { const data = JSON.parse(raw) as { name?: string; tokens?: ThemeTokens }; if (!data?.name) return null; const theme: ThemeFile = { version: 1, id: crypto.randomUUID(), name: data.name, tokens: data.tokens ?? {} }; this.publish({ ...this.state, themes: [...this.state.themes, theme] }); return theme.id } catch { return null } }
+  /** 主题包导入:与 handleExportJson 的导出结构对齐(tokens/dark/extraCss 全量),
+   *  字段形状不合的照无值处理,不让坏文件污染令牌表 */
+  importTheme(raw: string) {
+    try {
+      const data = JSON.parse(raw) as { name?: string; tokens?: ThemeTokens; dark?: ThemeTokens; extraCss?: string }
+      if (!data?.name || typeof data.name !== 'string') return null
+      const isTokenMap = (v: unknown): v is ThemeTokens => typeof v === 'object' && v !== null && !Array.isArray(v)
+      const dark = isTokenMap(data.dark) && Object.keys(data.dark).length > 0 ? data.dark : undefined
+      const theme: ThemeFile = {
+        version: 1,
+        id: crypto.randomUUID(),
+        name: data.name,
+        tokens: isTokenMap(data.tokens) ? data.tokens : {},
+        dark,
+        extraCss: typeof data.extraCss === 'string' && data.extraCss ? data.extraCss : undefined,
+      }
+      this.publish({ ...this.state, themes: [...this.state.themes, theme] })
+      return theme.id
+    } catch { return null }
+  }
 }

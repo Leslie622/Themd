@@ -36,13 +36,13 @@ export async function imageFilesToMarkdown(
   const useAssets = imageMode === 'assets'
   const useRemote = imageMode === 'remote'
   const uploaderConfig = { provider: uploaderProvider, githubRepo, githubToken, picgoUrl }
-  // 绑定笔记落其目录 assets/(与 CM 版同规则);库内笔记用偏好根/平台默认
-  const root =
-    useAssets && noteDir
+  // 绑定笔记落其目录 assets/(与 CM 版同规则);root 仅 assets 分支消费,
+  // remote/embed 模式不去查平台默认根(免一次无用 IPC)
+  const root = useAssets
+    ? noteDir
       ? `${noteDir.replace(/[\\/]+$/, '')}\\assets`
-      : useAssets && assetsRoot.trim()
-        ? assetsRoot.trim()
-        : await platformServices.files.defaultAssetsRoot()
+      : assetsRoot.trim() || (await platformServices.files.defaultAssetsRoot())
+    : ''
   const out: string[] = []
   let ok = 0
   for (const file of files) {

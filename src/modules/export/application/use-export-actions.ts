@@ -4,9 +4,10 @@ import { toast } from 'sonner'
 import { exportNoteHtml, exportNoteMarkdown } from './export-note'
 import { platformServices } from '@/app/platform'
 import type { Note } from '@/modules/notebook/domain/note'
+import type { EditorViewMode } from '@/store-editor'
 
-/** 与 AppShell 的 ViewMode / store-editor 的 EditorViewMode 对齐(四值联合) */
-export type ExportViewMode = 'edit' | 'split' | 'live' | 'preview'
+/** 视图模式与 AppShell/store-editor 同源,不在本模块重抄一份 */
+export type ExportViewMode = EditorViewMode
 
 interface ExportActionsInput {
   active: Note | null
@@ -35,17 +36,14 @@ export function useExportActions({ active, view, setView }: ExportActionsInput) 
   }, [restoreView])
 
   useEffect(() => {
-    const onAfterPrint = () => restoreView()
-    return platformServices.pdf.onAfterPrint(onAfterPrint)
-  }, [restoreView])
-
-  useEffect(() => {
     runPendingExport()
   }, [runPendingExport, view])
 
   const exportPdf = useCallback(async () => {
-    printPrevView.current = view
+    // 无活动笔记先于状态记忆返回:printPrevView 只在真正要打印时记,
+    // 否则残留旧引用会让下次打印完成后 restoreView 切到错视图
     if (!active) return
+    printPrevView.current = view
     const path = await platformServices.files.chooseSavePath({
       defaultName: `${active.title || 'note'}.pdf`,
       filterName: 'PDF',

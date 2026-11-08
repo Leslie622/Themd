@@ -31,8 +31,7 @@ function loadLocalFonts(): Promise<string[]> {
 
 /**
  * 本机字体列表 + 自动获取完整列表。打开字体弹窗即自动请求:
- * 桌面端走 IPC 直出全量;浏览器端 queryLocalFonts 弹授权,拒绝或
- * 不支持时静默回落到 canvas 探测名单,不打扰用户。
+ * 桌面端走 IPC 直出全量;IPC 失败静默回落 canvas 探测名单,不打扰用户。
  */
 export function useLocalFontList() {
   const [fonts, setFonts] = useState<string[]>([])
@@ -48,20 +47,14 @@ export function useLocalFontList() {
     }
   }, [])
 
-  /** 自动/手动触发完整枚举;silent 用于自动路径(失败不弹 toast) */
-  const requestFullList = async (silent = false) => {
+  /** 触发完整枚举(IPC);失败静默,探测名单仍然可用 */
+  const requestFullList = async () => {
     setRequesting(true)
     const result = await requestAllFonts()
     setRequesting(false)
     if (result.ok) {
       fontListPromise = Promise.resolve(result.fonts)
       setFonts(result.fonts)
-      return
-    }
-    if (silent) return
-    // 仅显式触发时提示失败原因
-    if (result.reason === 'denied') {
-      // 浏览器拒绝授权:静默即可,探测名单仍然可用
     }
   }
 

@@ -1,4 +1,3 @@
-import type { ThemeFile } from './schema'
 import { type ThemeTokens, type TokenKey } from './tokens'
 
 /**
@@ -21,6 +20,8 @@ const SELECTOR_MAP: { keys: TokenKey[]; test: RegExp }[] = [
   { keys: ['em.fontLatin', 'em.weight', 'em.style', 'em.color', 'em.bg', 'em.padding', 'em.margin'], test: /(^|[\s,#.>])em$/i },
   { keys: ['del.fontLatin', 'del.weight', 'del.color', 'del.textColor', 'del.thickness', 'del.offset', 'del.bg', 'del.padding', 'del.margin'], test: /(^|[\s,#.>])(del|s)$/ },
   { keys: ['a.fontLatin', 'a.weight', 'a.color', 'a.hoverColor', 'a.underlineColor', 'a.underlineHeight', 'a.hoverLineColor', 'a.transition', 'a.bg', 'a.padding', 'a.margin'], test: /(^|[\s,#.>])a$/ },
+  // 行内 code 与 pre code 共用末段 code 匹配:第三方 CSS 的 pre code 字体类
+  // 声明会映射进 inlineCode.* 而非 codeBlock.*——启发式导入的已知局限
   { keys: ['inlineCode.fontLatin', 'inlineCode.size', 'inlineCode.weight', 'inlineCode.color', 'inlineCode.bg', 'inlineCode.padding', 'inlineCode.margin', 'inlineCode.radius', 'inlineCode.borderWidth', 'inlineCode.borderColor'], test: /(^|[\s,#.>])code$/ },
   { keys: ['quote.borderColor'], test: /(^|[\s,#.>])blockquote$/ },
   { keys: ['codeBlock.bg'], test: /(^|[\s,#.>])pre$/ },
@@ -266,7 +267,7 @@ function resolveTokenKey(groupKey: string, entry: { keys: TokenKey[] }, prop: st
   // border-left / border-bottom 这类合并写法
   if (prop === 'border-left' && entry.keys.includes('quote.borderColor')) return 'quote.borderColor'
   if (prop === 'border-bottom' && entry.keys.includes('h1.borderColor')) {
-    // border-bottom 简写只取颜色（宽度另算），交给调用方按需
+    // border-bottom 简写只取颜色:宽度需另行拆算,当前导入不做,该声明整条静默跳过
     return null
   }
   return null
@@ -291,19 +292,4 @@ function rewriteScope(selector: string, body: string): string {
     .replace(/\.markdown-body/g, '.themd-prose')
     .replace(/(^|[\s,])body(?=[\s,.:#>]|$)/g, '$1.themd-prose')
   return `${rewritten} {\n  ${body.replace(/;\s*/g, ';\n  ')}\n}`
-}
-
-/** 导入 .css 后组装完整主题对象（工场调用） */
-export function themeFromCssImport(
-  name: string,
-  cssText: string,
-): { theme: ThemeFile; report: CssImportReport } {
-  const theme: ThemeFile = {
-    version: 1,
-    id: crypto.randomUUID(),
-    name,
-    tokens: {},
-  }
-  const report = importThemeCss(cssText, theme)
-  return { theme, report }
 }

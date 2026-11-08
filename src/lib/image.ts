@@ -137,7 +137,7 @@ export async function fileToAssetImage(
   file: File,
   root: string,
   write: (path: string, bytes: Uint8Array) => Promise<void>,
-): Promise<{ relativePath: string; absolutePath: string }> {
+): Promise<{ relativePath: string }> {
   if (!isImageFile(file)) {
     throw new Error(`「${file.name}」不是图片`)
   }
@@ -147,10 +147,9 @@ export async function fileToAssetImage(
   const base = file.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|\s]/g, '_') || 'image'
   const name = `${base}-${crypto.randomUUID().slice(0, 8)}.${ext}`
   const normalizedRoot = root.replace(/[\\/]+$/, '')
-  const absolutePath = `${normalizedRoot}/${name}`
   const bytes = new Uint8Array(await file.arrayBuffer())
-  await write(absolutePath, bytes)
-  return { relativePath: `assets/${name}`, absolutePath }
+  await write(`${normalizedRoot}/${name}`, bytes)
+  return { relativePath: `assets/${name}` }
 }
 
 /**

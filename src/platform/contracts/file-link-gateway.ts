@@ -17,11 +17,10 @@ export interface FileLinkGateway {
   /** 读取磁盘文件文本(外部改动后重载用);失败抛错 */
   readTextFile(path: string): Promise<string>
   /**
-   * 递归读取目录下全部笔记文件(.md/.markdown/.txt,非 UTF-8 无 filePath);失败抛错。
-   * withContent=false 为懒加载元数据扫描:只回文件名/路径,不读正文(打开工作区用,
-   * 内容按需经 readTextFile 加载)
+   * 递归读取目录下全部笔记文件的元数据(.md/.markdown/.txt):只回文件名/路径,
+   * 不读正文(懒加载,打开工作区秒开;内容按需经 readTextFile 加载);失败抛错
    */
-  readFolderNotes(root: string, withContent?: boolean): Promise<ImportedFile[]>
+  readFolderNotes(root: string): Promise<ImportedFile[]>
   /** 原子写文本文件到指定绝对路径(绑定写回);失败抛错 */
   writeTextFile(path: string, contents: string): Promise<void>
   /** 监听工作区根(递归,整棵目录树实时);null = 停止监听 */

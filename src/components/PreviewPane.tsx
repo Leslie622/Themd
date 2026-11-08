@@ -10,7 +10,7 @@ import { renderStaticHtml } from '@/modules/rendering/static-html'
 import { buildCodeButtons } from '@/modules/rendering/codeblock-chrome'
 import { buildOutline, type OutlineItem } from '@/modules/rendering/outline'
 import { compileTokens } from '@/lib/theme/compile'
-import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
+import { resolveNoteTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
 import { useEditorPrefs } from '@/store-editor'
 import { useExtraCss } from '@/components/theme/useExtraCss'
@@ -46,17 +46,10 @@ export const PreviewPane = memo(function PreviewPane({
 
   const activeId = useThemeStore((s) => s.activeId)
   const themes = useThemeStore((s) => s.themes)
-  const theme = useMemo(() => {
-    if (noteThemeId) {
-      // listAllThemes = 内置 + 用户主题;笔记覆盖选内置主题时也能命中
-      // (id 失效如主题已删除,则回落全局)
-      const overridden = listAllThemes({ themes, activeId }).find(
-        (t) => t.id === noteThemeId,
-      )
-      if (overridden) return overridden
-    }
-    return resolveActiveTheme({ themes, activeId })
-  }, [themes, activeId, noteThemeId])
+  const theme = useMemo(
+    () => resolveNoteTheme({ themes, activeId }, noteThemeId),
+    [themes, activeId, noteThemeId],
+  )
   const isDark = useAppearance((s) => s.isDark)
   const cssVars = useMemo(
     () => compileTokens(theme.tokens, theme.dark, isDark),
@@ -70,6 +63,10 @@ export const PreviewPane = memo(function PreviewPane({
   // 预览里的 <a> 带真实 href,点击的默认行为是 WebView 直接导航,
   // 会把整个应用页面替换掉——拦截后交系统浏览器打开
   const handleClick = (e: React.MouseEvent) => {
+    // 灯箱经 React portal 挂 body,但仍是本组件的 React 子树——点击灯箱内部
+    // (放大图等)会沿 React 树冒泡回这里;YARL 的图不在 .themd-prose 采集范围内,
+    // 不豁免会被误判成新图片点击、导航重置回第 1 张
+    if ((e.target as HTMLElement).closest('.yarl__root')) return
     const anchor = (e.target as HTMLElement).closest('a[href]')
     if (anchor) {
       e.preventDefault()

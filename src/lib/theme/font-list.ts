@@ -70,12 +70,10 @@ export function detectInstalledFonts(): string[] {
   return installed
 }
 
-/** requestAllFonts 的结果:ok 带列表;其余带原因(UI 据此提示) */
-export type FontAccessResult =
-  | { ok: true; fonts: string[] }
-  | { ok: false; reason: 'unsupported' | 'denied' | 'error' }
+/** requestAllFonts 的结果:ok 带列表;失败只可能是 IPC 异常(UI 静默回落探测名单) */
+export type FontAccessResult = { ok: true; fonts: string[] } | { ok: false }
 
-/** 完整枚举:Rust IPC,无权限概念。失败(如命令异常)返回 error 原因 */
+/** 完整枚举:Rust IPC,无权限概念 */
 export async function requestAllFonts(): Promise<FontAccessResult> {
   try {
     const fonts = await desktopFontList()
@@ -87,7 +85,7 @@ export async function requestAllFonts(): Promise<FontAccessResult> {
     }
     return { ok: true, fonts }
   } catch {
-    return { ok: false, reason: 'error' }
+    return { ok: false }
   }
 }
 
@@ -101,9 +99,4 @@ export function getCachedFullFontList(): string[] | null {
   } catch {
     return null
   }
-}
-
-/** 完整列表是否可获取(桌面端 IPC 恒可用;保留函数让 UI 逻辑不动) */
-export function isLocalFontAccessSupported(): boolean {
-  return true
 }

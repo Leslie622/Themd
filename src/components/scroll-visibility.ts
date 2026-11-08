@@ -1,7 +1,7 @@
 /**
  * 滚动条「滚动浮现 / 静止淡出」的统一时序。
  *
- * 任何滚动容器在滚动期间挂 .osb-active,静止 IDLE_HIDE_MS 后摘掉:
+ * 任何滚动容器在滚动期间挂 .osb-active,静止 900ms 后摘掉:
  * - Radix 浮动滚动条(AutoHideScrollArea)靠它控制 [data-autohide] 的显隐;
  * - 原生 ::-webkit-scrollbar(CM 编辑器、弹层菜单、代码块)由
  *   installGlobalScrollbarFade 的 document 捕获级 scroll 监听统一接管
@@ -10,7 +10,7 @@
  * 显隐节奏全产品一致,hover 不点亮——「不滚动就不出现」。
  */
 
-export const IDLE_HIDE_MS = 900
+const IDLE_HIDE_MS = 900
 
 const timers = new WeakMap<Element, number>()
 

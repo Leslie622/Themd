@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 export const FieldRow = memo(function FieldRow({
   field,
   value,
+  fallbackColor,
   fallbackFont,
   onChange,
   onLivePreview,
@@ -36,10 +37,12 @@ export const FieldRow = memo(function FieldRow({
 }: {
   field: FieldDef
   value: string | undefined
+  /** 颜色令牌的回落色(实测);其他类型忽略 */
+  fallbackColor?: string
   /** 字体令牌的回落字体(实测);其他类型忽略 */
   fallbackFont?: string
   onChange: (v: string | undefined) => void
-  /** 拖动实时预览/收口提交:仅 background 类使用(app.bg 直写画布容器) */
+  /** 拖动实时预览/收口提交:颜色与 background 类使用(零渲染直写预览) */
   onLivePreview?: (field: FieldDef, v: string) => void
   onCommit?: (field: FieldDef, v: string) => void
 }) {
@@ -57,6 +60,7 @@ export const FieldRow = memo(function FieldRow({
           key={field.key}
           field={field}
           value={value}
+          fallbackColor={fallbackColor}
           fallbackFont={fallbackFont}
           onChange={set}
           onLivePreview={onLivePreview}
@@ -82,6 +86,7 @@ export const FieldRow = memo(function FieldRow({
 function FieldControl({
   field,
   value,
+  fallbackColor,
   fallbackFont,
   onChange,
   onLivePreview,
@@ -89,6 +94,7 @@ function FieldControl({
 }: {
   field: FieldDef
   value: string | undefined
+  fallbackColor?: string
   fallbackFont?: string
   onChange: (v: string) => void
   onLivePreview?: (field: FieldDef, v: string) => void
@@ -99,7 +105,16 @@ function FieldControl({
   const placeholder = placeholderOf(field.key)
   switch (field.type) {
     case 'color':
-      return <ColorInput field={field} value={value} onChange={onChange} />
+      return (
+        <ColorInput
+          field={field}
+          value={value}
+          fallbackColor={fallbackColor}
+          onChange={onChange}
+          onLivePreview={onLivePreview}
+          onCommit={onCommit}
+        />
+      )
     case 'background':
       return (
         <BackgroundInput
@@ -184,15 +199,6 @@ function FieldControl({
             </SelectGroup>
           </SelectContent>
         </Select>
-      )
-    case 'text':
-      return (
-        <Input
-          value={value ?? ''}
-          placeholder={placeholder ?? '未设置'}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-8 text-xs"
-        />
       )
     case 'marker-text':
       return <MarkerTextInput value={value} placeholder={placeholder} onChange={onChange} />
@@ -381,57 +387,64 @@ function FieldHint({ hint }: { hint?: string }) {
 }
 
 /**
- * 颜色属性行(仅 color 类型用):传入 fallbackColor(未设置时的实际观感色,由父级从
- * 迷你预览测量)时,未设置的色块显示回落色并带斜角标识;否则显示通用棋盘格。
- */export const ColorFieldRow = memo(function ColorFieldRow({
-  field,
-  value,
-  fallbackColor,
-  onChange,
-  onLivePreview,
-  onCommit,
-}: {
-  field: FieldDef
-  value: string | undefined
-  fallbackColor?: string
-  onChange: (v: string | undefined) => void
-  /** 拖动中的实时预览:直写预览容器 CSS 变量,零 React 渲染 */
-  onLivePreview?: (field: FieldDef, v: string) => void
-  /** 拖动结束后的最终提交(进 store 持久化) */
-  onCommit?: (field: FieldDef, v: string) => void
-}) {
-  const set = (v: string) => onChange(v === '' ? undefined : v)
-  const unset = () => onChange(undefined)
+ * 拖动取色的「绝对流畅」提交管线(ColorInput/BackgroundInput 共用):
+ * 每次移动 → 色块直写 + onLivePreview 直写预览(零 React 渲染),store 提交
+ * 按帧合拢,停止拖动 200ms 后经 onCommit 收口。收口定时器必须先于 rAF
+ * 合拢判断设置:rAF 在窗口被遮挡等场景可能长期不触发,后置会被一同跳过,
+ * store 永远停在旧值。卸载时若还有未提交的值,立即提交(避免松手瞬间丢最后一次)。
+ */
+function useThrottledColorSubmit(
+  swatchRef: React.RefObject<HTMLSpanElement | null>,
+  callbacks: {
+    onChange: (v: string) => void
+    onLivePreview?: (field: FieldDef, v: string) => void
+    onCommit?: (field: FieldDef, v: string) => void
+    field: FieldDef
+  },
+): (v: string) => void {
+  // 始终持有最新回调(effect 内同步,避免渲染期写 ref)
+  const cbRef = useRef(callbacks)
+  const onChangeRef = useRef(callbacks.onChange)
+  useEffect(() => {
+    cbRef.current = callbacks
+    onChangeRef.current = callbacks.onChange
+  })
 
-  return (
-    <div className="flex items-start gap-2 py-1.5">
-      {/* items-start + pt 对齐控件本体:描述悬在控件下方,label 不随整体变高而偏移 */}
-      <Label className="w-20 shrink-0 pt-[10px] text-xs leading-none text-muted-foreground">{field.label}</Label>
-      <div className="min-w-0 flex-1">
-        <ColorInput
-          field={field}
-          value={value}
-          fallbackColor={fallbackColor}
-          onChange={set}
-          onLivePreview={onLivePreview}
-          onCommit={onCommit}
-        />
-        <FieldHint hint={field.hint} />
-      </div>
-      <Tip label="恢复默认" side="bottom">
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn('mt-0.5 size-7 shrink-0', value === undefined && 'invisible')}
-          onClick={unset}
-          aria-label={`重置${field.section ?? ""}${field.label}`}
-        >
-          <IconRotate2 className="size-4" />
-        </Button>
-      </Tip>
-    </div>
+  const frame = useRef(0)
+  const pendingValue = useRef<string | null>(null)
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const submitThrottled = (v: string) => {
+    pendingValue.current = v
+    // 实时路径:色块 + 预览容器,同步直写,无 React 参与
+    if (swatchRef.current) swatchRef.current.style.background = v
+    cbRef.current.onLivePreview?.(cbRef.current.field, v)
+    // 最终提交:停止拖动 200ms 后收口(松手或悬停停顿)
+    if (commitTimer.current) clearTimeout(commitTimer.current)
+    commitTimer.current = setTimeout(() => {
+      if (pendingValue.current !== null) {
+        cbRef.current.onCommit?.(cbRef.current.field, pendingValue.current)
+      }
+    }, 200)
+    if (frame.current) return
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0
+      // store 提交仍按帧合拢(拖动中每帧至多一次,保证中栏大预览跟手)
+      if (pendingValue.current !== null) {
+        onChangeRef.current(pendingValue.current)
+      }
+    })
+  }
+  useEffect(
+    () => () => {
+      if (frame.current) cancelAnimationFrame(frame.current)
+      if (commitTimer.current) clearTimeout(commitTimer.current)
+      if (pendingValue.current !== null) onChangeRef.current(pendingValue.current)
+    },
+    [],
   )
-})
+  return submitThrottled
+}
 
 /**
  * 取色器 + hex 文本。「绝对流畅」拖动:
@@ -467,50 +480,7 @@ function ColorInput({
         : '#000000'
   // 色块本地实时色:拖动期间直接写 DOM,不进 React state
   const swatchRef = useRef<HTMLSpanElement>(null)
-  // 始终持有最新回调(effect 内同步,避免渲染期写 ref)
-  const cbRef = useRef({ onChange, onLivePreview, onCommit, field })
-  const onChangeRef = useRef(onChange)
-  useEffect(() => {
-    cbRef.current = { onChange, onLivePreview, onCommit, field }
-    onChangeRef.current = onChange
-  })
-
-  const frame = useRef(0)
-  const pendingValue = useRef<string | null>(null)
-  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const submitThrottled = (v: string) => {
-    pendingValue.current = v
-    // 实时路径:色块 + 预览容器 CSS 变量,同步直写,无 React 参与
-    if (swatchRef.current) swatchRef.current.style.background = v
-    cbRef.current.onLivePreview?.(cbRef.current.field, v)
-    // 最终提交:停止拖动 200ms 后收口(松手或悬停停顿)。
-    // 必须在 rAF 合拢判断之前设置:rAF 在窗口被遮挡等场景下可能长期不触发,
-    // 若挂在 return 之后,收口定时器会被一同跳过,store 永远停在旧值
-    if (commitTimer.current) clearTimeout(commitTimer.current)
-    commitTimer.current = setTimeout(() => {
-      if (pendingValue.current !== null) {
-        cbRef.current.onCommit?.(cbRef.current.field, pendingValue.current)
-      }
-    }, 200)
-    if (frame.current) return
-    frame.current = requestAnimationFrame(() => {
-      frame.current = 0
-      // store 提交仍按帧合拢(拖动中每帧至多一次,保证中栏大预览跟手)
-      if (pendingValue.current !== null) {
-        onChangeRef.current(pendingValue.current)
-      }
-    })
-  }
-  // 卸载时若还有未提交的值,立即提交(避免松手瞬间丢最后一次)
-  useEffect(
-    () => () => {
-      if (frame.current) cancelAnimationFrame(frame.current)
-      if (commitTimer.current) clearTimeout(commitTimer.current)
-      if (pendingValue.current !== null) onChangeRef.current(pendingValue.current)
-    },
-    [],
-  )
+  const submitThrottled = useThrottledColorSubmit(swatchRef, { onChange, onLivePreview, onCommit, field })
 
   // 色块显示:已设置→该色;未设置→回落色(若可测),否则透明棋盘格
   const swatchStyle: React.CSSProperties = value
@@ -855,44 +825,8 @@ function BackgroundInput({
   const swatchRef = useRef<HTMLSpanElement>(null)
   // 种子链与 ColorInput 同款:值可回流用值(oklch 也同步),图片值/非法值白起步
   const safe = value && parseColorValue(value) ? value : '#ffffff'
-  // 回调 ref(effect 内同步,避免渲染期写 ref)
-  const cbRef = useRef({ onChange, onLivePreview, onCommit, field })
-  const onChangeRef = useRef(onChange)
-  useEffect(() => {
-    cbRef.current = { onChange, onLivePreview, onCommit, field }
-    onChangeRef.current = onChange
-  })
-
-  const frame = useRef(0)
-  const pendingValue = useRef<string | null>(null)
-  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  /** 取色拖动专用:色块直写 + 画布直写 + rAF 合拢提交,200ms 收口(与 ColorInput 同款) */
-  const submitThrottled = (v: string) => {
-    pendingValue.current = v
-    if (swatchRef.current) swatchRef.current.style.background = v
-    cbRef.current.onLivePreview?.(cbRef.current.field, v)
-    // 收口定时器先于 rAF 合拢判断设置:rAF 长期不触发时(窗口被遮挡)提交不能丢
-    if (commitTimer.current) clearTimeout(commitTimer.current)
-    commitTimer.current = setTimeout(() => {
-      if (pendingValue.current !== null) {
-        cbRef.current.onCommit?.(cbRef.current.field, pendingValue.current)
-      }
-    }, 200)
-    if (frame.current) return
-    frame.current = requestAnimationFrame(() => {
-      frame.current = 0
-      if (pendingValue.current !== null) onChangeRef.current(pendingValue.current)
-    })
-  }
-  useEffect(
-    () => () => {
-      if (frame.current) cancelAnimationFrame(frame.current)
-      if (commitTimer.current) clearTimeout(commitTimer.current)
-      if (pendingValue.current !== null) onChangeRef.current(pendingValue.current)
-    },
-    [],
-  )
+  /** 取色拖动专用:色块直写 + 画布直写 + rAF 合拢提交,200ms 收口(与 ColorInput 同管线) */
+  const submitThrottled = useThrottledColorSubmit(swatchRef, { onChange, onLivePreview, onCommit, field })
 
   const pickImage = async () => {
     setPicking(true)
@@ -1094,7 +1028,14 @@ function SizeInput({
       />
       <Select
         value={curUnit}
-        onValueChange={(u) => emit(num || '0', u)}
+        onValueChange={(u) => {
+          if (num === '') {
+            // 空值时切单位只记住选择,不凭空创建 0 值令牌;输入时按 lastUnit 走
+            setLastUnit(u)
+            return
+          }
+          emit(num, u)
+        }}
       >
         <SelectTrigger size="sm" className="w-20 shrink-0">
           <SelectValue />

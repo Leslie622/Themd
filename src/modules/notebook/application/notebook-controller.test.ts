@@ -32,16 +32,16 @@ class FakeFileLink implements FileLinkGateway {
     this.files.set(path, contents)
   }
 
-  /** 模拟 Rust read_folder_notes:递归返回 fake 磁盘上 root 之下的笔记文件;withContent=false 只回元数据 */
-  async readFolderNotes(root: string, withContent = true) {
+  /** 模拟 Rust read_folder_notes:递归返回 fake 磁盘上 root 之下的笔记文件元数据(懒加载,不含正文) */
+  async readFolderNotes(root: string) {
     const out: Array<{ folderPath: string; title: string; content: string; filePath: string }> = []
-    for (const [path, content] of this.files) {
+    for (const [path] of this.files) {
       if (!path.startsWith(`${root}\\`)) continue
       if (!/\.(md|markdown|txt)$/i.test(path)) continue
       out.push({
         folderPath: '',
         title: (path.split('\\').pop() ?? '').replace(/\.(md|markdown|txt)$/i, ''),
-        content: withContent ? content : '',
+        content: '',
         filePath: path,
       })
     }

@@ -141,7 +141,7 @@ export class NotebookController {
     this.flushAll()
     // 懒加载扫描:只取文件名元数据不读正文(Typora 语义,大目录秒开),
     // 正文在笔记激活时按需经 ensureNoteContentLoaded 读取
-    const imported = await this.fileLink.readFolderNotes(normalizedRoot, false)
+    const imported = await this.fileLink.readFolderNotes(normalizedRoot)
     const existing = new Map(this.state.notes.map((n) => [normalizePath(n.sourcePath), n]))
     const dirs = new Set<string>()
     // 目录链补齐:笔记所在目录的各级祖先一路补到工作区根,
@@ -203,8 +203,9 @@ export class NotebookController {
 
   updateNote(id: string, content: string): void {
     const target = this.state.notes.find((note) => note.id === id)
-    // 未加载正文的笔记不可写:编辑器此时不应挂载,这里兜底防「空内容覆盖磁盘」
-    if (target?.contentLoaded === false) return
+    // 不存在的 id 与未加载正文的笔记都不可写:编辑器此时不应挂载,
+    // 兜底防「空内容覆盖磁盘」,也避免幽灵 id 触发无意义的 publish + 落库
+    if (!target || target.contentLoaded === false) return
     this.publish({
       ...this.state,
       notes: this.state.notes.map((note) => {
@@ -212,7 +213,7 @@ export class NotebookController {
         return { ...note, content, updatedAt: Date.now() }
       }),
     })
-    if (target) this.scheduleWriteBack(id, target.sourcePath)
+    this.scheduleWriteBack(id, target.sourcePath)
   }
 
   /** 在指定目录新建笔记:求无冲突路径 → 建笔记 → 立即写盘绑定 */

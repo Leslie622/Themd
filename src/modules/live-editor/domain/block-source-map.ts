@@ -173,7 +173,8 @@ export function joinBlocks(blocks: BlockRecord[]): string {
   return blocks.map((b) => b.text + b.separator).join('')
 }
 
-/** 标记命中区间 [from, to) 的块为 dirty(编辑事务回调用;偏移为 content 坐标) */
+/** 标记命中区间 [from, to) 的块为 dirty(仅供守门测试模拟编辑;生产路径
+ *  由 reconcileBlocks 在重对账时标脏,偏移为 content 坐标) */
 export function markDirty(blocks: BlockRecord[], from: number, to: number): BlockRecord[] {
   return blocks.map((b) =>
     b.from < to && from < b.to + b.separator.length && !b.dirty ? { ...b, dirty: true } : b,

@@ -25,7 +25,8 @@ const SHADOW_PAD = 28
  */
 export default function TrayMenuWindow() {
   const [open, setOpen] = useState(false)
-  const anchorRef = useRef({ cursorX: 0, cursorY: 0 })
+  /** 菜单锚点 = 托盘右键的光标屏幕坐标(Rust 传回,落位用) */
+  const cursorRef = useRef({ cursorX: 0, cursorY: 0 })
 
   useEffect(() => {
     // 透明窗口:全局样式给 body 上的底色会挡住菜单圆角外的桌面,压成透明
@@ -38,7 +39,7 @@ export default function TrayMenuWindow() {
     let offOpen: (() => void) | null = null
     let offBlur: (() => void) | null = null
     void platformServices.trayMenu.onOpenRequest((anchor) => {
-      anchorRef.current = anchor
+      cursorRef.current = anchor
       setOpen(true)
     }).then((off) => { offOpen = off })
     void platformServices.trayMenu.onBlur(() => {
@@ -63,7 +64,7 @@ export default function TrayMenuWindow() {
         const content = document.querySelector<HTMLElement>('[data-slot="dropdown-menu-content"]')
         if (!content || cancelled) return
         const commit = async () => {
-          const { cursorX, cursorY } = anchorRef.current
+          const { cursorX, cursorY } = cursorRef.current
           try {
             await platformServices.trayMenu.commitGeometry(
               cursorX - SHADOW_PAD,
@@ -76,7 +77,7 @@ export default function TrayMenuWindow() {
           }
           if (cancelled) return
           ro = new ResizeObserver(() => {
-            const { cursorX, cursorY } = anchorRef.current
+            const { cursorX, cursorY } = cursorRef.current
             void platformServices.trayMenu
               .resizeTrayMenu(
                 cursorX - SHADOW_PAD,

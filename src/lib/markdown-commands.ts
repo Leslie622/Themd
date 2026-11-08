@@ -248,12 +248,16 @@ export function insertRefLink(view: EditorView): void {
   const range = state.selection.main
   const text = state.sliceDoc(range.from, range.to) || '链接文本'
   const insert = `[${text}][ref]`
+  // selection 指事务后的文档:文末后缀 '\n\n[ref]: url' 的新起点 = 原文末
+  // ± 行内插入的净偏移,占位 url 在其后偏移 9..12('url' 三个字符)
+  const delta = insert.length - (range.to - range.from)
+  const urlAt = state.doc.length + delta + 9
   view.dispatch({
     changes: [
       { from: range.from, to: range.to, insert },
       { from: state.doc.length, to: state.doc.length, insert: '\n\n[ref]: url' },
     ],
-    selection: { anchor: state.doc.length + 7, head: state.doc.length + 10 },
+    selection: { anchor: urlAt, head: urlAt + 3 },
     scrollIntoView: true,
   })
   view.focus()
@@ -295,7 +299,8 @@ export function insertYamlFrontMatter(view: EditorView): void {
   const insert = '---\ntitle: 标题\ndate: \n---\n\n'
   view.dispatch({
     changes: { from: 0, to: 0, insert },
-    selection: { anchor: 7, head: 9 },
+    // selection 指事务后的文档:占位「标题」在 '---\ntitle: ' 之后(11..13)
+    selection: { anchor: 11, head: 13 },
     scrollIntoView: true,
   })
   view.focus()

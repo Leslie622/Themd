@@ -20,8 +20,8 @@ import { toast } from 'sonner'
 
 /**
  * 字体选择弹窗:完整本机字体列表 + 搜索 + 复制。
- * 打开时自动请求完整列表(桌面端 IPC 直出;浏览器端弹一次授权,
- * 拒绝后回落探测名单)。点击字体行应用到所属槽位;行内按钮单独复制族名。
+ * 打开时自动请求完整列表(桌面端 IPC 直出;失败回落探测名单)。
+ * 点击字体行应用到所属槽位;行内按钮单独复制族名。
  * 值输入框支持粘贴多个逗号分隔的族名(font-family 语义)。
  */
 function FontListDialog({
@@ -47,7 +47,7 @@ function FontListDialog({
 
   // 每次打开弹窗自动刷新完整列表;首次授权后,后续会话用缓存免重复授权
   useEffect(() => {
-    if (open) void requestFullList(true)
+    if (open) void requestFullList()
   }, [open, requestFullList])
 
   const filtered = useMemo(() => {

@@ -36,7 +36,6 @@ const zh = {
     prevImage: "上一张截图",
     nextImage: "下一张截图",
     altLight: "Themd 实时预览视图：标题、行内元素与五色提示块",
-    altDark: "Themd 主界面截图（暗色模式）",
     altLists: "Themd 实时预览视图：任务列表与表格",
     altCode: "Themd 实时预览视图：代码块、数学公式与 Mermaid 图表",
   },
@@ -332,7 +331,6 @@ const en: typeof zh = {
     nextImage: "Next screenshot",
     altLight:
       "Themd live preview view: headings, inline elements and five colored callouts",
-    altDark: "Themd main interface (dark mode)",
     altLists: "Themd live preview view: task lists and tables",
     altCode: "Themd live preview view: code blocks, math formulas and Mermaid diagrams",
   },

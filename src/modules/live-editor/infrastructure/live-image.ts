@@ -117,10 +117,6 @@ class ImageResizeView {
   ignoreMutation(mutation: ViewMutationRecord): boolean {
     return mutation.type !== 'selection'
   }
-
-  destroy(): void {
-    // 全局监听在 up 里必然移除;此处兜底拖拽中途节点销毁
-  }
 }
 
 export const LiveImage = Image.extend({

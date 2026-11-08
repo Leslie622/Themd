@@ -24,8 +24,7 @@ export function ThemeProvider({
 } & React.HTMLAttributes<HTMLDivElement>) {
   const [theme, setTheme] = React.useState<Theme>(
     () =>
-      (localStorage.getItem(storageKey ?? "themd-website-ui-theme") as Theme) ||
-      defaultTheme
+      (localStorage.getItem(storageKey) as Theme) || defaultTheme
   )
 
   React.useEffect(() => {
@@ -49,7 +48,7 @@ export function ThemeProvider({
   const value = {
     theme,
     setTheme: (newTheme: Theme) => {
-      localStorage.setItem(storageKey ?? "themd-website-ui-theme", newTheme)
+      localStorage.setItem(storageKey, newTheme)
       setTheme(newTheme)
     },
   }

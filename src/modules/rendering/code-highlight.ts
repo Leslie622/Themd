@@ -114,7 +114,7 @@ const DISPLAY_NAMES: Record<string, string> = {
 /** fence 语言值 → 显示名;常用缩写别名先归一,清单外语言原样返回(首字母大写兜底) */
 export function displayLanguage(lang: string): string {
   const lower = lang.toLowerCase()
-  const aliased = ALIAS_TO_CANON[lower]
+  const aliased = LANGUAGE_ALIAS_TO_CANON[lower]
   if (aliased) return DISPLAY_NAMES[aliased]
   const known = DISPLAY_NAMES[lower]
   if (known) return known
@@ -122,8 +122,10 @@ export function displayLanguage(lang: string): string {
   return lang.charAt(0).toUpperCase() + lang.slice(1)
 }
 
-/** 常用 fence 缩写 → 清单规范名(存量笔记里 ```ts/```js 这类写法的显示归一) */
-const ALIAS_TO_CANON: Record<string, string> = {
+/** 常用 fence 缩写 → 清单规范名(存量笔记里 ```ts/```js 这类写法的显示归一)。
+ *  缩写归一的单一来源:语言图标两处消费方(language-icons / language-icon-svg)
+ *  也从这里取别名,不再各自维护子集表 */
+export const LANGUAGE_ALIAS_TO_CANON: Record<string, string> = {
   ts: 'typescript',
   js: 'javascript',
   py: 'python',

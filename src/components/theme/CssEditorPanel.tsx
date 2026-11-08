@@ -10,16 +10,13 @@ import { Button } from '@/components/ui/button'
  * 附加自定义 CSS 编辑器（P4）。
  * 按约定直接写元素选择器（strong { … }），保存时由 scopeExtraCss 统一包装 .themd-prose 作用域。
  * 编辑为本地草稿，点「保存」才写入主题；「清空」一键移除全部附加 CSS。
- * value 作为 key 传入（主题切换时由父级重挂），草稿无需 effect 同步。
+ * 父级以主题 id 作 key 重挂本组件,草稿随之重置,无需 effect 同步。
  */
 export function CssEditorPanel({
   value,
-  themeId,
   onSave,
 }: {
   value: string | undefined
-  /** 当前编辑的主题 id：作为 key 的一部分，切换主题时重置草稿 */
-  themeId: string
   onSave: (css: string) => void
 }) {
   const [draft, setDraft] = useState(value ?? '')
@@ -27,7 +24,7 @@ export function CssEditorPanel({
   const dirty = draft !== (value ?? '')
 
   return (
-    <div className="flex flex-col gap-2" key={themeId}>
+    <div className="flex flex-col gap-2">
       <div className="overflow-hidden rounded-lg border text-xs">
         <CodeMirror
           value={draft}

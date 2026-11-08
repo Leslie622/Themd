@@ -9,8 +9,8 @@ export function createTauriFileLinkGateway(): FileLinkGateway {
     async readTextFile(path) {
       return invoke<string>('read_text_file', { path })
     },
-    async readFolderNotes(root, withContent = true) {
-      return invoke<ImportedFile[]>('read_folder_notes', { root, withContent })
+    async readFolderNotes(root) {
+      return invoke<ImportedFile[]>('read_folder_notes', { root })
     },
     async writeTextFile(path, contents) {
       await invoke('write_text_file', { path, contents })

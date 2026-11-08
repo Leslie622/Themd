@@ -72,7 +72,6 @@ export default function App() {
 
   useEffect(() => {
     const offCollapse = appEvents.on('collapseSidebar', () => setSidebarCollapsed(true))
-    const offSettings = appEvents.on('openSettings', () => setSettingsOpen(true))
     const offConflict = appEvents.on('fs-conflict', ({ noteId }) => setConflict({ noteId }))
     // 写回失败必须可见:本地未写回编辑只活在内存里,静默失败 = 用户以为已保存
     const offWriteFailed = appEvents.on('write-failed', ({ noteId, path, error }) => {
@@ -87,7 +86,6 @@ export default function App() {
     })
     return () => {
       offCollapse()
-      offSettings()
       offConflict()
       offWriteFailed()
     }
@@ -195,7 +193,8 @@ export default function App() {
       fileMissing={activeFileMissing}
       onNoteDelete={() => {
           if (activeId)
-            void removeNote(activeId).catch((error: unknown) => console.error('删除笔记失败:', error))
+            void removeNote(activeId).catch((error: unknown) =>
+              toast.error(`删除笔记失败: ${error instanceof Error ? error.message : String(error)}`))
         }}
       bindEditorScroller={bindEditorScroller}
       bindPreviewScroller={bindPreviewScroller}

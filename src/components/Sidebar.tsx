@@ -65,12 +65,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { Tip } from '@/components/Tip'
 import { platformServices } from '@/app/platform'
 import { cn } from '@/lib/utils'
@@ -78,7 +72,7 @@ import { toast } from 'sonner'
 import { useNotebook } from '@/store'
 import { useWorkspacePrefs } from '@/app/workspace-preferences'
 import { appEvents } from '@/shared/events/app-events'
-import { isPathUnder, isSamePath, normalizePath, noteDirOf } from '@/shared/paths'
+import { isPathUnder, isSamePath, normalizePath, noteDirOf, pathBaseName } from '@/shared/paths'
 import type { Folder as FolderEntity } from '@/modules/notebook/domain/note'
 import type { Note } from '@/store'
 
@@ -206,10 +200,15 @@ export function Sidebar() {
       })
   }
 
-  /** 新建文件夹 = 选一个(或经系统对话框新建)磁盘目录 */
+  /** 新建文件夹 = 选一个(或经系统对话框新建)磁盘目录;必须在工作区内,
+   *  否则会得到树里不可见却持久化的僵尸 Folder 实体 */
   async function handleCreateFolder() {
     const dir = await platformServices.files.pickDirectory()
     if (!dir) return
+    if (workspaceRoot && !isPathUnder(dir, workspaceRoot)) {
+      toast.error('所选目录不在工作区内')
+      return
+    }
     createFolder(dir)
   }
 
@@ -294,13 +293,10 @@ export function Sidebar() {
           toast.error(`移动笔记失败: ${error instanceof Error ? error.message : String(error)}`)
         })
       }}
-      onReveal={
-        n.sourcePath
-          ? () =>
-              platformServices.files.revealItemInDir(n.sourcePath!).catch((error: unknown) => {
-                toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
-              })
-          : undefined
+      onReveal={() =>
+        platformServices.files.revealItemInDir(n.sourcePath).catch((error: unknown) => {
+          toast.error(`打开文件位置失败: ${error instanceof Error ? error.message : String(error)}`)
+        })
       }
     />
   )
@@ -390,7 +386,7 @@ export function Sidebar() {
     })
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <>
       <aside className="flex h-full w-full flex-col overflow-hidden bg-sidebar [contain:strict]">
       <div className="flex flex-col gap-3.5 px-4 pb-1.5 pt-3">
         <div
@@ -400,20 +396,17 @@ export function Sidebar() {
           {/* 桌面端无原生标题栏,logo 行即窗口左上角的拖拽区;SVG 设 pointer-events-none,点击穿透到带拖拽属性的行容器 */}
           <ThemdLogo className="h-4 w-auto shrink-0 pointer-events-none" />
           <div className="flex items-center gap-0.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => appEvents.emit('collapseSidebar')}
-                  aria-label="收起侧栏"
-                >
-                  <IconLayoutSidebarLeftCollapse className="size-[18px]" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>收起侧栏</TooltipContent>
-            </Tooltip>
+            <Tip label="收起侧栏">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => appEvents.emit('collapseSidebar')}
+                aria-label="收起侧栏"
+              >
+                <IconLayoutSidebarLeftCollapse className="size-[18px]" />
+              </Button>
+            </Tip>
           </div>
         </div>
         <div className="relative">
@@ -447,17 +440,12 @@ export function Sidebar() {
             </span>
             <Tip label={workspaceRoot}>
               <span className="truncate">
-                {workspaceRoot.split(/[\\/]/).filter(Boolean).pop()}
+                {pathBaseName(workspaceRoot)}
               </span>
             </Tip>
           </div>
         )}
 
-        {workspaceRoot && notes.length > 0 && filtered.length === 0 && (
-          <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-            没有匹配的笔记
-          </p>
-        )}
         {workspaceRoot && notes.length === 0 && (
           <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
             <IconFileText className="size-8 text-muted-foreground/50" />
@@ -470,7 +458,7 @@ export function Sidebar() {
 
         {/* 根目录笔记:和顶级文件夹同一层级,参考线对齐文件夹内容——层级全部从根标题起算 */}
         {workspaceRoot ? (
-          <div className="ml-4 border-l border-sidebar-border/70 pl-1.5" style={{ marginLeft: 16 }}>
+          <div className="ml-4 border-l border-sidebar-border/70 pl-1.5">
             <AnimatePresence key={kw} initial={false}>
               {(byFolder.get('') ?? []).map(renderNoteItem)}
             </AnimatePresence>
@@ -514,21 +502,18 @@ export function Sidebar() {
 
       {/* 工作区胶囊固定侧栏底部:目录是全局上下文,不是头部操作;「新建」在其左侧 */}
       <div className="flex items-center gap-1 p-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 text-muted-foreground"
-              disabled={!workspaceRoot}
-              onClick={handleCreateNote}
-              aria-label="新建笔记"
-            >
-              <IconPlus className="size-[18px]" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>在工作区根新建笔记</TooltipContent>
-        </Tooltip>
+        <Tip label="在工作区根新建笔记">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 text-muted-foreground"
+            disabled={!workspaceRoot}
+            onClick={handleCreateNote}
+            aria-label="新建笔记"
+          >
+            <IconPlus className="size-[18px]" />
+          </Button>
+        </Tip>
         <div className="min-w-0 flex-1">
           <WorkspacePill
             workspaceRoot={workspaceRoot}
@@ -536,12 +521,16 @@ export function Sidebar() {
             onOpenDir={openDir}
             onPickDir={pickAndOpenDir}
             onClear={() => {
-              void closeWorkspace().then(() => forgetWorkspace())
+              void closeWorkspace()
+                .then(() => forgetWorkspace())
+                .catch((error: unknown) => {
+                  toast.error(`清除工作区失败: ${error instanceof Error ? error.message : String(error)}`)
+                })
             }}
           />
         </div>
       </div>
-      </aside>
+    </aside>
 
       {/* 删除文件夹 = 删除磁盘目录(移入系统回收站,可恢复);其中笔记从应用一并移除 */}
       <AlertDialog
@@ -645,7 +634,7 @@ export function Sidebar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </TooltipProvider>
+    </>
   )
 }
 
@@ -665,7 +654,7 @@ function WorkspacePill({
   onPickDir: () => void
   onClear: () => void
 }) {
-  const name = workspaceRoot?.split(/[\\/]/).filter(Boolean).pop() ?? null
+  const name = workspaceRoot ? pathBaseName(workspaceRoot) : null
   return (
     <DropdownMenu>
       <Tip label={workspaceRoot ?? '未打开工作区'}>
@@ -694,7 +683,7 @@ function WorkspacePill({
                 <DropdownMenuItem onClick={() => onOpenDir(r)}>
                   <IconFolder className="text-muted-foreground" />
                   <span className="min-w-0 truncate">
-                    {r.split(/[\\/]/).filter(Boolean).pop()}
+                    {pathBaseName(r)}
                   </span>
                 </DropdownMenuItem>
               </Tip>
@@ -739,15 +728,6 @@ function Highlight({ text, keyword }: { text: string; keyword: string }) {
   return <>{parts}</>
 }
 
-/** 内容命中时截取关键字前后各约 30 字符做摘要行,让用户知道命中在哪 */
-function matchSnippet(content: string, keyword: string): string | null {
-  const hit = content.toLowerCase().indexOf(keyword.toLowerCase())
-  if (hit === -1) return null
-  const start = Math.max(0, hit - 30)
-  const end = Math.min(content.length, hit + keyword.length + 30)
-  return (start > 0 ? '…' : '') + content.slice(start, end).replace(/\s+/g, ' ') + (end < content.length ? '…' : '')
-}
-
 /** 文件夹操作项:「⋯」下拉和右键菜单共用同一套 */
 function FolderMenuItems({
   parts,
@@ -759,8 +739,8 @@ function FolderMenuItems({
   parts: { Item: React.ElementType; Separator: React.ElementType }
   onRename: () => void
   onCreateNote: () => void
-  /** 打开文件位置(资源管理器);Web 端不传则不显示 */
-  onReveal?: () => void
+  /** 打开文件位置(资源管理器) */
+  onReveal: () => void
   onDelete: () => void
 }) {
   const { Item, Separator } = parts
@@ -772,11 +752,9 @@ function FolderMenuItems({
       <Item onClick={onCreateNote}>
         <IconPlus /> 在此文件夹新建笔记
       </Item>
-      {onReveal && (
-        <Item onClick={onReveal}>
-          <IconFolderOpen /> 打开文件位置
-        </Item>
-      )}
+      <Item onClick={onReveal}>
+        <IconFolderOpen /> 打开文件位置
+      </Item>
       <Separator />
       <Item variant="destructive" onClick={onDelete}>
         <IconTrash /> 删除文件夹(移入回收站)
@@ -805,7 +783,7 @@ function NoteMenuItems({
   onRename: () => void
   onMove: (folderId: string) => void
   /** 打开文件位置(资源管理器) */
-  onReveal?: () => void
+  onReveal: () => void
   onDelete: () => void
   /** 展平的目录树(父文件夹在前),depth 决定缩进 */
   folders: { folder: FolderEntity; depth: number }[]
@@ -818,11 +796,9 @@ function NoteMenuItems({
       <Item onClick={onRename}>
         <IconPencil /> 重命名
       </Item>
-      {onReveal && (
-        <Item onClick={onReveal}>
-          <IconFolderOpen /> 打开文件位置
-        </Item>
-      )}
+      <Item onClick={onReveal}>
+        <IconFolderOpen /> 打开文件位置
+      </Item>
       <Sub>
         {/* ContextMenuSubTrigger 基类缺 gap-2(与 Dropdown 版不一致),此处覆盖补齐 */}
         <SubTrigger className="gap-2">
@@ -864,7 +840,7 @@ function NoteItem({
 }: {
   note: Note
   active: boolean
-  /** 搜索关键字:空串表示非搜索态,不做高亮、不显示摘要 */
+  /** 搜索关键字:空串表示非搜索态,不做高亮 */
   keyword: string
   onClick: () => void
   onRename: () => void
@@ -873,34 +849,23 @@ function NoteItem({
   currentFolderId: string
   onMove: (folderId: string) => void
   /** 打开文件位置(资源管理器) */
-  onReveal?: () => void
+  onReveal: () => void
 }) {
-  const titleHit = keyword && note.title.toLowerCase().includes(keyword.toLowerCase())
-  const snippet = keyword && !titleHit ? matchSnippet(note.content, keyword) : null
-
   // 图标统一 IconFileText——笔记本质是工作区内的 md 文件,悬停显示源文件名
-  const boundName = note.sourcePath.split(/[\\/]/).pop()
+  const boundName = pathBaseName(note.sourcePath)
   const icon = (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-sky-500/15 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400">
-          <IconFileText className="size-3" />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="right">已绑定 {boundName}</TooltipContent>
-    </Tooltip>
+    <Tip label={`已绑定 ${boundName}`} side="right">
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-sky-500/15 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400">
+        <IconFileText className="size-3" />
+      </span>
+    </Tip>
   )
-  // 非搜索态单行(对齐 Typora 的文件列表密度);搜索态追加命中摘要行
+  // 单行(对齐 Typora 的文件列表密度);搜索命中片段由 Highlight 高亮
   const titleArea = (
     <span className="min-w-0 flex-1">
       <span className={cn('block truncate', active && 'font-medium')}>
         <Highlight text={note.title} keyword={keyword} />
       </span>
-      {snippet && (
-        <span className="block truncate text-xs text-muted-foreground">
-          <Highlight text={snippet} keyword={keyword} />
-        </span>
-      )}
     </span>
   )
 

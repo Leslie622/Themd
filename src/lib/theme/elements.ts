@@ -26,7 +26,6 @@ export type FieldType =
   | 'font-family'  // 字体：预设列表 + 自定义输入
   | 'select'       // 枚举下拉
   | 'text-align'   // 对齐分段控件
-  | 'text'         // 自由文本（如 box-shadow）
   | 'background'   // 画布背景：完整 CSS background 值（颜色/渐变/图片）
   | 'box'          // 四边盒值（上/右/下/左 独立数值 + 共享单位），存 CSS 简写字符串
   | 'marker-text'  // 列表自定义符号：输入裸符号,控件包装成 CSS content 字符串(加引号+尾随空格)
@@ -59,8 +58,6 @@ export interface ElementDef {
   label: string
   /** 导航分组 */
   group: 'basic' | 'headings' | 'inline' | 'lists' | 'blocks'
-  /** 预览里定位样例文档的锚文本（debug 用，运行时不需要） */
-  sampleHint?: string
   fields: FieldDef[]
 }
 
@@ -103,7 +100,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'root',
     label: '正文',
     group: 'basic',
-    sampleHint: '正文段落',
     fields: [
       { key: 'root.fontLatin', label: '西文字体', type: 'font-family' },
       { key: 'root.fontCjk', label: '中文字体', type: 'font-family' },
@@ -169,7 +165,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'strong',
     label: '加粗',
     group: 'inline',
-    sampleHint: '加粗',
     fields: [
       { key: 'strong.fontLatin', label: '西文字体', type: 'font-family' },
       { key: 'strong.fontCjk', label: '中文字体', type: 'font-family' },
@@ -184,7 +179,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'em',
     label: '斜体',
     group: 'inline',
-    sampleHint: '斜体',
     fields: [
       { key: 'em.fontLatin', label: '西文字体', type: 'font-family' },
       { key: 'em.fontCjk', label: '中文字体', type: 'font-family' },
@@ -203,7 +197,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'del',
     label: '删除线',
     group: 'inline',
-    sampleHint: '删除线',
     fields: [
       { key: 'del.fontLatin', label: '西文字体', type: 'font-family' },
       { key: 'del.fontCjk', label: '中文字体', type: 'font-family' },
@@ -221,7 +214,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'a',
     label: '链接',
     group: 'inline',
-    sampleHint: '链接',
     fields: [
       { key: 'a.fontLatin', label: '西文字体', type: 'font-family' },
       { key: 'a.fontCjk', label: '中文字体', type: 'font-family' },
@@ -242,7 +234,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'inlineCode',
     label: '行内代码',
     group: 'inline',
-    sampleHint: '行内代码',
     fields: [
       { key: 'inlineCode.fontLatin', label: '西文字体', type: 'font-family' },
       { key: 'inlineCode.fontCjk', label: '中文字体', type: 'font-family' },
@@ -261,7 +252,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'ul',
     label: '无序列表',
     group: 'lists',
-    sampleHint: '无序列表',
     fields: [
       { key: 'list.indent', label: '缩进', type: 'size', unit: 'em', section: '共用' },
       { key: 'li.spacing', label: '项间距', type: 'size', unit: 'em', section: '共用' },
@@ -289,7 +279,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'ol',
     label: '有序列表',
     group: 'lists',
-    sampleHint: '有序列表',
     fields: [
       { key: 'list.indent', label: '缩进', type: 'size', unit: 'em', section: '共用' },
       { key: 'li.spacing', label: '项间距', type: 'size', unit: 'em', section: '共用' },
@@ -315,7 +304,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'task',
     label: '任务列表',
     group: 'lists',
-    sampleHint: '任务列表',
     fields: [
       { key: 'task.accent', label: '勾选框颜色', type: 'color', hint: '已勾时勾选框的底色,对勾恒为白色' },
       { key: 'task.size', label: '勾选框大小', type: 'size', unit: 'em' },
@@ -330,7 +318,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'quote',
     label: '引用',
     group: 'blocks',
-    sampleHint: '引用',
     fields: [
       { key: 'quote.borderWidth', label: '左边框粗细', type: 'size', unit: 'px' },
       { key: 'quote.borderColor', label: '左边框颜色', type: 'color' },
@@ -348,7 +335,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'callout',
     label: '提示块',
     group: 'blocks',
-    sampleHint: '提示块',
     fields: [
       { key: 'callout.borderWidth', label: '左边框粗细', type: 'size', unit: 'px', section: '共用' },
       { key: 'callout.radius', label: '圆角', type: 'size', unit: 'px', section: '共用' },
@@ -365,7 +351,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'codeBlock',
     label: '代码块',
     group: 'blocks',
-    sampleHint: '代码块',
     fields: [
       { key: 'codeBlock.fontLatin', label: '西文字体', type: 'font-family' },
       { key: 'codeBlock.fontCjk', label: '中文字体', type: 'font-family' },
@@ -382,7 +367,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'table',
     label: '表格',
     group: 'blocks',
-    sampleHint: '表格',
     fields: [
       { key: 'table.borderColor', label: '边框颜色', type: 'color' },
       { key: 'cell.rowLine', label: '行横线', type: 'select', defaultLabel: '显示', options: [
@@ -407,7 +391,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'hr',
     label: '分割线',
     group: 'blocks',
-    sampleHint: '分割线',
     fields: [
       { key: 'hr.color', label: '颜色', type: 'color' },
       { key: 'hr.thickness', label: '粗细', type: 'size', unit: 'px' },
@@ -419,7 +402,6 @@ export const ELEMENTS: ElementDef[] = [
     id: 'img',
     label: '图片',
     group: 'blocks',
-    sampleHint: '图片',
     fields: [
       { key: 'img.maxWidth', label: '最大宽度', type: 'size', unit: '%' },
       { key: 'img.width', label: '宽度', type: 'size', unit: 'px' },

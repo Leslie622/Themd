@@ -2,7 +2,6 @@ import { cn } from "@/lib/utils"
 
 interface Image3DProps {
   lightSrc: string
-  darkSrc: string
   alt: string
   className?: string
   direction?: "left" | "right"
@@ -16,7 +15,6 @@ interface Image3DProps {
  */
 export function Image3D({
   lightSrc,
-  darkSrc,
   alt,
   className,
   direction = "left",
@@ -52,21 +50,13 @@ export function Image3D({
               )}
             />
 
-            {/* Theme-aware images */}
+            {/* Main image */}
             <img
               src={lightSrc}
-              alt={`${alt} - Light Mode`}
+              alt={alt}
               width={2560}
               height={1380}
-              className="block size-full object-cover dark:hidden transition-transform duration-700 group-hover:scale-105"
-              loading="lazy"
-            />
-            <img
-              src={darkSrc}
-              alt={`${alt} - Dark Mode`}
-              width={2560}
-              height={1380}
-              className="hidden dark:block size-full object-cover transition-transform duration-700 group-hover:scale-105"
+              className="block size-full object-cover transition-transform duration-700 group-hover:scale-105"
               loading="lazy"
             />
 

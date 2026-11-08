@@ -1,18 +1,17 @@
-import type { AutostartGateway, FileGateway, FileLinkGateway, FontGateway, PdfGateway, TrayMenuGateway, UploaderGateway, WindowGateway } from './contracts'
+import type { AutostartGateway, FileGateway, FileLinkGateway, PdfGateway, TrayMenuGateway, UploaderGateway, WindowGateway } from './contracts'
 import { createTauriFileGateway } from './tauri/file-gateway'
 import { createTauriFileLinkGateway } from './tauri/file-link-gateway'
 import { createTauriTrayMenuGateway } from './tauri/tray-menu-gateway'
 import { createTauriUploaderGateway } from './tauri/uploader-gateway'
 
 /** 平台服务集合。本应用仅支持 Tauri 桌面端(Web 路线已清除) */
-export interface PlatformServices { files: FileGateway; fileLink: FileLinkGateway; pdf: PdfGateway; fonts: FontGateway; window: WindowGateway; autostart: AutostartGateway; uploader: UploaderGateway; trayMenu: TrayMenuGateway }
+export interface PlatformServices { files: FileGateway; fileLink: FileLinkGateway; pdf: PdfGateway; window: WindowGateway; autostart: AutostartGateway; uploader: UploaderGateway; trayMenu: TrayMenuGateway }
 
 export function createPlatformServices(): PlatformServices {
-  return { files: createTauriFileGateway(), fileLink: createTauriFileLinkGateway(), pdf: createTauriPdfGateway(), fonts: createTauriFontGateway(), window: createTauriWindowGateway(), autostart: createTauriAutostartGateway(), uploader: createTauriUploaderGateway(), trayMenu: createTauriTrayMenuGateway() }
+  return { files: createTauriFileGateway(), fileLink: createTauriFileLinkGateway(), pdf: createTauriPdfGateway(), window: createTauriWindowGateway(), autostart: createTauriAutostartGateway(), uploader: createTauriUploaderGateway(), trayMenu: createTauriTrayMenuGateway() }
 }
 
-function createTauriPdfGateway(): PdfGateway { return { print: async () => window.print(), exportToPath: async (path) => { const { invoke } = await import('@tauri-apps/api/core'); await invoke('export_pdf', { path }) }, onAfterPrint: (listener) => { window.addEventListener('afterprint', listener); return () => window.removeEventListener('afterprint', listener) } } }
-function createTauriFontGateway(): FontGateway { return { listFamilies: async () => { const { invoke } = await import('./tauri/commands'); return invoke<string[]>('list_system_fonts') } } }
+function createTauriPdfGateway(): PdfGateway { return { exportToPath: async (path) => { const { invoke } = await import('@tauri-apps/api/core'); await invoke('export_pdf', { path }) } } }
 function createTauriWindowGateway(): WindowGateway {
   return {
     minimize: async () => { const { getCurrentWindow } = await import('@tauri-apps/api/window'); await getCurrentWindow().minimize() },

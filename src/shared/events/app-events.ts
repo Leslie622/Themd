@@ -4,7 +4,6 @@
  */
 export type AppEventMap = {
   collapseSidebar: void
-  openSettings: void
   insertImage: void
   /** 绑定文件在磁盘上被外部修改,而本地还有未写回的编辑,等 UI 弹冲突窗 */
   'fs-conflict': { noteId: string; path: string }

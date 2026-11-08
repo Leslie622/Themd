@@ -35,7 +35,7 @@ export function parseBlockMarkdown(text: string): JSONContent {
   return getMarkdownManager().parse(text)
 }
 
-export function serializeBlockMarkdown(doc: JSONContent): string {
+function serializeBlockMarkdown(doc: JSONContent): string {
   return getMarkdownManager().serialize(doc)
 }
 
@@ -45,7 +45,7 @@ export function roundTripBlockMarkdown(text: string): string {
 }
 
 /** 剥掉块尾的一个行终止符(\r\n 或 \n),保留给重组时回贴 */
-export function stripTerminator(text: string): { body: string; term: string } {
+function stripTerminator(text: string): { body: string; term: string } {
   if (text.endsWith('\r\n')) return { body: text.slice(0, -2), term: '\r\n' }
   if (text.endsWith('\n')) return { body: text.slice(0, -1), term: '\n' }
   return { body: text, term: '' }

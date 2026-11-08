@@ -1,13 +1,16 @@
-/** Compatibility facade. New code should import NotebookController directly. */
+/**
+ * 笔记状态的 React 绑定层:useNotebook(selector) 订阅 NotebookController 快照,
+ * 命令经 notebookController 直连。Controller 是笔记事实来源(application 层),
+ * 组件不经它自己的 React hook,统一从本文件取状态(含 store-themes 同款约定)。
+ */
 import { useSyncExternalStore } from 'react'
 import { applicationServices } from '@/app/services'
-import { countWords, type Folder, type Note } from '@/modules/notebook/domain/note'
+import type { Folder, Note } from '@/modules/notebook/domain/note'
 
 const controller = applicationServices.notebook
 void controller.hydrate().catch((error: unknown) => console.error('笔记初始化失败:', error))
 
-export type { Folder, Note }
-export { countWords }
+export type { Note }
 
 export interface NotebookFacade {
   notes: Note[]
@@ -29,10 +32,6 @@ export interface NotebookFacade {
   removeFolder: (id: string) => Promise<void>
   moveNoteToFolder: (id: string, folderId: string) => Promise<void>
   createNoteInFolder: (folderId: string) => Promise<string>
-  flushNote: (id: string) => void
-  flushAll: () => void
-  reloadNoteFromDisk: (id: string) => Promise<void>
-  keepLocalNote: (id: string) => void
 }
 
 const facade: NotebookFacade = {
@@ -55,10 +54,6 @@ const facade: NotebookFacade = {
   removeFolder: controller.removeFolder.bind(controller),
   moveNoteToFolder: controller.moveNoteToFolder.bind(controller),
   createNoteInFolder: controller.createNoteInFolder.bind(controller),
-  flushNote: controller.flushNote.bind(controller),
-  flushAll: controller.flushAll.bind(controller),
-  reloadNoteFromDisk: controller.reloadNoteFromDisk.bind(controller),
-  keepLocalNote: controller.keepLocalNote.bind(controller),
 }
 
 export function useNotebook<T>(selector: (state: NotebookFacade) => T): T {

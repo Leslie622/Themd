@@ -20,7 +20,6 @@ export interface AutoHideScrollAreaProps extends RootProps {
  * 时序逻辑在 scroll-visibility.ts,与原生滚动条(CM 编辑器等)共用同一套。
  */
 export function AutoHideScrollArea({
-  ref,
   className,
   children,
   viewportRef,
@@ -28,13 +27,6 @@ export function AutoHideScrollArea({
   ...rootProps
 }: AutoHideScrollAreaProps) {
   const rootRef = React.useRef<HTMLDivElement | null>(null)
-
-  // 外部 ref 与内部行为 ref 并存:Root 恒挂 rootRef,外部 ref 逐渲染同步
-  React.useEffect(() => {
-    if (!ref) return
-    if (typeof ref === 'function') ref(rootRef.current)
-    else (ref as React.RefObject<HTMLDivElement | null>).current = rootRef.current
-  })
 
   React.useEffect(() => {
     const root = rootRef.current

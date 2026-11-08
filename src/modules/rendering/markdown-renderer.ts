@@ -52,19 +52,12 @@ md.core.ruler.push('themd_task_gap', taskGapRule)
 // 每种语法元素（标题/代码块/引用/图片…）都有一个 rule 函数可覆盖。
 // ============================================================
 
-// 示例 1：给所有标题加 id（slug），方便以后做目录、锚点跳转
+// 标题加 id（slug），目录、锚点跳转与大纲共用
 md.renderer.rules.heading_open = (tokens, idx, options, _env, self) => {
   const text = tokens[idx + 1]?.content ?? ''
   tokens[idx].attrs = [['id', slug(text)]]
   return self.renderToken(tokens, idx, options)
 }
-
-// 示例 2（取消注释即可生效）：完全接管代码块，输出自定义结构
-// md.renderer.rules.fence = (tokens, idx) => {
-//   const token = tokens[idx]
-//   const lang = token.info.trim()
-//   return `<div class="code-card" data-lang="${lang}"><pre><code>${md.utils.escapeHtml(token.content)}</code></pre></div>`
-// }
 
 // mermaid fence → 占位容器(渲染期同步输出源码兜底,PreviewPane 挂载后
 // 异步渲染 SVG 并替换;实时编辑侧经 codeblock-cm 的图表视图走同一渲染模块)

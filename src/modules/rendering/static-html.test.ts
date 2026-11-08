@@ -5,7 +5,6 @@ import { renderStaticHtml } from './static-html'
 describe('renderStaticHtml 语料外节点', () => {
   it('frontmatter 隐藏不崩,正文正常渲染', () => {
     const html = renderStaticHtml('---\ntitle: 笔记\n tags: [a]\n---\n\n# 标题\n\n正文。')
-    expect(html).not.toThrow
     expect(html).toContain('<h1 id="标题">标题</h1>')
     expect(html).toContain('<p>正文。</p>')
     expect(html).not.toContain('live-frontmatter')

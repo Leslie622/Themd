@@ -4,12 +4,21 @@ use std::path::PathBuf;
 #[tauri::command]
 /// 枚举系统已注册的字体族名(去重、排序)。
 ///
-/// 浏览器环境拿不到这份列表(安全沙盒),桌面端直接读系统字体目录:
+/// 桌面端直接读系统字体目录:
 /// - 系统级:C:\Windows\Fonts
 /// - 用户级:%LOCALAPPDATA%\Microsoft\Windows\Fonts
 /// 注册表(GDI/DirectWrite 的真实来源)与目录内容一致度足够;
 /// 文件名 ≠ 族名,故解析字体文件内部的 name 表取真实族名。
-pub(crate) fn list_system_fonts() -> Vec<String> {
+/// async + spawn_blocking:系统字体目录常数百个文件要全量读字节解析,
+/// 与 files/watch 的扫描命令同理不能占主线程,否则 UI 卡死。
+pub(crate) async fn list_system_fonts() -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(enum_system_fonts)
+        .await
+        // join 失败 = 解析任务 panic:返回空列表退化为字体弹窗的自由输入路径
+        .unwrap_or_default()
+}
+
+fn enum_system_fonts() -> Vec<String> {
     let mut dirs: Vec<PathBuf> = Vec::new();
     if let Some(dir) = system_font_dir() {
         dirs.push(dir);
@@ -122,16 +131,12 @@ fn parse_single_sfnt(data: &[u8], base: usize) -> Option<String> {
                 continue;
             }
             let name_id = read_u16(data, rec + 6)? as usize;
+            // 只认排版族名(16)与族名(1),其余记录(子体/首选名等)不进候选
+            if !matches!(name_id, 16 | 1) {
+                continue;
+            }
             let length = read_u16(data, rec + 8)? as usize;
             let offset = read_u16(data, rec + 10)? as usize;
-            let target = match name_id {
-                16 => 0,
-                1 => 1,
-                _ => continue,
-            };
-            if target == 0 && fallback.is_none() {
-                // 记录 16 号,但先继续找是否有更完整的;直接采用即可
-            }
             let s_start = string_offset + offset;
             if s_start + length > data.len() {
                 continue;

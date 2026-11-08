@@ -4,33 +4,16 @@ import themeBaseCss from '@/styles/theme-base.css?raw'
 
 import { renderStaticHtml } from './static-html'
 import { compileTokens, extraCssToStyle } from '@/lib/theme/compile'
-import { listAllThemes, resolveActiveTheme, useThemeStore } from '@/store-themes'
+import { resolveNoteTheme, useThemeStore } from '@/store-themes'
 import { useAppearance } from '@/store-appearance'
 import { useEditorPrefs } from '@/store-editor'
 import type { Note } from '@/modules/notebook/domain/note'
-
-/** store 的主题切片形状(themes + activeId) */
-type ThemeSlice = ReturnType<typeof useThemeStore.getState>
 
 /**
  * 导出独立 HTML:复用预览的渲染管线(TipTap 静态序列化 + 主题令牌编译 +
  * 附加 CSS),把预览的完整观感内联成单文件——离线可开、样式自包含、不依赖应用。
  * 打印/导出 PDF 的视觉与此一致(应用内打印走同一套 .themd-prose 样式)。
  */
-
-/** 解析笔记生效主题:笔记级覆盖 > 全局激活(与 PreviewPane 同逻辑) */
-function resolveNoteTheme(
-  noteThemeId: string | undefined,
-  { themes, activeId }: Pick<ThemeSlice, 'themes' | 'activeId'>,
-) {
-  if (noteThemeId) {
-    const overridden = listAllThemes({ themes, activeId }).find(
-      (t) => t.id === noteThemeId,
-    )
-    if (overridden) return overridden
-  }
-  return resolveActiveTheme({ themes, activeId })
-}
 
 function escapeHtml(s: string): string {
   return s
@@ -43,7 +26,7 @@ function escapeHtml(s: string): string {
 export function buildStandaloneHtml(note: Note): string {
   const isDark = useAppearance.getState().isDark
   const { themes, activeId } = useThemeStore.getState()
-  const theme = resolveNoteTheme(note.themeId, { themes, activeId })
+  const theme = resolveNoteTheme({ themes, activeId }, note.themeId)
   // 变量声明在 :root,body 与 .themd-prose 都能消费(如 --t-root-bg 作页面底色)
   const vars = Object.entries(compileTokens(theme.tokens, theme.dark, isDark))
     .map(([name, value]) => `${name}: ${value};`)
@@ -98,8 +81,6 @@ ${renderStaticHtml(note.content)}
 `
 }
 
-
-export const renderStandaloneHtml = buildStandaloneHtml
 
 /**
  * mermaid 导出预热:导出的独立 HTML 无运行时 JS,占位容器必须在写文件前

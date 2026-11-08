@@ -8,7 +8,8 @@ export interface ThemeFile {
   /** 内置主题：随代码发布，不占用户存储、不可删除；修改时自动先复制 */
   builtin?: boolean
   tokens: ThemeTokens
-  /** 暗色令牌套：应用切到暗色模式时优先使用（未设置的键回落 tokens） */
+  /** 暗色令牌套:应用切到暗色模式时**整面替换** tokens(未设键回落 CSS 基础值,
+   *  不回落亮面——builtin 的暗色副本须带全部存续键,见 compile.ts 与 builtin.test) */
   dark?: ThemeTokens
   /** 附加自定义 CSS（P4 启用，schema 先就位） */
   extraCss?: string

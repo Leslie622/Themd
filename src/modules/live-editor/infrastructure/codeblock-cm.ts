@@ -88,8 +88,9 @@ class CodeMirrorNodeView {
   private header: HTMLElement
   private langText: HTMLElement
   private pre: HTMLElement
-  /** 哨兵值:无语言块 language=null→'',与初始值相同会被 syncLanguage 守卫吞掉 */
-  private lang = '\u0000never'
+  /** 已同步进 header 的语言;langSynced=false 表示尚未同步过(首帧无语言块也必须执行一次) */
+  private lang = ''
+  private langSynced = false
   /** 换行临时态 compartment(header 按钮切换,不持久化) */
   private wrapComp = new Compartment()
   /** 语言选择浮层卸载函数(开着时非 null) */
@@ -178,8 +179,9 @@ class CodeMirrorNodeView {
 
   private syncLanguage(): void {
     const lang = (this.node.attrs.language as string | null)?.trim() ?? ''
-    if (lang === this.lang) return
+    if (this.langSynced && lang === this.lang) return
     this.lang = lang
+    this.langSynced = true
     // 语言标签 = 图标(官方品牌 SVG,与规范 HTML 同源)+ 文本;header 子节点
     // (图标 svg/文本/浮层锚点)各自独立更新互不清除——textContent 会杀掉
     // 浮层锚点,Radix 立即把浮层重定位到左上角=闪角 bug。

@@ -8,13 +8,12 @@ import { useEditorPrefs } from '@/store-editor'
  * 从笔记目录找。活动笔记切换时由 App 调 setActiveNoteDir 注入基准目录,
  * 渲染期零异步。
  *
- * 库内笔记(Web 端全部如此):维持旧行为,仅 `assets/` 开头的相对路径
+ * 未注入活动目录时(启动瞬间/工场导入预览),仅 `assets/` 开头的相对路径
  * 解析到全局图片根目录(本地图片模式落盘位置)。正文统一写
  * `assets/<名>`,应用内渲染时 WebView 拿到相对路径只会相对当前页面解析,
- * 必须在这里改写成真实地址:
- * - 桌面端:Tauri 的 convertFileSrc 把绝对文件路径转 asset:// 协议;
- *   convertFileSrc 本身是纯字符串变换,启动时预取一次函数引用即可同步调用
- * - Web 端:无本地文件,原样返回(显示裂图,属预期)
+ * 必须在这里改写成真实地址:Tauri 的 convertFileSrc 把绝对文件路径转
+ * asset:// 协议;convertFileSrc 本身是纯字符串变换,启动时预取一次函数
+ * 引用即可同步调用。
  *
  * data URL 与 http(s) 外链原样放行。
  */
@@ -24,14 +23,17 @@ let convertFileSrcFn: ((path: string) => string) | null = null
 /** 活动绑定笔记的所在目录;未绑定/库内笔记为 null */
 let activeNoteDir: string | null = null
 
-/** 应用启动时注入平台默认根目录与路径转换函数,渲染期零异步 */
+/** 应用启动时注入平台默认根目录与路径转换函数,渲染期零异步。
+ *  图片根单一来源:FileGateway.defaultAssetsRoot(与插图落盘/设置回显同源)。
+ *  动态引入 platform services:本模块被 static-html 等测试环境链路静态依赖,
+ *  静态引入会把整个服务装配(含 Tauri listen)拖进 node/happy-dom 环境 */
 export async function initImageSrcResolver(): Promise<void> {
-  const [{ convertFileSrc }, { appDataDir, join }] = await Promise.all([
+  const [{ convertFileSrc }, { platformServices }] = await Promise.all([
     import('@tauri-apps/api/core'),
-    import('@tauri-apps/api/path'),
+    import('@/app/platform'),
   ])
   convertFileSrcFn = convertFileSrc
-  defaultRoot = await join(await appDataDir(), 'assets')
+  defaultRoot = await platformServices.files.defaultAssetsRoot()
 }
 
 /** 活动笔记变化时注入其所在目录;未绑定传 undefined 归位库内模式 */

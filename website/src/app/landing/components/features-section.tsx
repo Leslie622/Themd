@@ -82,7 +82,6 @@ export function FeaturesSection() {
           {/* Right Image */}
           <Image3D
             lightSrc={assetUrl("themd-feature-editor.webp")}
-            darkSrc={assetUrl("themd-feature-editor.webp")}
             alt={t.features.altEditor}
             direction="right"
             onOpen={(src, alt) => setLightbox({ src, alt })}
@@ -94,7 +93,6 @@ export function FeaturesSection() {
           {/* Left Image */}
           <Image3D
             lightSrc={assetUrl("themd-feature-studio.webp")}
-            darkSrc={assetUrl("themd-feature-studio.webp")}
             alt={t.features.altStudio}
             direction="left"
             className="order-2 lg:order-1"
@@ -162,7 +160,6 @@ export function FeaturesSection() {
           {/* Right Image */}
           <Image3D
             lightSrc={assetUrl("themd-feature-export.webp")}
-            darkSrc={assetUrl("themd-feature-export.webp")}
             alt={t.features.altExport}
             direction="right"
             onOpen={(src, alt) => setLightbox({ src, alt })}
@@ -174,7 +171,6 @@ export function FeaturesSection() {
           {/* Left Image */}
           <Image3D
             lightSrc={assetUrl("themd-feature-lightbox.webp")}
-            darkSrc={assetUrl("themd-feature-lightbox.webp")}
             alt={t.features.altLightbox}
             direction="left"
             className="order-2 lg:order-1"
@@ -225,7 +221,6 @@ export function FeaturesSection() {
           {/* Right Image */}
           <Image3D
             lightSrc={assetUrl("themd-feature-uploader.webp")}
-            darkSrc={assetUrl("themd-feature-uploader.webp")}
             alt={t.features.altUploader}
             direction="right"
             onOpen={(src, alt) => setLightbox({ src, alt })}

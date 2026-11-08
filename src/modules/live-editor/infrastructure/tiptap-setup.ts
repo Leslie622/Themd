@@ -33,7 +33,7 @@ import { RawHtmlBlock, RawHtmlInline } from './raw-html'
 import { LiveTableMenu } from './live-table-menu'
 
 /** MarkdownManager 渲染辅助器的最小面(官方 h 的子集,够表格用) */
-export interface RenderHelper {
+interface RenderHelper {
   renderChildren: (nodeOrContent: JSONContent | JSONContent[]) => string
 }
 
@@ -331,23 +331,19 @@ const SelectionEditingClass = Extension.create({
             if (!state?.doc || !state.selection) return DecorationSet.empty
             const { from, to } = state.selection
             const decos: Decoration[] = []
-            try {
-              state.doc.descendants((node, pos) => {
-                if (!node?.type) return
-                let cls: string | undefined = EDITING_CLASS_BY_TYPE[node.type.name]
-                if (node.type.name === 'codeBlock' && (node.attrs.language as string)?.toLowerCase() === 'mermaid') {
-                  cls = 'live-mermaid-editing'
-                }
-                if (!cls) return
-                const end = pos + node.nodeSize
-                const selected = from === pos && to === end && to > from
-                const cursorInside = from > pos && from < end
-                if (selected || cursorInside) decos.push(Decoration.node(pos, end, { class: cls }))
-              })
-            } catch {
-              // 编辑器装配初态的瞬态探测不保证完整文档;装饰仅管视觉,失败即空
-              return DecorationSet.empty
-            }
+            // 合法 doc 的 descendants 不抛:上游 !state.doc 已挡掉装配初态空档
+            state.doc.descendants((node, pos) => {
+              if (!node?.type) return
+              let cls: string | undefined = EDITING_CLASS_BY_TYPE[node.type.name]
+              if (node.type.name === 'codeBlock' && (node.attrs.language as string)?.toLowerCase() === 'mermaid') {
+                cls = 'live-mermaid-editing'
+              }
+              if (!cls) return
+              const end = pos + node.nodeSize
+              const selected = from === pos && to === end && to > from
+              const cursorInside = from > pos && from < end
+              if (selected || cursorInside) decos.push(Decoration.node(pos, end, { class: cls }))
+            })
             return decos.length ? DecorationSet.create(state.doc, decos) : DecorationSet.empty
           },
         },

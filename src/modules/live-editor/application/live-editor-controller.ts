@@ -49,11 +49,6 @@ export class LiveEditorController {
     this.rebuild(content)
   }
 
-  /** 块表(测试/调试观察用) */
-  getBlocks(): readonly BlockRuntime[] {
-    return this.blocks
-  }
-
   /** parse 产物:编辑器初始 content(doc JSON) */
   buildDocJson(): JSONContent {
     const content: JSONContent[] = []
