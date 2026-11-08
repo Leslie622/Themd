@@ -490,6 +490,20 @@
   border-color: var(--destructive);
 }
 
+/* ── 通知字体跟随界面字体 ──────────────────────────────────────────────
+ * sonner 内置样式把 font-family 写死在 [data-sonner-toaster] 上,且它运行时
+ * 注入的 <style> 晚于本文件,同特异性会赢——:root 的 --font-sans(设置里
+ * 自定义的界面字体)传不进 toast。加元素选择器抬高一级特异性接管。 */
+ol[data-sonner-toaster] {
+  font-family: var(--font-sans);
+}
+/* toast 标题:sonner 默认 font-weight 500,但打包鸿蒙只有 Regular(100-400)/
+   Bold(500-900)两档,500 会整档落到 Bold 脸上显全粗;压回 400 与正文一致。
+   特异性需压过 sonner 的 [toast][styled] [title] 三属性规则 */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-title] {
+  font-weight: 400;
+}
+
 /* ── 分割线指针跟随渐变高光(GlowResizeHandle) ────────────────────────
  * 1px 基线之上叠 ::before 高光层(::after 已被拖拽热区占用):2px 核心 +
  * 3px 宽柔晕两层渐变,纵向位置跟随 --glow-y,整体透明度随指针离线的
