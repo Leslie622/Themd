@@ -1,9 +1,10 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import 'highlight.js/styles/github.css'
-import { ListTree, PanelRightClose } from 'lucide-react'
+import { IconListTree, IconLayoutSidebarRightCollapse } from '@tabler/icons-react'
 
 import { ImageLightbox } from '@/components/ImageLightbox'
 import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
+import { Tip } from '@/components/Tip'
 import { collectLightboxState, type LightboxSlide } from '@/lib/image-lightbox-state'
 import { renderStaticHtml } from '@/modules/rendering/static-html'
 import { buildCodeButtons } from '@/modules/rendering/codeblock-chrome'
@@ -17,6 +18,7 @@ import { platformServices } from '@/app/platform'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import type { PanelImperativeHandle } from 'react-resizable-panels'
 import { GlowResizeHandle } from '@/components/GlowResizeHandle'
 import { cn } from '@/lib/utils'
 
@@ -96,6 +98,84 @@ export const PreviewPane = memo(function PreviewPane({
 
   const outlineEnabled = useEditorPrefs((s) => s.outlineEnabled)
   const setOutlineEnabled = useEditorPrefs((s) => s.setOutlineEnabled)
+
+  // ── 大纲折叠动画 ────────────────────────────────────────────────────
+  // 面板常挂载(collapsible),收起/展开走 panelRef 命令:仅在程序化切换的
+  // ~200ms 里给两块面板临时挂 flex-grow 过渡(拖拽路径无过渡,不受影响)。
+  // 过渡期间冻结大纲内容宽防逐帧挤压(与侧栏折叠同一手法),展开完成才解冻。
+  // outlineEnabled 不再决定挂载,只经 onResize/isCollapsed 镜像面板真实状态
+  const outlinePanelRef = useRef<PanelImperativeHandle | null>(null)
+  const outlinePanelElRef = useRef<HTMLDivElement | null>(null)
+  const previewPanelElRef = useRef<HTMLDivElement | null>(null)
+  const [outlineContentW, setOutlineContentW] = useState<number | null>(null)
+  const lastOutlineWRef = useRef(0)
+  const outlineCollapsedKnownRef = useRef(false)
+  const outlineTweenSeq = useRef(0)
+  const outlineTweenActiveRef = useRef(false)
+
+  const beginOutlineTween = useCallback(() => {
+    const seq = ++outlineTweenSeq.current
+    outlineTweenActiveRef.current = true
+    const els = [outlinePanelElRef.current, previewPanelElRef.current]
+    let timer = 0
+    const finish = () => {
+      if (outlineTweenSeq.current !== seq) return
+      outlineTweenActiveRef.current = false
+      if (timer) window.clearTimeout(timer)
+      for (const el of els) if (el) el.style.transition = ''
+      // 展开完成才解冻内容宽;收起完成保持冻结,留给下次展开做整宽揭示
+      if (!outlinePanelRef.current?.isCollapsed()) setOutlineContentW(null)
+    }
+    for (const el of els) {
+      if (!el) continue
+      // 库 v4 的面板宽度由 flex-grow 驱动(getPanelStyles 只写 flexGrow,basis 恒 0),
+      // 过渡必须挂在 flex-grow 上,flex-basis 不变永远没有动画
+      el.style.transition = 'flex-grow 200ms ease-out'
+      el.addEventListener(
+        'transitionend',
+        (e) => {
+          // 只认面板自身的 flex-grow 过渡,子元素(滚动条等)冒泡的不触发收尾
+          if (e.target === el && e.propertyName === 'flex-grow') finish()
+        },
+        { once: true },
+      )
+    }
+    // 后台页签 transitionend 可能迟到,定时兜底(幂等)
+    timer = window.setTimeout(finish, 400)
+  }, [])
+
+  /** 程序化收起/展开大纲;偏好由 onResize 镜像,这里不直写 */
+  const toggleOutline = useCallback(
+    (open: boolean) => {
+      const panel = outlinePanelRef.current
+      if (!panel) return
+      const collapsed = panel.isCollapsed()
+      if (collapsed === !open) return
+      if (!open) {
+        setOutlineContentW(panel.getSize().inPixels)
+      } else if (outlineContentW == null) {
+        // 拖拽塌缩过的面板没有冻结宽可复用,用最近一次展开宽兜底
+        setOutlineContentW(lastOutlineWRef.current || null)
+      }
+      beginOutlineTween()
+      // 目标态同步直写:浮钮/内容 inert 即刻生效,不等 ResizeObserver 回调
+      // (后台页签 RO 冻结);拖拽路径仍由 onResize 镜像,程序化回声经去重为空操作
+      setOutlineEnabled(open)
+      if (open) {
+        if (collapsed) panel.expand()
+        else panel.resize(lastOutlineWRef.current || '40')
+      } else {
+        panel.collapse()
+      }
+    },
+    [beginOutlineTween, outlineContentW, setOutlineEnabled],
+  )
+
+  // 首挂对齐持久化偏好:禁用态在 pre-paint 阶段塌缩,不闪 40% 宽的帧
+  useLayoutEffect(() => {
+    if (!outlineEnabled) outlinePanelRef.current?.collapse()
+  }, [outlineEnabled])
+
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null)
 
   // 滚动时前向扫描定位当前标题(视口顶线之上最后一个标题)。只读不写滚动位置,
@@ -199,8 +279,9 @@ export const PreviewPane = memo(function PreviewPane({
       <ResizablePanelGroup orientation="horizontal" className="h-full">
         <ResizablePanel
           id="outline-preview"
-          defaultSize={outlineEnabled && outline.length > 0 ? '60' : '100'}
+          defaultSize={outline.length > 0 ? '60' : '100'}
           minSize="40"
+          elementRef={previewPanelElRef}
         >
           <AutoHideScrollArea
             viewportRef={setScrollEl}
@@ -224,31 +305,60 @@ export const PreviewPane = memo(function PreviewPane({
             />
           </AutoHideScrollArea>
         </ResizablePanel>
-        {outlineEnabled && outline.length > 0 && (
+        {/* 大纲面板常挂载(有标题时):收起 = collapsible 塌缩到 0,动画由 toggleOutline 驱动;
+            拖拽越过塌缩阈值同样经 onResize 落偏好 */}
+        {outline.length > 0 && (
           <>
             <GlowResizeHandle withHandle />
-            <ResizablePanel id="outline-panel" defaultSize="40" minSize="12" maxSize="45">
-              <OutlinePanel
-                items={outline}
-                activeId={activeHeadingId}
-                onJump={jumpTo}
-                onClose={() => setOutlineEnabled(false)}
-              />
+            <ResizablePanel
+              id="outline-panel"
+              panelRef={outlinePanelRef}
+              elementRef={outlinePanelElRef}
+              defaultSize="40"
+              minSize="12"
+              maxSize="45"
+              collapsible
+              className={cn(outlineContentW != null && 'overflow-hidden')}
+              onResize={(size) => {
+                const panel = outlinePanelRef.current
+                const collapsed = panel ? panel.isCollapsed() : true
+                if (!collapsed && size.inPixels > 0) lastOutlineWRef.current = size.inPixels
+                // 拖拽路径在这里解冻(程序化路径由过渡收尾解冻)
+                if (!collapsed && !outlineTweenActiveRef.current) setOutlineContentW(null)
+                if (collapsed !== outlineCollapsedKnownRef.current) {
+                  outlineCollapsedKnownRef.current = collapsed
+                  setOutlineEnabled(!collapsed)
+                }
+              }}
+            >
+              <div
+                className="h-full"
+                style={outlineContentW != null ? { width: outlineContentW } : undefined}
+                inert={!outlineEnabled || undefined}
+              >
+                <OutlinePanel
+                  items={outline}
+                  activeId={activeHeadingId}
+                  onJump={jumpTo}
+                  onClose={() => toggleOutline(false)}
+                />
+              </div>
             </ResizablePanel>
           </>
         )}
       </ResizablePanelGroup>
       {!outlineEnabled && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-2 right-2 size-7 text-muted-foreground"
-          aria-label="显示大纲"
-          title="显示大纲"
-          onClick={() => setOutlineEnabled(true)}
-        >
-          <ListTree />
-        </Button>
+        <Tip label="显示大纲" side="bottom">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 size-7 text-muted-foreground"
+            aria-label="显示大纲"
+            onClick={() => toggleOutline(true)}
+          >
+            <IconListTree />
+          </Button>
+        </Tip>
       )}
     </div>
   )
@@ -278,27 +388,27 @@ function OutlinePanel({
           aria-label="收起大纲"
           onClick={onClose}
         >
-          <PanelRightClose />
+          <IconLayoutSidebarRightCollapse />
         </Button>
       </div>
       <AutoHideScrollArea className="min-h-0 flex-1" viewportProps={{ className: 'px-2 pb-3' }}>
         <div className="space-y-0.5">
         {items.map((item, i) => (
-          <button
-            key={`${item.id}-${i}`}
-            type="button"
-            style={{ paddingLeft: (item.level - 1) * 10 + 8 }}
-            className={cn(
-              'block w-full truncate rounded-md py-1 pr-2 text-left text-xs',
-              activeId === item.id
-                ? 'bg-accent font-medium text-foreground'
-                : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-            )}
-            onClick={() => onJump(item.id)}
-            title={item.text}
-          >
-            {item.text}
-          </button>
+          <Tip key={`${item.id}-${i}`} label={item.text}>
+            <button
+              type="button"
+              style={{ paddingLeft: (item.level - 1) * 10 + 8 }}
+              className={cn(
+                'block w-full truncate rounded-md py-1 pr-2 text-left text-xs',
+                activeId === item.id
+                  ? 'bg-accent font-medium text-foreground'
+                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+              )}
+              onClick={() => onJump(item.id)}
+            >
+              {item.text}
+            </button>
+          </Tip>
         ))}
         </div>
       </AutoHideScrollArea>

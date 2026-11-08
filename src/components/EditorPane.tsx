@@ -14,25 +14,26 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  type LucideIcon,
-  Bold,
-  Check,
-  ClipboardPaste,
-  Code,
-  Copy,
-  FolderOpen,
-  Italic,
-  Link2,
-  List,
-  ListOrdered,
-  ListTodo,
-  Scissors,
-  TextQuote,
-  Trash2,
-} from 'lucide-react'
+  type TablerIcon,
+  IconBold,
+  IconCheck,
+  IconClipboardText,
+  IconCode,
+  IconCopy,
+  IconFolderOpen,
+  IconItalic,
+  IconLink,
+  IconList,
+  IconListNumbers,
+  IconListCheck,
+  IconScissors,
+  IconQuote,
+  IconTrash,
+} from '@tabler/icons-react'
 import { toast } from 'sonner'
 
 import { CmScrollbarOverlay } from '@/components/cm-scrollbar-overlay'
+import { Tip } from '@/components/Tip'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -85,23 +86,24 @@ function MenuIconBtn({
   disabled,
   onSelect,
 }: {
-  icon: LucideIcon
+  icon: TablerIcon
   title: string
   disabled?: boolean
   onSelect: () => void
 }) {
   return (
-    <ContextMenuItem asChild disabled={disabled} onSelect={() => onSelect()}>
-      <Button
-        variant="ghost"
-        size="icon"
-        title={title}
-        aria-label={title}
-        className="h-8 w-full px-0 text-foreground/80"
-      >
-        <Icon />
-      </Button>
-    </ContextMenuItem>
+    <Tip label={title}>
+      <ContextMenuItem asChild disabled={disabled} onSelect={() => onSelect()}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={title}
+          className="h-8 w-full px-0 text-foreground/80"
+        >
+          <Icon />
+        </Button>
+      </ContextMenuItem>
+    </Tip>
   )
 }
 
@@ -693,7 +695,7 @@ export function EditorPane({
               if (!inAssetHoverKeep(e.clientX, e.clientY)) hideAssetHoverNow()
             }}
           >
-            <FolderOpen />
+            <IconFolderOpen />
             打开图片位置
           </Button>,
           document.body,
@@ -704,24 +706,24 @@ export function EditorPane({
         {/* 剪贴板图标网格(Typora 同款):无选中时剪切/复制/删除置灰;不加水平 padding,靠均分居中保证左右对称 */}
         <div className="grid grid-cols-4 gap-1 px-1.5 pt-2">
           <MenuIconBtn
-            icon={Scissors}
+            icon={IconScissors}
             title="剪切"
             disabled={selEmpty}
             onSelect={() => runView((v) => cutSelection(v).catch(() => toast.error('剪切失败')))}
           />
           <MenuIconBtn
-            icon={Copy}
+            icon={IconCopy}
             title="复制"
             disabled={selEmpty}
             onSelect={() => runView((v) => copySelection(v).catch(() => toast.error('复制失败')))}
           />
           <MenuIconBtn
-            icon={ClipboardPaste}
+            icon={IconClipboardText}
             title="粘贴"
             onSelect={() => runView((v) => pasteClipboard(v).catch(() => toast.error('粘贴失败')))}
           />
           <MenuIconBtn
-            icon={Trash2}
+            icon={IconTrash}
             title="删除"
             disabled={selEmpty}
             onSelect={() => runView(deleteSelection)}
@@ -760,14 +762,14 @@ export function EditorPane({
         </ContextMenuSub>
         {/* 格式图标网格:行内(加粗/斜体/行内代码/链接)+ 块级(引用/有序/无序/任务) */}
         <div className="grid grid-cols-4 gap-1 px-1.5 py-1.5">
-          <MenuIconBtn icon={Bold} title="加粗" onSelect={() => runView((v) => toggleInline(v, '**'))} />
-          <MenuIconBtn icon={Italic} title="斜体" onSelect={() => runView((v) => toggleInline(v, '*'))} />
-          <MenuIconBtn icon={Code} title="行内代码" onSelect={() => runView((v) => toggleInline(v, '`'))} />
-          <MenuIconBtn icon={Link2} title="链接" onSelect={() => runView(insertLink)} />
-          <MenuIconBtn icon={TextQuote} title="引用" onSelect={() => runView((v) => toggleLinePrefix(v, 'quote'))} />
-          <MenuIconBtn icon={ListOrdered} title="有序列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'olist'))} />
-          <MenuIconBtn icon={List} title="无序列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'ulist'))} />
-          <MenuIconBtn icon={ListTodo} title="任务列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'task'))} />
+          <MenuIconBtn icon={IconBold} title="加粗" onSelect={() => runView((v) => toggleInline(v, '**'))} />
+          <MenuIconBtn icon={IconItalic} title="斜体" onSelect={() => runView((v) => toggleInline(v, '*'))} />
+          <MenuIconBtn icon={IconCode} title="行内代码" onSelect={() => runView((v) => toggleInline(v, '`'))} />
+          <MenuIconBtn icon={IconLink} title="链接" onSelect={() => runView(insertLink)} />
+          <MenuIconBtn icon={IconQuote} title="引用" onSelect={() => runView((v) => toggleLinePrefix(v, 'quote'))} />
+          <MenuIconBtn icon={IconListNumbers} title="有序列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'olist'))} />
+          <MenuIconBtn icon={IconList} title="无序列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'ulist'))} />
+          <MenuIconBtn icon={IconListCheck} title="任务列表" onSelect={() => runView((v) => toggleLinePrefix(v, 'task'))} />
         </div>
         {/* 段落/插入:Typora 同款二级结构,转换作用于选中行;当前层级打勾 */}
         <ContextMenuSub>
@@ -775,14 +777,14 @@ export function EditorPane({
           <ContextMenuSubContent className="min-w-44">
             {([1, 2, 3, 4, 5, 6] as const).map((level) => (
               <ContextMenuItem key={level} onSelect={() => runView((v) => setHeading(v, level))}>
-                {headingLevel === level && <Check className="size-3.5" />}
+                {headingLevel === level && <IconCheck className="size-3.5" />}
                 {level} 级标题
                 <ContextMenuShortcut>Ctrl+{level}</ContextMenuShortcut>
               </ContextMenuItem>
             ))}
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={() => runView((v) => setHeading(v, 0))}>
-              {headingLevel === 0 && <Check className="size-3.5" />}
+              {headingLevel === 0 && <IconCheck className="size-3.5" />}
               段落
               <ContextMenuShortcut>Ctrl+0</ContextMenuShortcut>
             </ContextMenuItem>

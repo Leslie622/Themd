@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { css } from '@codemirror/lang-css'
 import CodeMirror from '@uiw/react-codemirror'
-import { Eraser, Save } from 'lucide-react'
+import { IconEraser, IconDeviceFloppy } from '@tabler/icons-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -49,7 +49,7 @@ export function CssEditorPanel({
             toast.success('附加 CSS 已保存')
           }}
         >
-          <Save /> 保存
+          <IconDeviceFloppy /> 保存
         </Button>
         <Button
           size="sm"
@@ -61,7 +61,7 @@ export function CssEditorPanel({
             toast.success('已清空附加 CSS')
           }}
         >
-          <Eraser /> 清空
+          <IconEraser /> 清空
         </Button>
         {dirty && <span className="text-xs text-muted-foreground">未保存</span>}
       </div>

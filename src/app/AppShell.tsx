@@ -1,11 +1,13 @@
-import { type ReactElement, type ReactNode, useRef } from 'react'
-import { Columns2, Eye, FileCode2, FileSymlink, FileText, FileWarning, ImagePlus, Paintbrush, Palette, PanelLeft, PenLine, Plus, Printer, Settings, Sparkles } from 'lucide-react'
+import { type ReactElement, type ReactNode, useEffect, useRef, useState } from 'react'
+import { animate, motion, useMotionValue } from 'motion/react'
+import type { AnimationPlaybackControls, Transition } from 'motion/react'
+import { IconLayoutColumns, IconEye, IconFileCode2, IconFileExport, IconFileText, IconFileAlert, IconPhotoPlus, IconBrush, IconPalette, IconLayoutSidebar, IconWriting, IconPlus, IconPrinter, IconSettings, IconSparkles } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Toaster } from '@/components/ui/sonner'
 import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Sidebar } from '@/components/Sidebar'
@@ -17,6 +19,7 @@ import { SettingsSheet } from '@/components/SettingsSheet'
 import { EditorPane } from '@/components/EditorPane'
 import { LiveEditorPane } from '@/components/LiveEditorPane'
 import { PreviewPane } from '@/components/PreviewPane'
+import { Tip } from '@/components/Tip'
 import { fromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { countImages, countWords } from '@/modules/notebook/domain/note'
@@ -39,12 +42,62 @@ const VIEW_ITEM_CLS = 'relative h-6 w-7 min-w-7 px-0 rounded text-muted-foregrou
 const VIEW_ITEM_ON = 'text-foreground'
 /* 基类带 hover:text-foreground,未选中项不锁住的话 hover 会提亮图标 */
 const VIEW_ITEM_OFF = 'hover:text-muted-foreground'
-function IconTip({ label, children }: { label: string; children: ReactElement }) { return <Tooltip><TooltipTrigger asChild>{children}</TooltipTrigger><TooltipContent side="bottom">{label}</TooltipContent></Tooltip> }
+/* 侧栏折叠/展开动画:200ms ease-out,与顶栏视图胶囊同一动效语言 */
+const SIDEBAR_SLIDE_TRANSITION: Transition = { duration: 0.2, ease: 'easeOut' }
+/* 顶栏图标按钮的悬停提示:统一走 Tip(替代原生 title 的项目级封装),固定向下弹出 */
+function IconTip({ label, children }: { label: string; children: ReactElement }) { return <Tip label={label} side="bottom">{children}</Tip> }
 export interface AppShellProps { active: Note | null; allThemes: ThemeFile[]; noteThemeLabel: string; view: ViewMode; setView: (view: ViewMode) => void; previewText: string; sidebarCollapsed: boolean; onSidebarExpand: () => void; sidebarWidth: number; onSidebarWidthCommit: (px: number) => void; settingsOpen: boolean; setSettingsOpen: (open: boolean) => void; setStudioOpen: (open: boolean) => void; updateNote: (id: string, content: string) => void; createNote: () => void; setNoteTheme: (id: string, themeId: string | null) => void; exportPdf: () => void; exportNoteFile: (kind: 'md' | 'html') => void; fileMissing: boolean; onNoteDelete: () => void; bindEditorScroller: (element: HTMLElement | null) => void; bindPreviewScroller: (element: HTMLElement | null) => void; children?: ReactNode }
 export function AppShell({ active, allThemes, noteThemeLabel, view, setView, previewText, sidebarCollapsed, onSidebarExpand, sidebarWidth, onSidebarWidthCommit, settingsOpen, setSettingsOpen, setStudioOpen, updateNote, createNote, setNoteTheme, exportPdf, exportNoteFile, fileMissing, onNoteDelete, bindEditorScroller, bindPreviewScroller, children }: AppShellProps) {
   const imageCount = active ? countImages(active.content) : 0
-  /* 侧栏容器:拖拽期间 SidebarResizeHandle 直改它的 style.width,绕开 React */
-  const sidebarRef = useRef<HTMLDivElement | null>(null)
+  /* 侧栏折叠动画(motion 命令式,与拖拽架构共生):
+     clipWidth = 外层裁剪窗宽,折叠/展开由 animate() 补间;
+     contentWidth = 内层内容宽,滑出前冻结一次,动画过程内容不逐帧重排。
+     两者同时是拖拽的数值源——handle 经 writeWidth 直写 .set()(绕开 React),
+     拖拽提交进 state 后走下方同步分支,为空操作,不会触发 motion 重播动画。
+     声明式 animate={{ width }} 不可用:提交会从 motion 内部陈旧值重播动画 */
+  const clipWidth = useMotionValue(sidebarWidth)
+  const contentWidth = useMotionValue(sidebarWidth)
+  /* sidebarMounted = DOM 是否存在:折叠动画完成后才卸载(保留原卸载语义),
+     sidebarCollapsed 只表示目标态。展开由下方展开按钮的 onClick 先行
+     置回 mounted(事件处理器内 setState),collapsed 目标态交回 App——
+     若将来新增展开入口,必须同样先置 mounted,否则侧栏无法重新挂载 */
+  const [sidebarMounted, setSidebarMounted] = useState(true)
+  const sidebarAnimRef = useRef<AnimationPlaybackControls | null>(null)
+  const collapsedRef = useRef(sidebarCollapsed)
+  useEffect(() => {
+    const wasCollapsed = collapsedRef.current
+    collapsedRef.current = sidebarCollapsed
+    if (sidebarCollapsed) {
+      if (!sidebarMounted) return
+      let cancelled = false
+      // 冻结内容宽后窗口滑向 0,内容保持完整不逐帧换行
+      contentWidth.set(clipWidth.get())
+      sidebarAnimRef.current?.stop()
+      const controls = animate(clipWidth, 0, SIDEBAR_SLIDE_TRANSITION)
+      sidebarAnimRef.current = controls
+      void controls.then(() => {
+        // 双重守卫:收起途中被展开则不卸载;展开动画已接管同样跳过
+        if (!cancelled && collapsedRef.current && sidebarAnimRef.current === controls) {
+          setSidebarMounted(false)
+        }
+      })
+      return () => {
+        cancelled = true
+      }
+    }
+    if (!wasCollapsed) {
+      // 展开态下的宽度同步(偏好异步水合/拖拽提交):直接落位,不做动画
+      clipWidth.set(sidebarWidth)
+      contentWidth.set(sidebarWidth)
+      return
+    }
+    // 展开:内容按全宽渲染,窗口从当前宽(0 或收起中途)滑到目标宽。
+    // effect 在 DOM 提交后执行,motion.div 已挂载,直接启动;
+    // 不经 requestAnimationFrame 门控——后台窗口 rAF 冻结会把宽度卡在 0
+    contentWidth.set(sidebarWidth)
+    sidebarAnimRef.current?.stop()
+    sidebarAnimRef.current = animate(clipWidth, sidebarWidth, SIDEBAR_SLIDE_TRANSITION)
+  }, [sidebarCollapsed, sidebarMounted, sidebarWidth, clipWidth, contentWidth])
   /* 弹层内发生过指针按下 → 关闭时不让 Radix 把焦点还给触发器:
      那次还焦点会继承列表项的 :focus-visible,触发器常驻聚焦环,
      且 tooltip focus 守卫把它当键盘焦点放行 → tooltip 常驻 */
@@ -54,17 +107,31 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
     /* Provider 包整个根:顶栏左侧的"展开侧栏"按钮(仅折叠时渲染)也在 Tooltip
        作用域内,否则一折叠就 Tooltip 脱离 Provider 导致 React 崩溃白屏 */
     <TooltipProvider delayDuration={300}>
-    <div className="flex h-full">
+    {/* 主页根节点:返回主页时的对称入场动画(主题工厂侧在 App.tsx);应用冷启动也走一次轻淡入 */}
+    <div className="flex h-full animate-in fade-in-0 zoom-in-98 duration-200 ease-out">
       {/* 侧栏是固定像素宽的普通 flex 区块,不参与 react-resizable-panels:
           百分比引擎靠 JS 追赶校正,窗口缩放时浏览器先按旧百分比画脏帧
           导致内容抖动;纯 CSS 像素宽由布局层逐帧保证,零 JS 参与。 */}
-      {sidebarCollapsed ? null : (
+      {sidebarMounted && (
         <>
-          <div ref={sidebarRef} className="h-full shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
-            <Sidebar />
-          </div>
+          {/* 外层是裁剪窗(动画补间宽),内层固定内容宽防滑动过程逐帧重排;
+              拖拽时两者同步直写,内容实时回流如旧 */}
+          <motion.div style={{ width: clipWidth }} className="h-full shrink-0 overflow-hidden">
+            <motion.div style={{ width: contentWidth }} className="h-full">
+              <Sidebar />
+            </motion.div>
+          </motion.div>
           <SidebarResizeHandle
-            targetRef={sidebarRef}
+            readWidth={() => clipWidth.get()}
+            writeWidth={(px) => {
+              // 拖拽/键盘抢占进行中的折叠/展开动画:必须用 jump 落值——
+              // 动画未停时 set 会被动画渲染覆盖;jump 语义即「终止动画并直落」。
+              // 同时清空动画引用,让退出动画的 then 守卫(ref 比对)失配,
+              // 不会在拖拽中途误卸载;松手提交后 effect 自行恢复收起/同步
+              clipWidth.jump(px)
+              contentWidth.jump(px)
+              sidebarAnimRef.current = null
+            }}
             min={SIDEBAR_MIN_WIDTH}
             max={SIDEBAR_MAX_WIDTH}
             onCommit={onSidebarWidthCommit}
@@ -86,10 +153,14 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   variant="ghost"
                   size="icon"
                   className="size-8 shrink-0"
-                  onClick={onSidebarExpand}
+                  onClick={() => {
+                    // 先恢复挂载使侧栏以 0 宽进场滑开;collapsed 目标态交回 App
+                    setSidebarMounted(true)
+                    onSidebarExpand()
+                  }}
                   aria-label="展开侧栏"
                 >
-                  <PanelLeft className="size-[18px]" />
+                  <IconLayoutSidebar className="size-[18px]" />
                 </Button>
               </IconTip>
             )}
@@ -127,22 +198,22 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                   />
                   <IconTip label="实时预览">
                     <ToggleGroupItem value="live" aria-label="实时预览" className={cn(VIEW_ITEM_CLS, view === 'live' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
-                      <Sparkles className="size-4" />
+                      <IconSparkles className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                   <IconTip label="编辑视图">
                     <ToggleGroupItem value="edit" aria-label="编辑视图" className={cn(VIEW_ITEM_CLS, view === 'edit' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
-                      <PenLine className="size-4" />
+                      <IconWriting className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                   <IconTip label="分屏视图">
                     <ToggleGroupItem value="split" aria-label="分屏视图" className={cn(VIEW_ITEM_CLS, view === 'split' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
-                      <Columns2 className="size-4" />
+                      <IconLayoutColumns className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                   <IconTip label="预览视图">
                     <ToggleGroupItem value="preview" aria-label="预览视图" className={cn(VIEW_ITEM_CLS, view === 'preview' ? VIEW_ITEM_ON : VIEW_ITEM_OFF)}>
-                      <Eye className="size-4" />
+                      <IconEye className="size-4" />
                     </ToggleGroupItem>
                   </IconTip>
                 </ToggleGroup>
@@ -163,7 +234,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                       className="relative h-8 w-8 justify-center border-none bg-transparent px-0 shadow-none hover:bg-accent [&>svg:last-child]:hidden dark:bg-transparent"
                       aria-label={noteThemeLabel}
                     >
-                      <Palette className="size-[18px] shrink-0" />
+                      <IconPalette className="size-[18px] shrink-0" />
                       {active.themeId && (
                         <span
                           aria-hidden
@@ -210,11 +281,11 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     onClick={() => appEvents.emit('insertImage')}
                     aria-label="插入图片"
                   >
-                    <ImagePlus className="size-[18px]" />
+                    <IconPhotoPlus className="size-[18px]" />
                   </Button>
                 </IconTip>
-                {/* 导出:三种格式进下拉;FileSymlink 箭头向右穿出文件,
-                    与侧栏 FileInput/FolderInput(箭头指入)构成导入/导出一对。
+                {/* 导出:三种格式进下拉;IconFileExport 箭头向右穿出文件,
+                    与主题工厂 IconFileImport/侧栏 IconFolderDown(箭头指入)构成导入/导出一对。
                     IconTip 必须包在 DropdownMenu 内、套住 Trigger:
                     DropdownMenu Root 是纯 Context 不渲染 DOM,包在外面
                     TooltipTrigger 的 asChild 会静默失效 */}
@@ -227,7 +298,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                         className="size-8"
                         aria-label="导出笔记"
                       >
-                        <FileSymlink className="size-[18px]" />
+                        <IconFileExport className="size-[18px]" />
                       </Button>
                     </DropdownMenuTrigger>
                   </IconTip>
@@ -246,16 +317,16 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     }}
                   >
                     <DropdownMenuItem onClick={() => void exportNoteFile('md')}>
-                      <FileText />
+                      <IconFileText />
                       导出 Markdown (.md)
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => void exportNoteFile('html')}>
-                      <FileCode2 />
+                      <IconFileCode2 />
                       导出 HTML (.html)
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={exportPdf}>
-                      <Printer />
+                      <IconPrinter />
                       导出 PDF
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -271,7 +342,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     onClick={() => setStudioOpen(true)}
                     aria-label="打开主题工厂"
                   >
-                    <Paintbrush className="size-[18px]" />
+                    <IconBrush className="size-[18px]" />
                   </Button>
                 </IconTip>
                 <IconTip label="设置:外观、编辑器与字体偏好">
@@ -282,7 +353,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                     onClick={() => setSettingsOpen(true)}
                     aria-label="打开设置"
                   >
-                    <Settings className="size-[18px]" />
+                    <IconSettings className="size-[18px]" />
                   </Button>
                 </IconTip>
               </>
@@ -297,7 +368,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
                 自救 = 继续编辑写回重建文件,删除 = 移除笔记(不碰磁盘) */}
             {fileMissing && (
               <div className="flex shrink-0 items-center gap-2 border-b bg-amber-500/10 px-4 py-1.5 text-xs text-amber-700 dark:text-amber-400">
-                <FileWarning className="size-3.5 shrink-0" />
+                <IconFileAlert className="size-3.5 shrink-0" />
                 <span className="min-w-0 flex-1">绑定文件已在磁盘上消失(被外部删除或移动);继续编辑将重建文件。</span>
                 {/* ghost 无 destructive 文本色变体,仅保留这一个覆盖 */}
                 <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={onNoteDelete}>
@@ -362,7 +433,7 @@ export function AppShell({ active, allThemes, noteThemeLabel, view, setView, pre
           <div className="flex flex-1 flex-col items-center justify-center gap-4">
             <p className="text-sm text-muted-foreground">选择左侧笔记，或新建一篇笔记</p>
             <Button onClick={() => createNote()}>
-              <Plus /> 新建笔记
+              <IconPlus /> 新建笔记
             </Button>
           </div>
         )}

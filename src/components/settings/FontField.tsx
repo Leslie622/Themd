@@ -12,9 +12,10 @@ import {
 } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
+import { Tip } from '@/components/Tip'
 import { isFontAvailable, onFontAvailabilityChange, recheckFontAvailability } from './is-font-available'
 import { useLocalFontList } from './use-local-font-list'
-import { Check, ChevronDown, Copy, XIcon } from 'lucide-react'
+import { IconCheck, IconChevronDown, IconCopy, IconX } from '@tabler/icons-react'
 import { toast } from 'sonner'
 
 /**
@@ -74,7 +75,7 @@ function FontListDialog({
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogClose asChild>
             <Button variant="ghost" size="icon-sm" aria-label="关闭">
-              <XIcon />
+              <IconX />
             </Button>
           </DialogClose>
           <DialogDescription className="sr-only">
@@ -118,7 +119,7 @@ function FontListDialog({
                     }}
                   >
                     <span className="truncate text-sm">{f}</span>
-                    {active && <Check className="size-3.5 shrink-0 text-primary" />}
+                    {active && <IconCheck className="size-3.5 shrink-0 text-primary" />}
                   </button>
                   <Button
                     variant="ghost"
@@ -127,9 +128,9 @@ function FontListDialog({
                     onClick={() => void copy(f)}
                   >
                     {copied === f ? (
-                      <Check className="size-3 text-primary" />
+                      <IconCheck className="size-3 text-primary" />
                     ) : (
-                      <Copy className="size-3" />
+                      <IconCopy className="size-3" />
                     )}
                   </Button>
                 </div>
@@ -218,18 +219,17 @@ export function FontField({
         >
           {display || (
             echo ? (
-              <span
-                className="truncate italic text-muted-foreground"
-                title={echoTitle ?? '未设置,显示当前生效的回落字体;点选即可覆盖'}
-              >
-                {echo}
-              </span>
+              <Tip label={echoTitle ?? '未设置,显示当前生效的回落字体;点选即可覆盖'}>
+                <span className="truncate italic text-muted-foreground">
+                  {echo}
+                </span>
+              </Tip>
             ) : (
               <span className="text-muted-foreground">{placeholder}</span>
             )
           )}
         </span>
-        <ChevronDown className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
+        <IconChevronDown className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
       </Button>
       {notInstalled && (
         <p className="text-xs text-amber-600 dark:text-amber-400">未安装,显示回落效果</p>

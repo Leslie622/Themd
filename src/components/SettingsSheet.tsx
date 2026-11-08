@@ -8,12 +8,13 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
+import { Tip } from '@/components/Tip'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { listAllThemes, useThemeStore } from '@/store-themes'
 import { EDITOR_FONT_RANGE, useEditorPrefs } from '@/store-editor'
 import { useAppearance } from '@/store-appearance'
 import { platformServices } from '@/app/platform'
-import { Minus, Plus, Settings, XIcon } from 'lucide-react'
+import { IconMinus, IconPlus, IconSettings, IconX } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
@@ -156,9 +157,9 @@ export function SettingsSheet({
       {/* 紧凑 header:vega 默认关闭按钮按 p-6+ 定位(top-4),放这里会偏出
           标题行,故 showCloseButton=false + 官方 SheetClose 放标题行内 */}
       <SheetContent side="left" showCloseButton={false} className="w-80 gap-0 overflow-hidden sm:max-w-80">
-        <AutoHideScrollArea className="min-h-0 flex-1">
         {/* 抽屉盖住顶栏后窗口拖拽区随之失效,头部补一块拖拽区:
             属性必须落在 mousedown 的实际目标上,所以 header 与标题都带 */}
+        {/* header 固定在滚动区外,只有表单主体滚动 */}
         <SheetHeader
           data-tauri-drag-region
           className="flex-row items-center justify-between shrink-0 border-b p-4"
@@ -166,15 +167,16 @@ export function SettingsSheet({
           <div className="flex items-center gap-2">
             {/* svg 的内部 path 会成为 mousedown 目标导致拖拽失效,
                 pointer-events-none 让事件落到带 drag-region 的父级上 */}
-            <Settings className="pointer-events-none size-4 text-muted-foreground" />
+            <IconSettings className="pointer-events-none size-4 text-muted-foreground" />
             <SheetTitle data-tauri-drag-region className="text-sm">设置</SheetTitle>
           </div>
           <SheetClose asChild>
             <Button variant="ghost" size="icon-sm" aria-label="关闭设置">
-              <XIcon />
+              <IconX />
             </Button>
           </SheetClose>
         </SheetHeader>
+        <AutoHideScrollArea className="min-h-0 flex-1">
         {!contentReady ? (
           <div className="flex flex-col gap-4 px-4">
             <div className="h-40 animate-pulse rounded-xl bg-muted/60" />
@@ -248,34 +250,34 @@ export function SettingsSheet({
               <div className="mt-3 flex items-center justify-between gap-2">
                 <span className="min-w-0 shrink-0 text-[13px] text-muted-foreground">图片目录</span>
                 <div className="flex min-w-0 items-center gap-1">
-                  <span
-                    className="min-w-0 flex-1 truncate rounded-md bg-muted/50 px-2 py-1 text-right text-xs text-muted-foreground"
-                    title={assetsRoot || '默认(应用数据目录)'}
-                  >
-                    {assetsRoot || '默认(应用数据目录)'}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    title="打开图片目录"
-                    onClick={() => {
-                      void (async () => {
-                        const dir = assetsRoot || (await platformServices.files.defaultAssetsRoot())
-                        try {
-                          // 打开前确保目录存在:首图未插时也能查看未来存放位置
-                          await platformServices.files.writeBinaryFile(
-                            `${dir.replace(/[\\/]+$/, '')}/.keep`,
-                            new Uint8Array(),
-                          )
-                          await platformServices.files.openPath(dir)
-                        } catch {
-                          toast.error('打开目录失败')
-                        }
-                      })()
-                    }}
-                  >
-                    打开
-                  </Button>
+                  <Tip label={assetsRoot || '默认(应用数据目录)'}>
+                    <span className="min-w-0 flex-1 truncate rounded-md bg-muted/50 px-2 py-1 text-right text-xs text-muted-foreground">
+                      {assetsRoot || '默认(应用数据目录)'}
+                    </span>
+                  </Tip>
+                  <Tip label="打开图片目录" side="bottom">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        void (async () => {
+                          const dir = assetsRoot || (await platformServices.files.defaultAssetsRoot())
+                          try {
+                            // 打开前确保目录存在:首图未插时也能查看未来存放位置
+                            await platformServices.files.writeBinaryFile(
+                              `${dir.replace(/[\\/]+$/, '')}/.keep`,
+                              new Uint8Array(),
+                            )
+                            await platformServices.files.openPath(dir)
+                          } catch {
+                            toast.error('打开目录失败')
+                          }
+                        })()
+                      }}
+                    >
+                      打开
+                    </Button>
+                  </Tip>
                   {assetsRoot && (
                     <Button variant="ghost" size="xs" onClick={() => setAssetsRoot('')}>
                       恢复默认
@@ -324,7 +326,7 @@ export function SettingsSheet({
                   disabled={fontSize <= EDITOR_FONT_RANGE.MIN}
                   onClick={() => setFontSize(fontSize - 0.5)}
                 >
-                  <Minus className="size-3.5" />
+                  <IconMinus className="size-3.5" />
                 </button>
                 <span
                   className="min-w-10 border-x px-1 text-center text-xs leading-7 text-muted-foreground"
@@ -339,7 +341,7 @@ export function SettingsSheet({
                   disabled={fontSize >= EDITOR_FONT_RANGE.MAX}
                   onClick={() => setFontSize(fontSize + 0.5)}
                 >
-                  <Plus className="size-3.5" />
+                  <IconPlus className="size-3.5" />
                 </button>
               </div>
             </div>

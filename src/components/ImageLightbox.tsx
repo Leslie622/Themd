@@ -11,15 +11,16 @@ import 'yet-another-react-lightbox/plugins/captions.css'
 import './image-lightbox.css'
 
 import { Button } from '@/components/ui/button'
+import { Tip } from '@/components/Tip'
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  DownloadIcon,
-  RotateCwSquareIcon,
-  XIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
-} from 'lucide-react'
+  IconChevronLeft,
+  IconChevronRight,
+  IconDownload,
+  IconRotateRectangle,
+  IconX,
+  IconZoomIn,
+  IconZoomOut,
+} from '@tabler/icons-react'
 import { cn } from '@/lib/utils'
 import type { LightboxSlide } from '@/lib/image-lightbox-state'
 import { useCallback, useEffect, useState } from 'react'
@@ -42,16 +43,17 @@ const buttonScrim =
 
 function CloseButton({ onClose }: { onClose: () => void }) {
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label="关闭"
-      title="关闭"
-      className={cn(buttonScrim)}
-      onClick={onClose}
-    >
-      <XIcon />
-    </Button>
+    <Tip label="关闭" side="bottom">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="关闭"
+        className={cn(buttonScrim)}
+        onClick={onClose}
+      >
+        <IconX />
+      </Button>
+    </Tip>
   )
 }
 
@@ -59,28 +61,30 @@ function ZoomButtons({ zoomRef }: { zoomRef: ZoomRef }) {
   const unavailable = zoomRef.disabled
   return (
     <div className="flex items-center gap-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="缩小"
-        title="缩小"
-        className={cn(buttonScrim)}
-        disabled={unavailable || zoomRef.zoom <= zoomRef.minZoom + 0.001}
-        onClick={zoomRef.zoomOut}
-      >
-        <ZoomOutIcon />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="放大"
-        title="放大"
-        className={cn(buttonScrim)}
-        disabled={unavailable || zoomRef.zoom >= zoomRef.maxZoom - 0.001}
-        onClick={zoomRef.zoomIn}
-      >
-        <ZoomInIcon />
-      </Button>
+      <Tip label="缩小" side="bottom">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="缩小"
+          className={cn(buttonScrim)}
+          disabled={unavailable || zoomRef.zoom <= zoomRef.minZoom + 0.001}
+          onClick={zoomRef.zoomOut}
+        >
+          <IconZoomOut />
+        </Button>
+      </Tip>
+      <Tip label="放大" side="bottom">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="放大"
+          className={cn(buttonScrim)}
+          disabled={unavailable || zoomRef.zoom >= zoomRef.maxZoom - 0.001}
+          onClick={zoomRef.zoomIn}
+        >
+          <IconZoomIn />
+        </Button>
+      </Tip>
     </div>
   )
 }
@@ -88,16 +92,17 @@ function ZoomButtons({ zoomRef }: { zoomRef: ZoomRef }) {
 function RotateButton({ onRotate }: { onRotate: (index: number) => void }) {
   const { currentIndex } = useLightboxState()
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label="旋转"
-      title="旋转 90°"
-      className={cn(buttonScrim)}
-      onClick={() => currentIndex !== undefined && onRotate(currentIndex)}
-    >
-      <RotateCwSquareIcon />
-    </Button>
+    <Tip label="旋转 90°" side="bottom">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="旋转"
+        className={cn(buttonScrim)}
+        onClick={() => currentIndex !== undefined && onRotate(currentIndex)}
+      >
+        <IconRotateRectangle />
+      </Button>
+    </Tip>
   )
 }
 
@@ -122,16 +127,17 @@ function DownloadButton() {
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label="下载"
-      title="下载"
-      className={cn(buttonScrim)}
-      onClick={onDownload}
-    >
-      <DownloadIcon />
-    </Button>
+    <Tip label="下载" side="bottom">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="下载"
+        className={cn(buttonScrim)}
+        onClick={onDownload}
+      >
+        <IconDownload />
+      </Button>
+    </Tip>
   )
 }
 
@@ -171,17 +177,18 @@ function NavButton({ side }: { side: 'prev' | 'next' }) {
     // wrapper 只做垂直定位,不接收指针:inset-y-0 全高竖条会盖住工具栏按钮
     // (DOM 里 navigation 在 toolbar 之后,不关 pointer-events 时关闭钮左半 hover/点击全被吞)
     <div className={cn('pointer-events-none absolute inset-y-0 flex items-center', isPrev ? 'left-4' : 'right-4')}>
-      <Button
-        variant="ghost"
-        size="icon-lg"
-        aria-label={isPrev ? '上一张' : '下一张'}
-        title={isPrev ? '上一张' : '下一张'}
-        className={cn('pointer-events-auto size-10', buttonScrim)}
-        disabled={isPrev ? prevDisabled : nextDisabled}
-        onClick={() => (isPrev ? prev() : next())}
-      >
-        {isPrev ? <ChevronLeftIcon /> : <ChevronRightIcon />}
-      </Button>
+      <Tip label={isPrev ? '上一张' : '下一张'} side="bottom">
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          aria-label={isPrev ? '上一张' : '下一张'}
+          className={cn('pointer-events-auto size-10', buttonScrim)}
+          disabled={isPrev ? prevDisabled : nextDisabled}
+          onClick={() => (isPrev ? prev() : next())}
+        >
+          {isPrev ? <IconChevronLeft /> : <IconChevronRight />}
+        </Button>
+      </Tip>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
 import {
   SiTypescript, SiJavascript, SiPython, SiRust, SiGo, SiGnubash, SiLua,
   SiJson, SiYaml, SiCss, SiSass, SiMarkdown, SiPhp, SiRuby, SiSwift,
@@ -17,7 +18,7 @@ import {
  */
 
 interface LangIconDef {
-  Icon: (props: { size?: number; color?: string }) => JSX.Element
+  Icon: (props: { size?: number; color?: string }) => ReactNode
   color: string
 }
 

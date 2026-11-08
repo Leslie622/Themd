@@ -1,23 +1,23 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
-import { FolderOpen } from 'lucide-react'
+import { IconFolderOpen } from '@tabler/icons-react'
 import {
-  Bold,
-  Check,
-  ClipboardPaste,
-  Code,
-  Copy,
-  Italic,
-  Link2,
-  List,
-  ListOrdered,
-  ListTodo,
-  Scissors,
-  TextQuote,
-  Trash2,
-  type LucideIcon,
-} from 'lucide-react'
+  IconBold,
+  IconCheck,
+  IconClipboardText,
+  IconCode,
+  IconCopy,
+  IconItalic,
+  IconLink,
+  IconList,
+  IconListNumbers,
+  IconListCheck,
+  IconScissors,
+  IconQuote,
+  IconTrash,
+  type TablerIcon,
+} from '@tabler/icons-react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 
@@ -29,6 +29,7 @@ import { assetsPathToAbsolute } from '@/lib/image-src'
 import { appEvents } from '@/shared/events/app-events'
 import { platformServices } from '@/app/platform'
 import { Button } from '@/components/ui/button'
+import { Tip } from '@/components/Tip'
 import { AutoHideScrollArea } from '@/components/AutoHideScrollArea'
 import {
   ContextMenu,
@@ -84,23 +85,24 @@ function MenuIconBtn({
   disabled,
   onSelect,
 }: {
-  icon: LucideIcon
+  icon: TablerIcon
   title: string
   disabled?: boolean
   onSelect: () => void
 }) {
   return (
-    <ContextMenuItem asChild disabled={disabled} onSelect={() => onSelect()}>
-      <Button
-        variant="ghost"
-        size="icon"
-        title={title}
-        aria-label={title}
-        className="h-8 w-full px-0 text-foreground/80"
-      >
-        <Icon />
-      </Button>
-    </ContextMenuItem>
+    <Tip label={title}>
+      <ContextMenuItem asChild disabled={disabled} onSelect={() => onSelect()}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={title}
+          className="h-8 w-full px-0 text-foreground/80"
+        >
+          <Icon />
+        </Button>
+      </ContextMenuItem>
+    </Tip>
   )
 }
 
@@ -393,24 +395,24 @@ export const LiveEditorPane = memo(function LiveEditorPane({
         {/* 剪贴板图标网格(Typora 同款) */}
         <div className="grid grid-cols-4 gap-1 px-1.5 pt-2">
           <MenuIconBtn
-            icon={Scissors}
+            icon={IconScissors}
             title="剪切"
             disabled={selEmpty}
             onSelect={() => runEditor((t) => void cutSelection(t))}
           />
           <MenuIconBtn
-            icon={Copy}
+            icon={IconCopy}
             title="复制"
             disabled={selEmpty}
             onSelect={() => runEditor((t) => void copySelection(t))}
           />
           <MenuIconBtn
-            icon={ClipboardPaste}
+            icon={IconClipboardText}
             title="粘贴"
             onSelect={() => runEditor((t) => void pasteClipboard(t))}
           />
           <MenuIconBtn
-            icon={Trash2}
+            icon={IconTrash}
             title="删除"
             disabled={selEmpty}
             onSelect={() => runEditor(deleteSelection)}
@@ -427,7 +429,7 @@ export const LiveEditorPane = memo(function LiveEditorPane({
                   if (absolute) openAsset(absolute)
                 }}
               >
-                <FolderOpen className="size-4" />
+                <IconFolderOpen className="size-4" />
                 打开图片位置
               </ContextMenuItem>
             )}
@@ -472,14 +474,14 @@ export const LiveEditorPane = memo(function LiveEditorPane({
         </ContextMenuSub>
         {/* 格式图标网格:行内 + 块级(节点选区如图片不适用,禁用) */}
         <div className="grid grid-cols-4 gap-1 px-1.5 py-1.5">
-          <MenuIconBtn icon={Bold} title="加粗" disabled={nodeSel} onSelect={() => runEditor(toggleBold)} />
-          <MenuIconBtn icon={Italic} title="斜体" disabled={nodeSel} onSelect={() => runEditor(toggleItalic)} />
-          <MenuIconBtn icon={Code} title="行内代码" disabled={nodeSel} onSelect={() => runEditor(toggleInlineCode)} />
-          <MenuIconBtn icon={Link2} title="链接" disabled={nodeSel} onSelect={() => runEditor(insertLink)} />
-          <MenuIconBtn icon={TextQuote} title="引用" disabled={nodeSel} onSelect={() => runEditor(toggleQuote)} />
-          <MenuIconBtn icon={ListOrdered} title="有序列表" disabled={nodeSel} onSelect={() => runEditor(toggleOrderedList)} />
-          <MenuIconBtn icon={List} title="无序列表" disabled={nodeSel} onSelect={() => runEditor(toggleBulletList)} />
-          <MenuIconBtn icon={ListTodo} title="任务列表" disabled={nodeSel} onSelect={() => runEditor(toggleTaskList)} />
+          <MenuIconBtn icon={IconBold} title="加粗" disabled={nodeSel} onSelect={() => runEditor(toggleBold)} />
+          <MenuIconBtn icon={IconItalic} title="斜体" disabled={nodeSel} onSelect={() => runEditor(toggleItalic)} />
+          <MenuIconBtn icon={IconCode} title="行内代码" disabled={nodeSel} onSelect={() => runEditor(toggleInlineCode)} />
+          <MenuIconBtn icon={IconLink} title="链接" disabled={nodeSel} onSelect={() => runEditor(insertLink)} />
+          <MenuIconBtn icon={IconQuote} title="引用" disabled={nodeSel} onSelect={() => runEditor(toggleQuote)} />
+          <MenuIconBtn icon={IconListNumbers} title="有序列表" disabled={nodeSel} onSelect={() => runEditor(toggleOrderedList)} />
+          <MenuIconBtn icon={IconList} title="无序列表" disabled={nodeSel} onSelect={() => runEditor(toggleBulletList)} />
+          <MenuIconBtn icon={IconListCheck} title="任务列表" disabled={nodeSel} onSelect={() => runEditor(toggleTaskList)} />
         </div>
         {/* 段落:标题层级,当前层级打勾 */}
         <ContextMenuSub>
@@ -487,14 +489,14 @@ export const LiveEditorPane = memo(function LiveEditorPane({
           <ContextMenuSubContent className="min-w-44">
             {([1, 2, 3, 4, 5, 6] as const).map((level) => (
               <ContextMenuItem key={level} onSelect={() => runEditor((t) => setHeading(t, level))}>
-                {headingLevel === level && <Check className="size-3.5" />}
+                {headingLevel === level && <IconCheck className="size-3.5" />}
                 {level} 级标题
                 <ContextMenuShortcut>Ctrl+{level}</ContextMenuShortcut>
               </ContextMenuItem>
             ))}
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={() => runEditor((t) => setHeading(t, 0))}>
-              {headingLevel === 0 && <Check className="size-3.5" />}
+              {headingLevel === 0 && <IconCheck className="size-3.5" />}
               段落
               <ContextMenuShortcut>Ctrl+0</ContextMenuShortcut>
             </ContextMenuItem>
@@ -555,7 +557,7 @@ export const LiveEditorPane = memo(function LiveEditorPane({
               if (!inHoverKeep(e.clientX, e.clientY)) hideHover()
             }}
           >
-            <FolderOpen />
+            <IconFolderOpen />
             打开图片位置
           </Button>,
           document.body,

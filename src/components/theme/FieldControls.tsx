@@ -1,4 +1,4 @@
-import { ImagePlus, RotateCcw } from 'lucide-react'
+import { IconPhotoPlus, IconRotate2 } from '@tabler/icons-react'
 import { hexToHsva, hsvaToHex, hsvaToRgba, rgbaToHsva, type HsvaColor } from '@uiw/color-convert'
 import Saturation from '@uiw/react-color-saturation'
 import Hue from '@uiw/react-color-hue'
@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { memo, useEffect, useRef, useState } from 'react'
 import { FontField } from '@/components/settings/FontField'
 import { useLocalFontList } from '@/components/settings/use-local-font-list'
+import { Tip } from '@/components/Tip'
 import { platformServices } from '@/app/platform'
 import { fileFromBytes, fileToBackgroundValue } from '@/lib/image'
 
@@ -63,16 +64,17 @@ export const FieldRow = memo(function FieldRow({
         />
         <FieldHint hint={field.hint} />
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={cn('mt-1 size-6 shrink-0', value === undefined && 'invisible')}
-        onClick={unset}
-        aria-label={`重置${field.section ?? ""}${field.label}`}
-        title="恢复默认"
-      >
-        <RotateCcw className="size-3.5" />
-      </Button>
+      <Tip label="恢复默认" side="bottom">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('mt-0.5 size-7 shrink-0', value === undefined && 'invisible')}
+          onClick={unset}
+          aria-label={`重置${field.section ?? ""}${field.label}`}
+        >
+          <IconRotate2 className="size-4" />
+        </Button>
+      </Tip>
     </div>
   )
 })
@@ -148,14 +150,15 @@ function FieldControl({
     case 'select':
       return (
         <Select value={value ?? ''} onValueChange={onChange}>
-          <SelectTrigger
-            className={cn('w-full', !value && field.defaultLabel && 'text-muted-foreground italic')}
-            size="sm"
-            title={!value && field.defaultLabel ? '未设置,跟随基础样式表默认;选择即覆盖' : undefined}
-          >
-            {/* 未设置有默认值时回显默认值本身(灰斜体=非自设,来源语义在 title) */}
-            <SelectValue placeholder={field.defaultLabel ?? '未设置'} />
-          </SelectTrigger>
+          <Tip label={!value && field.defaultLabel ? '未设置,跟随基础样式表默认;选择即覆盖' : undefined}>
+            <SelectTrigger
+              className={cn('w-full', !value && field.defaultLabel && 'text-muted-foreground italic')}
+              size="sm"
+            >
+              {/* 未设置有默认值时回显默认值本身(灰斜体=非自设,来源语义在 tooltip) */}
+              <SelectValue placeholder={field.defaultLabel ?? '未设置'} />
+            </SelectTrigger>
+          </Tip>
           <SelectContent>
             <SelectGroup>
             {(field.options ?? []).map((o) => (
@@ -292,13 +295,14 @@ function MarkerTextInput({
     onChange(sym.trim() ? `"${sym} "` : '')
   }
   return (
-    <Input
-      value={display}
-      placeholder={placeholder ?? '未设置'}
-      title={value ? undefined : '未设置,按圆点形状渲染;输入符号即自绘'}
-      onChange={(e) => commit(e.target.value)}
-      className="h-8 text-xs"
-    />
+    <Tip label={value ? undefined : '未设置,按圆点形状渲染;输入符号即自绘'}>
+      <Input
+        value={display}
+        placeholder={placeholder ?? '未设置'}
+        onChange={(e) => commit(e.target.value)}
+        className="h-8 text-xs"
+      />
+    </Tip>
   )
 }
 
@@ -414,16 +418,17 @@ function FieldHint({ hint }: { hint?: string }) {
         />
         <FieldHint hint={field.hint} />
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={cn('mt-1 size-6 shrink-0', value === undefined && 'invisible')}
-        onClick={unset}
-        aria-label={`重置${field.section ?? ""}${field.label}`}
-        title="恢复默认"
-      >
-        <RotateCcw className="size-3.5" />
-      </Button>
+      <Tip label="恢复默认" side="bottom">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('mt-0.5 size-7 shrink-0', value === undefined && 'invisible')}
+          onClick={unset}
+          aria-label={`重置${field.section ?? ""}${field.label}`}
+        >
+          <IconRotate2 className="size-4" />
+        </Button>
+      </Tip>
     </div>
   )
 })
@@ -530,13 +535,14 @@ function ColorInput({
       {/* 回显只做占位符,不做可编辑文本:若把回落色填进受控 value,
           删空瞬间令牌被删→回显整串回来,永远删不干净(退格死循环)。
           占位符直接显示默认色值本身(灰斜体=未自设,跟随默认) */}
-      <Input
-        value={value ?? ''}
-        placeholder={hasFallback ? (fallbackColor as string) : '未设置'}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn('h-8 font-mono text-xs', !value && hasFallback && 'text-muted-foreground italic')}
-        title={hasFallback ? '未设置,跟随默认色;输入或取色即可覆盖' : undefined}
-      />
+      <Tip label={hasFallback ? '未设置,跟随默认色;输入或取色即可覆盖' : undefined}>
+        <Input
+          value={value ?? ''}
+          placeholder={hasFallback ? (fallbackColor as string) : '未设置'}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn('h-8 font-mono text-xs', !value && hasFallback && 'text-muted-foreground italic')}
+        />
+      </Tip>
     </div>
   )
 }
@@ -648,19 +654,19 @@ function ColorPanel({ color, onChange }: { color: string; onChange: (v: string) 
         onChange={(hsv) => change({ ...hsv, a: hsva.a })}
         className="gap-1.5"
         rectRender={({ color: c, checked, style, onClick }) => (
-          <button
-            type="button"
-            key={c}
-            title={c}
-            aria-label={`预设色 ${c}`}
-            aria-pressed={checked}
-            onClick={(e) => onClick(e as unknown as React.MouseEvent<HTMLDivElement>)}
-            className={cn(
-              'size-4 shrink-0 rounded-sm border border-black/10 transition-shadow hover:scale-110',
-              checked && 'ring-2 ring-ring ring-offset-1 ring-offset-popover',
-            )}
-            style={{ background: c, ...style, height: 16, width: 16, margin: 0 }}
-          />
+          <Tip key={c} label={c}>
+            <button
+              type="button"
+              aria-label={`预设色 ${c}`}
+              aria-pressed={checked}
+              onClick={(e) => onClick(e as unknown as React.MouseEvent<HTMLDivElement>)}
+              className={cn(
+                'size-4 shrink-0 rounded-sm border border-black/10 transition-shadow hover:scale-110',
+                checked && 'ring-2 ring-ring ring-offset-1 ring-offset-popover',
+              )}
+              style={{ background: c, ...style, height: 16, width: 16, margin: 0 }}
+            />
+          </Tip>
         )}
       />
     </div>
@@ -777,22 +783,23 @@ function SketchPopover({
 }) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-md border"
-          aria-label={swatchLabel}
-          title="点击打开取色器"
-        >
-          <span ref={swatchRef} className="absolute inset-0" style={swatchStyle} />
-          {showFallbackCorner && (
-            <span
-              aria-hidden
-              className="absolute right-0 bottom-0 size-2.5 border-t border-l border-border bg-background/85"
-            />
-          )}
-        </button>
-      </PopoverTrigger>
+      <Tip label="点击打开取色器">
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-md border"
+            aria-label={swatchLabel}
+          >
+            <span ref={swatchRef} className="absolute inset-0" style={swatchStyle} />
+            {showFallbackCorner && (
+              <span
+                aria-hidden
+                className="absolute right-0 bottom-0 size-2.5 border-t border-l border-border bg-background/85"
+              />
+            )}
+          </button>
+        </PopoverTrigger>
+      </Tip>
       {/* 基类自带 flex-col gap-4,这里用 gap-2.5 覆盖(space-y 会与 gap 叠加) */}
       <PopoverContent className="w-64 gap-2.5 p-3" align="start">
         <ColorPanel color={color} onChange={onColorChange} />
@@ -925,17 +932,18 @@ function BackgroundInput({
         onChange={(e) => onChange(e.target.value)}
         className="h-8 min-w-0 flex-1"
       />
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-8 shrink-0"
-        disabled={picking}
-        onClick={() => void pickImage()}
-        title="插入背景图片"
-        aria-label="插入背景图片"
-      >
-        <ImagePlus className="size-[18px]" />
-      </Button>
+      <Tip label="插入背景图片" side="bottom">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0"
+          disabled={picking}
+          onClick={() => void pickImage()}
+          aria-label="插入背景图片"
+        >
+          <IconPhotoPlus className="size-[18px]" />
+        </Button>
+      </Tip>
     </div>
   )
 }

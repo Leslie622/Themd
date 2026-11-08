@@ -1,27 +1,28 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import 'highlight.js/styles/github.css'
 import {
-  ArrowLeft,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Crosshair,
-  FileCode2,
-  FileInput,
-  FileJson,
-  FileSymlink,
-  FileText,
-  FolderOpen,
-  Focus,
-  Luggage,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react'
+  IconArrowLeft,
+  IconCheck,
+  IconChevronDown,
+  IconChevronRight,
+  IconCopy,
+  IconCrosshair,
+  IconFileCode2,
+  IconFileImport,
+  IconJson,
+  IconFileExport,
+  IconFileText,
+  IconFolderOpen,
+  IconFocusCentered,
+  IconLuggage,
+  IconDots,
+  IconPencil,
+  IconPlus,
+  IconRotate2,
+  IconTrash,
+} from '@tabler/icons-react'
 import { toast } from 'sonner'
+import { AnimatePresence, motion } from 'motion/react'
 import { platformServices } from '@/app/platform'
 
 import { Button } from '@/components/ui/button'
@@ -66,6 +67,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toggle } from '@/components/ui/toggle'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tip } from '@/components/Tip'
 import { WindowControls } from '@/components/WindowControls'
 import { CssEditorPanel } from '@/components/theme/CssEditorPanel'
 import { FieldRow } from '@/components/theme/FieldControls'
@@ -123,6 +125,26 @@ async function downloadFile(input: { defaultName: string; contents: string; filt
 
 /** 中栏预览模式:专注样例跟随左侧选中元素;全内容样例是标准完整文档;导入 = 工作区笔记副本(可编辑) */
 type PreviewMode = 'focused' | 'full' | 'imported'
+
+/**
+ * 预览模式 Tabs 的滑动高亮:shadcn(Radix 版)Tabs 的高亮底色长在 trigger 自身
+ * (data-active:bg-background),换页只能瞬切。这里把静态底色关掉,改由激活
+ * trigger 内渲染同一枚 layoutId 游标片,motion 在切换时自动把它从旧位置滑到
+ * 新位置。isolate + -z-10 让游标垫在图标/文字之下、又浮在 TabsList 的 muted
+ * 底之上;游标样式复刻原 data-active 观感(bg-background 阴影,dark 为描边半透)。
+ */
+const PREVIEW_TRIGGER_CLASS =
+  'isolate px-2.5 text-xs font-normal data-active:bg-transparent group-data-[variant=default]/tabs-list:data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-transparent'
+
+function PreviewModePill() {
+  return (
+    <motion.span
+      layoutId="theme-studio-preview-mode-pill"
+      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+      className="absolute inset-0 -z-10 rounded-md border border-transparent bg-background shadow-sm dark:border-input dark:bg-input/30"
+    />
+  )
+}
 
 export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const themes = useThemeStore((s) => s.themes)
@@ -402,7 +424,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
       >
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" className="font-normal" onClick={onBack}>
-            <ArrowLeft /> 返回
+            <IconArrowLeft /> 返回
           </Button>
           <span data-tauri-drag-region className="text-sm font-semibold">
             主题工场
@@ -418,8 +440,8 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
               onClick={() => jsonInputRef.current?.click()}
               aria-label="导入"
             >
-              {/* FileInput:箭头指入文件=收进来,与主页/侧栏导入语言一致 */}
-              <FileInput className="size-[18px]" />
+              {/* IconFileImport:箭头指入文件=收进来,与主页/侧栏导入语言一致 */}
+              <IconFileImport className="size-[18px]" />
             </Button>
           </IconTip>
           <input
@@ -439,26 +461,26 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
             <IconTip label="导出主题包 / 可移植样式包">
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="size-8" aria-label="导出">
-                  {/* FileSymlink:主页导出笔记同款(箭头穿出文件),与 FileInput 构成一对 */}
-                  <FileSymlink className="size-[18px]" />
+                  {/* IconFileExport:主页导出笔记同款(箭头穿出文件),与 IconFileImport 构成一对 */}
+                  <IconFileExport className="size-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
             </IconTip>
             {/* 基类把菜单宽度锁在触发按钮宽度,导出条目文本长,抬个下限防换行(同 AppShell) */}
             <DropdownMenuContent align="end" className="min-w-56">
               <DropdownMenuItem onClick={handleExportJson}>
-                <FileJson />
+                <IconJson />
                 主题包(.themd.json)
               </DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="gap-2">
-                  <Luggage />
+                  <IconLuggage />
                   可移植样式包(完整 CSS)
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   {PORTABLE_TARGETS.map((t) => (
                     <DropdownMenuItem key={t.id} onClick={() => handleExportPortable(t.id)}>
-                      <FileCode2 />
+                      <IconFileCode2 />
                       {t.label}
                       <span className="ml-auto text-xs text-muted-foreground">{t.hint}</span>
                     </DropdownMenuItem>
@@ -528,16 +550,19 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                   {/* shadcn Tabs 默认尺寸偏大,按工具栏场景收一档;基类 h-9 带
                       group-data-horizontal 变体前缀,必须用同前缀才能覆盖掉 */}
                   <TabsList className="group-data-horizontal/tabs:h-8">
-                    <TabsTrigger value="focused" className="px-2.5 text-xs font-normal">
-                      <Focus className="size-3.5" />
+                    <TabsTrigger value="focused" className={PREVIEW_TRIGGER_CLASS}>
+                      {previewMode === 'focused' && <PreviewModePill />}
+                      <IconFocusCentered className="size-4" />
                       专注样例
                     </TabsTrigger>
-                    <TabsTrigger value="full" className="px-2.5 text-xs font-normal">
-                      <FileText className="size-3.5" />
+                    <TabsTrigger value="full" className={PREVIEW_TRIGGER_CLASS}>
+                      {previewMode === 'full' && <PreviewModePill />}
+                      <IconFileText className="size-4" />
                       全内容样例
                     </TabsTrigger>
-                    <TabsTrigger value="imported" className="px-2.5 text-xs font-normal">
-                      <FileInput className="size-3.5" />
+                    <TabsTrigger value="imported" className={PREVIEW_TRIGGER_CLASS}>
+                      {previewMode === 'imported' && <PreviewModePill />}
+                      <IconFileImport className="size-4" />
                       导入笔记
                     </TabsTrigger>
                   </TabsList>
@@ -571,7 +596,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     className="size-8 px-0 aria-pressed:text-primary"
                     aria-label="选择元素"
                   >
-                    <Crosshair className="size-[18px]" />
+                    <IconCrosshair className="size-[18px]" />
                   </Toggle>
                 </IconTip>
                 <IconTip label={`应用「${editing.name}」到笔记预览`}>
@@ -585,7 +610,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     }}
                     aria-label="应用此主题"
                   >
-                    <Check className="size-[18px]" />
+                    <IconCheck className="size-[18px]" />
                   </Button>
                 </IconTip>
               </div>
@@ -636,8 +661,8 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
             {/* h-14 与中栏头部严格等高 */}
             <div className="flex h-14 shrink-0 items-center justify-between px-4">
               <h2 className="text-sm font-semibold">{element.label}</h2>
-              <Button variant="ghost" size="xs" onClick={resetElement} className="font-normal">
-                <RotateCcw /> 恢复默认
+              <Button variant="ghost" size="sm" onClick={resetElement} className="font-normal">
+                <IconRotate2 /> 恢复默认
               </Button>
             </div>
             <AutoHideScrollArea className="min-h-0 flex-1" viewportProps={{ className: 'px-4 py-2' }}>
@@ -702,7 +727,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     <span className="ml-1.5 text-xs font-normal text-primary">已自定义</span>
                   )}
                 </span>
-                {cssOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                {cssOpen ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
               </button>
               {cssOpen && (
                 <div className="px-4 pb-4">
@@ -735,7 +760,7 @@ function ImportEmptyState({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
-      <FileText className="size-8 text-muted-foreground/50" />
+      <IconFileText className="size-8 text-muted-foreground/50" />
       <div className="space-y-1">
         <p className="text-sm text-muted-foreground">
           {hasNotes ? '从工作区选一篇 Markdown 笔记作为预览文稿' : '当前没有笔记——先在主界面打开一个目录工作区'}
@@ -748,7 +773,7 @@ function ImportEmptyState({
       </div>
       {hasNotes && (
         <Button variant="outline" size="sm" onClick={onOpenPicker}>
-          <FolderOpen /> 选择笔记
+          <IconFolderOpen /> 选择笔记
         </Button>
       )}
     </div>
@@ -919,8 +944,8 @@ function ThemeLibrary(props: {
         <h2 className="text-sm font-semibold">主题库</h2>
         <IconTip label="新建主题">
           <Button variant="ghost" size="icon" className="size-8" onClick={props.onCreate} aria-label="新建主题">
-            {/* Plus:应用内「新建」的统一语言(主页新建笔记同款) */}
-            <Plus className="size-[18px]" />
+            {/* IconPlus:应用内「新建」的统一语言(主页新建笔记同款) */}
+            <IconPlus className="size-[18px]" />
           </Button>
         </IconTip>
       </div>
@@ -929,6 +954,8 @@ function ThemeLibrary(props: {
           -mt-3 让列表容器贴到头部带下沿(加号按钮底边),首行文字间隙 ~14px */}
       <AutoHideScrollArea className="-mt-3 min-h-0 flex-1">
         <div className="space-y-0.5 px-2 pb-2 pt-0.5">
+        {/* 新建/复制/删除主题:进出场高度+淡入过渡,兄弟行由文档流自然推动 */}
+        <AnimatePresence initial={false}>
         {themes.map((t) => {
           const menuProps = {
             canRename: !t.builtin,
@@ -948,15 +975,26 @@ function ThemeLibrary(props: {
                   ContextMenuTrigger 只拦右键,行内左键(编辑/使用/⋯)不受影响;
                   行不再有 hover/选中底色,正在编辑只靠「使用中」tag 表达 */}
               <ContextMenuTrigger asChild>
-                <div className="group flex items-center gap-1 px-2 py-1.5 text-sm">
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 truncate text-left"
-                    onClick={() => props.onSelectEdit(t.id)}
-                    title="编辑此主题"
-                  >
-                    {t.name}
-                  </button>
+                {/* 高度动画外壳不得带 padding:py-1.5 的 12px 会垫住 height:0(border-box
+                    下 padding 压不掉)——出场收合到 12px 就到底,卸载瞬间消失即「最后一下
+                    卡顿」,入场先弹 12px 死区。外壳只管裁切,视觉内边距在内层行上 */}
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="overflow-hidden"
+                >
+                  <div className="group flex items-center gap-1 px-2 py-1.5 text-sm">
+                  <Tip label="编辑此主题">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 truncate text-left"
+                      onClick={() => props.onSelectEdit(t.id)}
+                    >
+                      {t.name}
+                    </button>
+                  </Tip>
                   {t.builtin && <TagBadge>内置</TagBadge>}
                   {activeId === t.id && <TagBadge tone="primary">使用中</TagBadge>}
                   {activeId !== t.id && (
@@ -977,14 +1015,15 @@ function ThemeLibrary(props: {
                         className="size-6 shrink-0 opacity-0 duration-400 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                         aria-label={`主题 ${t.name} 操作`}
                       >
-                        <MoreHorizontal className="size-4" />
+                        <IconDots className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-40">
                       <ThemeMenuItems parts={{ Item: DropdownMenuItem, Separator: DropdownMenuSeparator }} {...menuProps} />
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
+                  </div>
+                </motion.div>
               </ContextMenuTrigger>
               <ContextMenuContent className="min-w-40">
                 <ThemeMenuItems parts={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }} {...menuProps} />
@@ -992,6 +1031,7 @@ function ThemeLibrary(props: {
             </ContextMenu>
           )
         })}
+        </AnimatePresence>
         </div>
       </AutoHideScrollArea>
       {/* 重命名弹窗:侧栏改笔记名称同款。不用内联编辑——菜单关闭后 WebView2
@@ -1027,21 +1067,16 @@ function ThemeLibrary(props: {
   )
 }
 
-/** 主题行小标签(内置/使用中):shadcn Badge 收窄到列表行密度;
+/** 主题行小标签(内置/使用中):比旁边 xs「使用」按钮(h-6/px-2/text-xs)小一号——h-5.5/px-1.5/text-[11px],圆角与字重同按钮;
     primary = 界面强调色 --chrome-accent 淡底着色(与分区标题竖条/分割线高光同一色彩来源),默认灰色 secondary(内置) */
 function TagBadge({ children, tone }: { children: React.ReactNode; tone?: 'primary' }) {
   return (
     <Badge
       variant={tone === 'primary' ? 'ghost' : 'secondary'}
-      className="gap-0 rounded-sm px-1 text-[10px] font-normal leading-4"
+      className="h-5.5 gap-0 rounded-[min(var(--radius-md),8px)] px-1.5 text-[11px] font-normal leading-none"
       style={
         tone === 'primary'
           ? {
-              height: '1.5rem',
-              paddingInline: '0.375rem',
-              fontSize: '0.75rem',
-              lineHeight: '1.5rem',
-              fontWeight: 500,
               color: 'var(--chrome-accent)',
               background: 'color-mix(in oklch, var(--chrome-accent) 12%, transparent)',
               borderColor: 'color-mix(in oklch, var(--chrome-accent) 30%, transparent)',
@@ -1081,22 +1116,22 @@ function ThemeMenuItems({
     <>
       {!active && (
         <Item onClick={onUse}>
-          <Check /> 使用此主题
+          <IconCheck /> 使用此主题
         </Item>
       )}
       {canRename && (
         <Item onClick={onRename}>
-          <Pencil /> 重命名
+          <IconPencil /> 重命名
         </Item>
       )}
       <Item onClick={onDuplicate}>
-        <Copy /> 创建副本
+        <IconCopy /> 创建副本
       </Item>
       {canDelete && (
         <>
           <Separator />
           <Item variant="destructive" onClick={onDelete}>
-            <Trash2 /> 删除
+            <IconTrash /> 删除
           </Item>
         </>
       )}
@@ -1128,7 +1163,7 @@ function ElementNav({
               className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
               onClick={() => onToggleCollapse(g.id)}
             >
-              {isCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
+              {isCollapsed ? <IconChevronRight className="size-3" /> : <IconChevronDown className="size-3" />}
               {g.label}
             </button>
             {!isCollapsed && (

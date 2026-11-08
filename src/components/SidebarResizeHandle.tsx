@@ -1,10 +1,12 @@
 import { useRef } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useDividerGlow } from '@/components/useDividerGlow'
 
 interface SidebarResizeHandleProps {
-  /** 侧栏容器节点:拖拽期间直接改它的 style.width,完全绕开 React 渲染 */
-  targetRef: RefObject<HTMLDivElement | null>
+  /** 当前侧栏宽度:拖拽起点与键盘微调的基准(动画与拖拽共用的 motion 值) */
+  readWidth: () => number
+  /** 拖拽/键盘调整宽度:直写 motion 值,绕开 React 渲染 */
+  writeWidth: (px: number) => void
   min: number
   max: number
   /** 手势结束时提交一次(此时才进 React 状态并持久化) */
@@ -39,7 +41,7 @@ function horizontalResizeCursor(): string {
  * 平台对应的全局拖拽光标(库经 adoptedStyleSheets 注入 *:hover 规则实现),
  * 拖拽中变 "active",均直写 DOM 不触发 React 渲染。
  */
-export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: SidebarResizeHandleProps) {
+export function SidebarResizeHandle({ readWidth, writeWidth, min, max, onCommit, onReset }: SidebarResizeHandleProps) {
   const frame = useRef<number | null>(null)
   const elementRef = useDividerGlow()
 
@@ -62,8 +64,8 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
     setState('active')
     setGlobalCursor(resizeCursor)
     const startX = event.clientX
-    // 起点以 DOM 实际宽度为准,不依赖任何 React 状态
-    const startWidth = targetRef.current?.getBoundingClientRect().width ?? min
+    // 起点以 motion 值实际宽度为准,不依赖任何 React 状态
+    const startWidth = readWidth()
     const clamp = (px: number) => Math.min(max, Math.max(min, px))
     let pendingWidth = startWidth
 
@@ -72,7 +74,7 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
       if (frame.current != null) return
       frame.current = requestAnimationFrame(() => {
         frame.current = null
-        if (targetRef.current) targetRef.current.style.width = `${pendingWidth}px`
+        writeWidth(pendingWidth)
       })
     }
     const finish = (upEvent: PointerEvent) => {
@@ -82,7 +84,7 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
       }
       const final = clamp(startWidth + upEvent.clientX - startX)
       // 松手同步直写,防止最后一次 rAF 被取消后宽度回跳一格
-      if (targetRef.current) targetRef.current.style.width = `${final}px`
+      writeWidth(final)
       cleanup()
       // 指针仍在线上则回到 hover,否则 inactive(与库状态机一致)
       const rect = elementRef.current?.getBoundingClientRect()
@@ -119,9 +121,9 @@ export function SidebarResizeHandle({ targetRef, min, max, onCommit, onReset }: 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
-    const current = targetRef.current?.getBoundingClientRect().width ?? min
+    const current = readWidth()
     const next = Math.min(max, Math.max(min, current + (event.key === 'ArrowRight' ? 16 : -16)))
-    if (targetRef.current) targetRef.current.style.width = `${next}px`
+    writeWidth(next)
     onCommit(next)
   }
 

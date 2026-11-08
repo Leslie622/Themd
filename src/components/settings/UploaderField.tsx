@@ -13,7 +13,7 @@ import {
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { platformServices } from '@/app/platform'
 import { useEditorPrefs } from '@/store-editor'
-import { ChevronDown, Eye, EyeOff, XIcon } from 'lucide-react'
+import { IconChevronDown, IconEye, IconEyeOff, IconX } from '@tabler/icons-react'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
 
@@ -53,7 +53,7 @@ function UploaderConfigDialog({
           <DialogTitle className="text-sm">图床配置</DialogTitle>
           <DialogClose asChild>
             <Button variant="ghost" size="icon-sm" aria-label="关闭">
-              <XIcon />
+              <IconX />
             </Button>
           </DialogClose>
           <DialogDescription className="sr-only">
@@ -152,7 +152,7 @@ function UploaderInput({
             aria-label={show ? `隐藏${label}` : `显示${label}`}
             onClick={() => setShow((s) => !s)}
           >
-            {show ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            {show ? <IconEyeOff className="size-3.5" /> : <IconEye className="size-3.5" />}
           </Button>
         )}
       </div>
@@ -187,7 +187,7 @@ export function UploaderField() {
         onClick={() => setOpen(true)}
       >
         <span className="truncate">{display}</span>
-        <ChevronDown className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
+        <IconChevronDown className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
       </Button>
       <UploaderConfigDialog open={open} onOpenChange={setOpen} />
     </>

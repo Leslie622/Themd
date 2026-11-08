@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Copy, Minus, Square, X } from 'lucide-react'
+import { IconCopy, IconMinus, IconSquare, IconX } from '@tabler/icons-react'
 
 import { platformServices } from '@/app/platform'
 
@@ -39,7 +39,7 @@ export function WindowControls() {
       {/* 与功能区拉开一杠,标示这是系统区不是应用按钮 */}
       <div className="mr-1.5 h-5 w-px bg-border" />
       <button type="button" className={BTN} aria-label="最小化" onClick={() => void platformServices.window.minimize()}>
-        <Minus className="size-4" />
+        <IconMinus className="size-4" />
       </button>
       <button
         type="button"
@@ -47,10 +47,10 @@ export function WindowControls() {
         aria-label={maximized ? '向下还原' : '最大化'}
         onClick={() => void platformServices.window.toggleMaximize()}
       >
-        {maximized ? <Copy className="size-4" /> : <Square className="size-4" />}
+        {maximized ? <IconCopy className="size-4" /> : <IconSquare className="size-4" />}
       </button>
       <button type="button" className={BTN_CLOSE} aria-label="关闭" onClick={() => void platformServices.window.close()}>
-        <X className="size-4" />
+        <IconX className="size-4" />
       </button>
     </div>
   )

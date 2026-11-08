@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, FileText } from 'lucide-react'
+import { IconCheck, IconSelector, IconFileText } from '@tabler/icons-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -37,14 +37,14 @@ export function NotePicker({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 max-w-44 gap-1 px-2 text-xs font-normal text-muted-foreground"
+          className="max-w-44 gap-1 px-2 text-xs font-normal text-muted-foreground"
           aria-label="选择预览笔记"
         >
-          <FileText className="size-3.5 shrink-0" />
+          <IconFileText className="size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">
             {selected ? selected.title : '选择笔记'}
           </span>
-          <ChevronsUpDown className="size-3 shrink-0 opacity-60" />
+          <IconSelector className="size-3.5 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
@@ -62,9 +62,9 @@ export function NotePicker({
                     onOpenChange(false)
                   }}
                 >
-                  <FileText className="size-4 text-muted-foreground" />
+                  <IconFileText className="size-4 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate">{n.title}</span>
-                  {n.id === selectedId && <Check className="size-3.5 text-primary" />}
+                  {n.id === selectedId && <IconCheck className="size-3.5 text-primary" />}
                 </CommandItem>
               ))}
             </CommandGroup>

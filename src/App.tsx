@@ -149,7 +149,10 @@ export default function App() {
   }, [active?.content])
 
   if (studioOpen) {
-    return <div className="flex h-full w-full"><ThemeStudio onBack={() => setStudioOpen(false)} /></div>
+    // 主页↔主题工厂的切换动画:入场淡入 + 0.98→1 轻缩放(tw-animate-css,
+    // 与 shadcn 弹层同语言);主页侧的对称入场在 AppShell 根节点。
+    // 不做双向交叉——交叉需两棵重树同屏或多等一程,均不值当
+    return <div className="flex h-full w-full animate-in fade-in-0 zoom-in-98 duration-200 ease-out"><ThemeStudio onBack={() => setStudioOpen(false)} /></div>
   }
 
   if (!hydrated) return null

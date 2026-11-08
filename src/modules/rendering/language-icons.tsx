@@ -1,4 +1,5 @@
-import { FileCode2 } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { IconFileCode2 } from '@tabler/icons-react'
 import {
   SiTypescript, SiJavascript, SiPython, SiRust, SiGo, SiGnubash, SiLua,
   SiJson, SiYaml, SiCss, SiSass, SiMarkdown, SiPhp, SiRuby, SiSwift,
@@ -10,11 +11,11 @@ import {
  * 代码块语言图标(语言选择浮层用):simple-icons 官方图形 + 官方品牌色
  * (色值取自包内配套的 Si*Hex 导出=official defaultColor,不做任何调整)。
  * simple-icons 的 Si*Hex 是色值字符串非组件;彩色 = 单色组件传 color。
- * 没有官方品牌图的语言用语义最近的品牌兜底(SQL→MySQL)/lucide 通用
- * FileCode2 兜底(灰色)。fence 语言值(小写)→ { Icon, color }。
+ * 没有官方品牌图的语言用语义最近的品牌兜底(SQL→MySQL)/tabler 通用
+ * IconFileCode2 兜底(灰色)。fence 语言值(小写)→ { Icon, color }。
  */
 interface LangIcon {
-  Icon: (props: { size?: number; color?: string }) => JSX.Element
+  Icon: (props: { size?: number; color?: string }) => ReactNode
   color: string
 }
 
@@ -50,7 +51,7 @@ export const LANGUAGE_ICONS: Record<string, LangIcon> = {
 export function languageIcon(lang: string): LangIcon {
   const lower = lang.toLowerCase()
   const aliased = LANGUAGE_ALIASES[lower]
-  return LANGUAGE_ICONS[aliased ?? lower] ?? { Icon: FileCode2, color: 'currentColor' }
+  return LANGUAGE_ICONS[aliased ?? lower] ?? { Icon: IconFileCode2, color: 'currentColor' }
 }
 
 /** 与 code-highlight ALIAS_TO_CANON 同步的图标侧缩写表(只列有品牌图的) */

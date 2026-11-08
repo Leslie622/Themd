@@ -1,19 +1,20 @@
 import { useCallback, useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
-  ChevronRight,
-  Copy,
-  FileText,
-  Folder,
-  FolderInput,
-  FolderOpen,
-  FolderPlus,
-  MoreHorizontal,
-  PanelLeftClose,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react'
+  IconChevronRight,
+  IconCopy,
+  IconFileText,
+  IconFolder,
+  IconFolderDown,
+  IconFolderOpen,
+  IconFolderPlus,
+  IconDots,
+  IconLayoutSidebarLeftCollapse,
+  IconPencil,
+  IconPlus,
+  IconSearch,
+  IconTrash,
+} from '@tabler/icons-react'
 
 import { ThemdLogo } from '@/components/ThemdLogo'
 import { Button } from '@/components/ui/button'
@@ -70,6 +71,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { Tip } from '@/components/Tip'
 import { platformServices } from '@/app/platform'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -332,11 +334,13 @@ export function Sidebar() {
             <ContextMenuTrigger asChild>
               <div className="group/row list-row-wipe flex items-center rounded-lg">
                 <CollapsibleTrigger className="group/chev flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-sm font-medium">
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
+                  <IconChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/chev:rotate-90" />
                   <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
-                    <Folder className="size-3" />
+                    <IconFolder className="size-3" />
                   </span>
-                  <span className="truncate" title={f.path}>{f.name}</span>
+                  <Tip label={f.path}>
+                    <span className="truncate">{f.name}</span>
+                  </Tip>
                 </CollapsibleTrigger>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -346,7 +350,7 @@ export function Sidebar() {
                       className="size-6 shrink-0 opacity-0 duration-400 focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:opacity-100"
                       aria-label={`文件夹 ${f.name} 操作`}
                     >
-                      <MoreHorizontal className="size-4" />
+                      <IconDots className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-40">
@@ -370,7 +374,12 @@ export function Sidebar() {
             {/* 子文件夹与笔记缩进并加参考线,每层容器逐级累加缩进 */}
             <div className="ml-4 border-l border-sidebar-border/70 pl-1.5">
               {childRows}
-              {items.map(renderNoteItem)}
+              {/* 新增/删除/移动笔记:进出场高度+淡入过渡,兄弟行由文档流自然推动。
+                  key=kw:搜索每次击键都增删条目,重挂载让过滤增减直接落位,
+                  避免清空搜索时整列表重播入场 */}
+              <AnimatePresence key={kw} initial={false}>
+                {items.map(renderNoteItem)}
+              </AnimatePresence>
               {items.length === 0 && childRows.length === 0 && (
                 <p className="px-2 py-1.5 text-xs text-muted-foreground">空文件夹</p>
               )}
@@ -400,7 +409,7 @@ export function Sidebar() {
                   onClick={() => appEvents.emit('collapseSidebar')}
                   aria-label="收起侧栏"
                 >
-                  <PanelLeftClose className="size-[18px]" />
+                  <IconLayoutSidebarLeftCollapse className="size-[18px]" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>收起侧栏</TooltipContent>
@@ -408,7 +417,7 @@ export function Sidebar() {
           </div>
         </div>
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <IconSearch className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
@@ -423,10 +432,10 @@ export function Sidebar() {
         {/* 无工作区:引导打开目录(folder-first 的起点) */}
         {!workspaceRoot && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
-            <FolderOpen className="size-8 text-muted-foreground/50" />
+            <IconFolderOpen className="size-8 text-muted-foreground/50" />
             <p className="text-xs text-muted-foreground">打开一个目录作为工作区</p>
             <Button onClick={pickAndOpenDir}>
-              <FolderOpen /> 打开目录
+              <IconFolderOpen /> 打开目录
             </Button>
           </div>
         )}
@@ -434,11 +443,13 @@ export function Sidebar() {
         {workspaceRoot && (
           <div className="flex items-center gap-1.5 px-2 py-1.5 text-sm font-medium">
             <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
-              <Folder className="size-3" />
+              <IconFolder className="size-3" />
             </span>
-            <span className="truncate" title={workspaceRoot}>
-              {workspaceRoot.split(/[\\/]/).filter(Boolean).pop()}
-            </span>
+            <Tip label={workspaceRoot}>
+              <span className="truncate">
+                {workspaceRoot.split(/[\\/]/).filter(Boolean).pop()}
+              </span>
+            </Tip>
           </div>
         )}
 
@@ -449,7 +460,7 @@ export function Sidebar() {
         )}
         {workspaceRoot && notes.length === 0 && (
           <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
-            <FileText className="size-8 text-muted-foreground/50" />
+            <IconFileText className="size-8 text-muted-foreground/50" />
             <p className="text-xs text-muted-foreground">
               工作区还没有笔记，点「新建」开始
             </p>
@@ -460,10 +471,14 @@ export function Sidebar() {
         {/* 根目录笔记:和顶级文件夹同一层级,参考线对齐文件夹内容——层级全部从根标题起算 */}
         {workspaceRoot ? (
           <div className="ml-4 border-l border-sidebar-border/70 pl-1.5" style={{ marginLeft: 16 }}>
-            {(byFolder.get('') ?? []).map(renderNoteItem)}
+            <AnimatePresence key={kw} initial={false}>
+              {(byFolder.get('') ?? []).map(renderNoteItem)}
+            </AnimatePresence>
           </div>
         ) : (
-          (byFolder.get('') ?? []).map(renderNoteItem)
+          <AnimatePresence key={kw} initial={false}>
+            {(byFolder.get('') ?? []).map(renderNoteItem)}
+          </AnimatePresence>
         )}
 
         {notes.length > 0 && filtered.length === 0 && (
@@ -480,16 +495,16 @@ export function Sidebar() {
             </ContextMenuTrigger>
             <ContextMenuContent className="min-w-40">
               <ContextMenuItem onClick={handleCreateNote}>
-                <Plus /> 新建文件
+                <IconPlus /> 新建文件
               </ContextMenuItem>
               <ContextMenuItem onClick={() => void handleCreateFolder()}>
-                <FolderPlus /> 新建文件夹
+                <IconFolderPlus /> 新建文件夹
               </ContextMenuItem>
               <ContextMenuItem onClick={copyRootPath}>
-                <Copy /> 复制文件路径
+                <IconCopy /> 复制文件路径
               </ContextMenuItem>
               <ContextMenuItem onClick={revealRoot}>
-                <FolderOpen /> 打开文件位置
+                <IconFolderOpen /> 打开文件位置
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -509,7 +524,7 @@ export function Sidebar() {
               onClick={handleCreateNote}
               aria-label="新建笔记"
             >
-              <Plus className="size-[18px]" />
+              <IconPlus className="size-[18px]" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>在工作区根新建笔记</TooltipContent>
@@ -535,7 +550,9 @@ export function Sidebar() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除文件夹「{deletingFolder?.name}」?</AlertDialogTitle>
+            <AlertDialogTitle className="[overflow-wrap:anywhere]">
+              删除文件夹「{deletingFolder?.name}」?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               将把该目录及其全部内容移入<b>系统回收站</b>(可恢复)。其中 {deletingFolder?.noteCount ?? 0} 篇笔记会同时从应用移除。
             </AlertDialogDescription>
@@ -566,7 +583,9 @@ export function Sidebar() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除笔记「{deletingNote?.title}」?</AlertDialogTitle>
+            <AlertDialogTitle className="[overflow-wrap:anywhere]">
+              删除笔记「{deletingNote?.title}」?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               将把对应的磁盘文件移入<b>系统回收站</b>(可恢复)。
             </AlertDialogDescription>
@@ -649,33 +668,36 @@ function WorkspacePill({
   const name = workspaceRoot?.split(/[\\/]/).filter(Boolean).pop() ?? null
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full justify-start gap-2 bg-muted/40 text-xs text-muted-foreground"
-          title={workspaceRoot ?? '未打开工作区'}
-        >
-          <FolderOpen className="size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{name ?? '未打开工作区'}</span>
-          <ChevronRight className="size-3 shrink-0 rotate-90 opacity-60" />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tip label={workspaceRoot ?? '未打开工作区'}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2 bg-muted/40 text-xs text-muted-foreground"
+          >
+            <IconFolderOpen className="size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{name ?? '未打开工作区'}</span>
+            <IconChevronRight className="size-3 shrink-0 rotate-90 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+      </Tip>
       <DropdownMenuContent align="start" className="min-w-52">
         <DropdownMenuItem onClick={onPickDir}>
-          <FolderOpen /> 打开目录…
+          <IconFolderOpen /> 打开目录…
         </DropdownMenuItem>
         {recents.length > 0 && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>最近工作区</DropdownMenuLabel>
             {recents.map((r) => (
-              <DropdownMenuItem key={r} title={r} onClick={() => onOpenDir(r)}>
-                <Folder className="text-muted-foreground" />
-                <span className="min-w-0 truncate">
-                  {r.split(/[\\/]/).filter(Boolean).pop()}
-                </span>
-              </DropdownMenuItem>
+              <Tip key={r} label={r}>
+                <DropdownMenuItem onClick={() => onOpenDir(r)}>
+                  <IconFolder className="text-muted-foreground" />
+                  <span className="min-w-0 truncate">
+                    {r.split(/[\\/]/).filter(Boolean).pop()}
+                  </span>
+                </DropdownMenuItem>
+              </Tip>
             ))}
           </>
         )}
@@ -683,7 +705,7 @@ function WorkspacePill({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={onClear}>
-              <Trash2 /> 清除工作区
+              <IconTrash /> 清除工作区
             </DropdownMenuItem>
           </>
         )}
@@ -745,19 +767,19 @@ function FolderMenuItems({
   return (
     <>
       <Item onClick={onRename}>
-        <Pencil /> 重命名文件夹
+        <IconPencil /> 重命名文件夹
       </Item>
       <Item onClick={onCreateNote}>
-        <Plus /> 在此文件夹新建笔记
+        <IconPlus /> 在此文件夹新建笔记
       </Item>
       {onReveal && (
         <Item onClick={onReveal}>
-          <FolderOpen /> 打开文件位置
+          <IconFolderOpen /> 打开文件位置
         </Item>
       )}
       <Separator />
       <Item variant="destructive" onClick={onDelete}>
-        <Trash2 /> 删除文件夹(移入回收站)
+        <IconTrash /> 删除文件夹(移入回收站)
       </Item>
     </>
   )
@@ -794,17 +816,17 @@ function NoteMenuItems({
   return (
     <>
       <Item onClick={onRename}>
-        <Pencil /> 重命名
+        <IconPencil /> 重命名
       </Item>
       {onReveal && (
         <Item onClick={onReveal}>
-          <FolderOpen /> 打开文件位置
+          <IconFolderOpen /> 打开文件位置
         </Item>
       )}
       <Sub>
         {/* ContextMenuSubTrigger 基类缺 gap-2(与 Dropdown 版不一致),此处覆盖补齐 */}
         <SubTrigger className="gap-2">
-          <FolderInput /> 移动到文件夹
+          <IconFolderDown /> 移动到文件夹
         </SubTrigger>
         {/* 菜单默认宽度跟随触发器,被 min-w-32 兜底;文件夹名长时避免换行 */}
         <SubContent className="min-w-32">
@@ -822,7 +844,7 @@ function NoteMenuItems({
       </Sub>
       <Separator />
       <Item variant="destructive" onClick={onDelete}>
-        <Trash2 /> 删除
+        <IconTrash /> 删除
       </Item>
     </>
   )
@@ -856,13 +878,13 @@ function NoteItem({
   const titleHit = keyword && note.title.toLowerCase().includes(keyword.toLowerCase())
   const snippet = keyword && !titleHit ? matchSnippet(note.content, keyword) : null
 
-  // 图标统一 FileText——笔记本质是工作区内的 md 文件,悬停显示源文件名
+  // 图标统一 IconFileText——笔记本质是工作区内的 md 文件,悬停显示源文件名
   const boundName = note.sourcePath.split(/[\\/]/).pop()
   const icon = (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-sky-500/15 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400">
-          <FileText className="size-3" />
+          <IconFileText className="size-3" />
         </span>
       </TooltipTrigger>
       <TooltipContent side="right">已绑定 {boundName}</TooltipContent>
@@ -886,9 +908,13 @@ function NoteItem({
     <ContextMenu>
       {/* 右键任意位置唤出操作菜单;菜单回调逐条目绑定,操作对象与选中状态无关 */}
       <ContextMenuTrigger asChild>
-        <div
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
           className={cn(
-            'group list-row-wipe flex w-full items-center gap-2 rounded-lg pr-1',
+            'group list-row-wipe flex w-full items-center gap-2 overflow-hidden rounded-lg pr-1',
             active ? 'bg-sidebar-accent' : '',
           )}
         >
@@ -908,7 +934,7 @@ function NoteItem({
                 className="size-6 shrink-0 opacity-0 duration-400 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                 aria-label={`笔记 ${note.title} 操作`}
               >
-                <MoreHorizontal className="size-4" />
+                <IconDots className="size-4" />
               </Button>
             </DropdownMenuTrigger>
             {/* 菜单默认宽度跟随 ⋯ 触发器,被 min-w-32 兜底;「移动到文件夹」差一点就换行,加宽到 min-w-44 */}
@@ -930,7 +956,7 @@ function NoteItem({
               />
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
+        </motion.div>
       </ContextMenuTrigger>
       <ContextMenuContent className="min-w-44">
         <NoteMenuItems
