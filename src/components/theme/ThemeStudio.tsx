@@ -1,6 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import 'highlight.js/styles/github.css'
 import {
+  IconAlertTriangle,
   IconArrowLeft,
   IconCheck,
   IconChevronDown,
@@ -15,6 +16,7 @@ import {
   IconFolderOpen,
   IconFocusCentered,
   IconLuggage,
+  IconLoader2,
   IconDots,
   IconPencil,
   IconPlus,
@@ -91,9 +93,11 @@ import { SAMPLE_DOC } from '@/lib/theme/sample'
 import { setActiveNoteDir } from '@/lib/image-src'
 import type { ThemeFile } from '@/lib/theme/schema'
 import type { ThemeTokens, TokenKey } from '@/lib/theme/tokens'
+import type { ThemeSaveStatus } from '@/modules/themes/application/theme-controller'
 import {
-  BUILTIN_THEMES,
   listAllThemes,
+  resolveActiveTheme,
+  themeController,
   useThemeStore,
 } from '@/store-themes'
 import { notebookController, useNotebook } from '@/store'
@@ -104,7 +108,8 @@ import { FieldLegend, FieldSet } from '@/components/ui/field'
 /**
  * 主题工场：左=主题库+元素导航，中=预览（专注样例/全内容样例/导入笔记），
  * 右=属性面板。UI 完全由 lib/theme/elements.ts 的元数据生成。
- * 所有主题就地修改；内置主题改动时 store 自动先复制为副本。
+ * 所有主题就地修改；内置主题改动时 store 自动先复制为副本并接管「使用中」。
+ * 编辑对象恒等于使用中的主题；列表行是纯展示（名称无点击），应用只走「使用」按钮/菜单。
  */
 
 /** 顶栏右侧图标按钮的悬停提示（与主页 AppShell 同款结构） */
@@ -114,6 +119,67 @@ function IconTip({ label, children }: { label: string; children: React.ReactElem
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
+  )
+}
+
+/** 主题保存生命周期快照(仅内存状态,经 useSyncExternalStore 订阅控制器) */
+function useThemeSaveStatus(): ThemeSaveStatus {
+  return useSyncExternalStore(
+    themeController.subscribeStatus,
+    themeController.getSaveStatus,
+    themeController.getSaveStatus,
+  )
+}
+
+/**
+ * 顶栏保存状态指示器:自动保存的「看见」。状态来自 ThemeController 真实落库
+ * 生命周期(防抖→写库→确认),不是装出来的假动画——改了令牌才转「保存中…」,
+ * IndexedDB 确认后才亮「已保存」;失败点行内重试并弹 toast。idle 显示静态
+ * 「自动保存」,先告知机制本身(用户不必猜有没有保存这回事)。
+ */
+function ThemeSaveStatus() {
+  const status = useThemeSaveStatus()
+  useEffect(() => {
+    if (status === 'error') {
+      toast.error('主题保存失败,更改尚未落库', {
+        action: { label: '重试', onClick: () => themeController.retrySave() },
+      })
+    }
+  }, [status])
+  return (
+    <Tip label="主题更改自动保存到本机,重启应用后依然生效">
+      <span
+        aria-live="polite"
+        className={cn(
+          'ml-1 flex items-center gap-1 text-xs',
+          status === 'error' ? 'text-destructive' : 'text-muted-foreground',
+        )}
+      >
+        {status === 'idle' && '自动保存'}
+        {(status === 'pending' || status === 'saving') && (
+          <>
+            <IconLoader2 className="size-3.5 animate-spin" />
+            保存中…
+          </>
+        )}
+        {status === 'saved' && (
+          <>
+            <IconCheck className="size-3.5 animate-in fade-in duration-300" />
+            已保存
+          </>
+        )}
+        {status === 'error' && (
+          <button
+            type="button"
+            className="flex items-center gap-1 hover:underline"
+            onClick={() => themeController.retrySave()}
+          >
+            <IconAlertTriangle className="size-3.5" />
+            保存失败 · 重试
+          </button>
+        )}
+      </span>
+    </Tip>
   )
 }
 
@@ -159,11 +225,9 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const importTheme = useThemeStore((s) => s.importTheme)
   const upsertTheme = useThemeStore((s) => s.upsertTheme)
 
-  // 工场里正在编辑的主题（不等于激活预览的主题；默认跟随激活，可单独选）
-  const [editId, setEditId] = useState<string | null>(null)
-  const editingId = editId ?? activeId
-  const editing =
-    listAllThemes({ themes, activeId }).find((t) => t.id === editingId) ?? BUILTIN_THEMES[0]
+  // 编辑对象恒等于使用中的主题：中栏预览/属性面板/「使用中」徽章三处永远指向
+  // 同一个主题（所见=所用=所编），不存在「点了列表行预览就换、徽章还钉在旧主题」的割裂
+  const editing = resolveActiveTheme({ themes, activeId })
 
   const [selectedElement, setSelectedElement] = useState('root')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -293,8 +357,9 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     if (value === undefined) delete next[key]
     else next[key] = value
     const realId = updateTokens(editing.id, next)
-    // 内置主题被复制后，跟随到副本继续编辑
-    if (realId !== editing.id) setEditId(realId)
+    // 内置主题不可变,改动落到自动副本;副本立即接管「使用中」,编辑对象
+    // (=使用中主题)无缝跟随到副本,预览/徽章不出现分叉
+    if (realId !== editing.id) setActive(realId)
   }
 
   // 稳定回调:memo 化的 FieldRow/ColorFieldRow 依赖引用相等跳过重渲染,
@@ -326,12 +391,14 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const resetElement = () => {
     const next: ThemeTokens = { ...editing.tokens }
     for (const k of elementTokenKeys(element.id)) delete next[k]
-    updateTokens(editing.id, next)
+    const realId = updateTokens(editing.id, next)
+    // 同 setToken:内置主题的恢复默认也落到自动副本并接管「使用中」
+    if (realId !== editing.id) setActive(realId)
   }
 
   const applyExtraCss = (css: string) => {
     const realId = setExtraCss(editing.id, css)
-    if (realId !== editing.id) setEditId(realId)
+    if (realId !== editing.id) setActive(realId)
   }
 
   const handleExportJson = () => {
@@ -372,10 +439,9 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
         tokens: target.tokens,
         extraCss: target.extraCss,
       })
-      // 导入即激活:带进来的是成品样式,意图就是使用;只挂列表会造成
-      // 「预览已是它、徽章还钉在旧主题」的割裂(导入者视角=已在使用)
+      // 导入即激活:带进来的是成品样式,意图就是使用;编辑对象恒等于使用中,
+      // 激活后预览/徽章自然指向它
       setActive(id)
-      setEditId(id)
       toast.success(
         `导入完成:映射 ${report.mapped} 条声明,附加 CSS ${report.extra} 条,跳过 ${report.skipped} 条`,
         { duration: 6000 },
@@ -385,7 +451,6 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
     const id = importTheme(text)
     if (id) {
       setActive(id)
-      setEditId(id)
       toast.success(`已导入「${file.name.replace(/\.themd\.json$/i, '')}」`)
     } else {
       toast.error('导入失败:不是有效的主题文件')
@@ -395,9 +460,8 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
   const handleCreate = () => {
     const id = crypto.randomUUID()
     upsertTheme({ version: 1, id, name: `我的主题 ${themes.length + 1}`, tokens: {} })
-    // 只把新主题加进列表,不动预览/编辑对象——预览跟随「正在编辑」,
-    // 这里若切 editId,用户正在看的主题预览会被强行换成一张白纸(观感=被应用了);
-    // 激活同理(见 copy/import 的不变式)。编辑新主题 = 点它那一行。
+    // 新建/创建副本都只进列表,不接管「使用中」——编辑对象恒等于使用中主题,
+    // 预览不被强行换成一张白纸;要使用/编辑它 = 点行内「使用」
   }
 
   // 中栏预览文稿:专注样例跟随左侧选中元素,全内容样例固定,导入模式用编辑副本
@@ -429,6 +493,7 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
           <span data-tauri-drag-region className="text-sm font-semibold">
             主题工场
           </span>
+          <ThemeSaveStatus />
         </div>
         {/* 右上角与主页同款:ghost 图标按钮 + 悬停提示 */}
         <div className="flex items-center gap-2">
@@ -501,22 +566,14 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
             <ThemeLibrary
               themes={listAllThemes({ themes, activeId })}
               activeId={activeId}
-              onSelectPreview={(id) => {
-                setActive(id)
-                setEditId(id)
-              }}
-              onSelectEdit={setEditId}
+              onUse={setActive}
               onDuplicate={(id) => {
-                const newId = duplicateTheme(id)
-                if (newId) {
-                  setEditId(newId)
-                  toast.success('已创建副本')
-                }
+                // 副本只进列表,不接管「使用中」;要使用 = 点它的「使用」按钮/菜单
+                if (duplicateTheme(id)) toast.success('已创建副本')
               }}
               onRename={(id, name) => renameTheme(id, name)}
               onDelete={(id) => {
                 removeTheme(id)
-                if (editing.id === id) setEditId(null)
                 toast.success('已删除')
               }}
               onCreate={handleCreate}
@@ -599,20 +656,8 @@ export function ThemeStudio({ onBack }: { onBack: () => void }) {
                     <IconCrosshair className="size-[18px]" />
                   </Toggle>
                 </IconTip>
-                <IconTip label={`应用「${editing.name}」到笔记预览`}>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={() => {
-                      setActive(editing.id)
-                      toast.success(`已应用「${editing.name}」到笔记预览`)
-                    }}
-                    aria-label="应用此主题"
-                  >
-                    <IconCheck className="size-[18px]" />
-                  </Button>
-                </IconTip>
+                {/* 编辑对象恒等于使用中主题,「应用 ✓」按钮(把编辑中的主题再
+                    setActive 一遍)随之失去意义——应用入口只剩行内「使用」按钮/菜单 */}
               </div>
             </div>
             {previewMode === 'imported' ? (
@@ -917,12 +962,12 @@ const ThemeScopedPreview = memo(function ThemeScopedPreview({
   )
 })
 
-/** 左栏上部：主题库(标题带 + 独立滚动的列表;列表多时本分区最多占左栏 45% 高) */
+/** 左栏上部：主题库(标题带 + 独立滚动的列表;列表多时本分区最多占左栏 45% 高)。
+    行是纯展示:名称无点击/hover 提示,「使用」是唯一的应用入口(行内按钮或菜单) */
 function ThemeLibrary(props: {
   themes: ThemeFile[]
   activeId: string
-  onSelectPreview: (id: string) => void
-  onSelectEdit: (id: string) => void
+  onUse: (id: string) => void
   onDuplicate: (id: string) => void
   onRename: (id: string, name: string) => void
   onDelete: (id: string) => void
@@ -961,7 +1006,7 @@ function ThemeLibrary(props: {
             canRename: !t.builtin,
             canDelete: !t.builtin,
             active: activeId === t.id,
-            onUse: () => props.onSelectPreview(t.id),
+            onUse: () => props.onUse(t.id),
             onRename: () => {
               setRenamingId(t.id)
               setRenameValue(t.name)
@@ -972,8 +1017,8 @@ function ThemeLibrary(props: {
           return (
             <ContextMenu key={t.id}>
               {/* 右键行 = 「⋯」菜单同一套操作(Sidebar 笔记/文件夹行同款范式);
-                  ContextMenuTrigger 只拦右键,行内左键(编辑/使用/⋯)不受影响;
-                  行不再有 hover/选中底色,正在编辑只靠「使用中」tag 表达 */}
+                  ContextMenuTrigger 只拦右键,行内「使用/⋯」不受影响;
+                  行是纯展示:名称无点击、hover 无提示,激活态只看「使用中」tag */}
               <ContextMenuTrigger asChild>
                 {/* 高度动画外壳不得带 padding:py-1.5 的 12px 会垫住 height:0(border-box
                     下 padding 压不掉)——出场收合到 12px 就到底,卸载瞬间消失即「最后一下
@@ -986,15 +1031,9 @@ function ThemeLibrary(props: {
                   className="overflow-hidden"
                 >
                   <div className="group flex items-center gap-1 px-2 py-1.5 text-sm">
-                  <Tip label="编辑此主题">
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 truncate text-left"
-                      onClick={() => props.onSelectEdit(t.id)}
-                    >
-                      {t.name}
-                    </button>
-                  </Tip>
+                  {/* 名称是纯文本:点击不切换、hover 无提示——使用/操作入口只在
+                      「使用」按钮与 ⋯/右键菜单,避免「点一下预览就换主题」的歧义 */}
+                  <span className="min-w-0 flex-1 truncate">{t.name}</span>
                   {t.builtin && <TagBadge>内置</TagBadge>}
                   {activeId === t.id && <TagBadge tone="primary">使用中</TagBadge>}
                   {activeId !== t.id && (
@@ -1002,7 +1041,7 @@ function ThemeLibrary(props: {
                       variant="outline"
                       size="xs"
                       className="shrink-0 font-normal"
-                      onClick={() => props.onSelectPreview(t.id)}
+                      onClick={() => props.onUse(t.id)}
                     >
                       使用
                     </Button>
