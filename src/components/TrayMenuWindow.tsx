@@ -9,10 +9,19 @@ import {
 import { platformServices } from '@/app/platform'
 
 /**
+ * 菜单四周为阴影预留的透明边距(px)。box-shadow/ring 画在内容布局盒之外,
+ * 窗口若按内容精确取尺寸会把它们裁在窗口边外(系统投影已关,阴影只能自绘)。
+ * 边距必须盖过阴影自然衰减到不可见的全程(约 2 倍 blur 半径),不够会在
+ * 窗口边缘留下一圈生硬的裁切线。窗口实际按「内容 + 2×边距」取尺寸;落位时
+ * 对光标做等量补偿,菜单可视盒仍保持左缘贴光标、底缘贴光标。
+ */
+const SHADOW_PAD = 28
+
+/**
  * 托盘右键自绘菜单窗口(常驻隐藏的第二个 WebView,桌面端独有)。
  * Rust 托盘右键经 tray://open 通知本窗口 → 受控打开 shadcn DropdownMenu →
- * 量出内容尺寸交 Rust 落位显示。零尺寸触发器钉在窗口左上角,
- * side=right + align=start 让菜单内容从窗口 (0,0) 铺开——窗口即菜单。
+ * 量出内容尺寸交 Rust 落位显示。触发器钉在阴影边距处(1px 宽),
+ * side=right + align=start + sideOffset=-1 让菜单内容左上角对齐边距内沿。
  */
 export default function TrayMenuWindow() {
   const [open, setOpen] = useState(false)
@@ -57,10 +66,10 @@ export default function TrayMenuWindow() {
           const { cursorX, cursorY } = anchorRef.current
           try {
             await platformServices.trayMenu.commitGeometry(
-              cursorX,
-              cursorY,
-              content.offsetWidth,
-              content.offsetHeight,
+              cursorX - SHADOW_PAD,
+              cursorY + SHADOW_PAD,
+              content.offsetWidth + SHADOW_PAD * 2,
+              content.offsetHeight + SHADOW_PAD * 2,
             )
           } catch {
             return
@@ -70,10 +79,10 @@ export default function TrayMenuWindow() {
             const { cursorX, cursorY } = anchorRef.current
             void platformServices.trayMenu
               .resizeTrayMenu(
-                cursorX,
-                cursorY,
-                Math.round(content.offsetWidth * window.devicePixelRatio),
-                Math.round(content.offsetHeight * window.devicePixelRatio),
+                cursorX - SHADOW_PAD,
+                cursorY + SHADOW_PAD,
+                Math.round((content.offsetWidth + SHADOW_PAD * 2) * window.devicePixelRatio),
+                Math.round((content.offsetHeight + SHADOW_PAD * 2) * window.devicePixelRatio),
               )
               .catch(() => {})
           })
@@ -97,18 +106,28 @@ export default function TrayMenuWindow() {
 
   return (
     <DropdownMenu open={open} onOpenChange={(next) => { if (!next) dismiss() }}>
-      {/* 伪触发器:仅作为 Radix 定位锚点,不可见不可交互 */}
-      <DropdownMenuTrigger aria-hidden tabIndex={-1} className="fixed left-0 top-0 size-px outline-none" />
-      {/* w-48!:盖掉 shadcn 自带的 trigger-width 变量宽度(伪触发器只有 1px,保证菜单定宽);
+      {/* 伪触发器:仅作为 Radix 定位锚点,不可见不可交互;钉在阴影边距处,
+          给菜单四周留出 box-shadow 的绘制空间(阴影画在布局盒外,窗口贴内容
+          取尺寸时会被裁掉) */}
+      <DropdownMenuTrigger aria-hidden tabIndex={-1} className="fixed left-7 top-7 size-px outline-none" />
+      {/* w-40!:盖掉 shadcn 自带的 trigger-width 变量宽度(伪触发器只有 1px,保证菜单定宽);
           max-h-none!:禁用 Radix 按打开时视口算的可用高度钳制——视口比内容矮一丝
           (DPI 舍入)时它会触发 overflow-y-auto 出滚动条,窗口尺寸由本组件+校正通道
-          保证,不需要菜单自己滚动 */}
-      <DropdownMenuContent side="right" align="start" sideOffset={0} className="w-48! max-h-none!">
-        <DropdownMenuItem onSelect={() => { void platformServices.trayMenu.showMainWindow() }}>
+          保证,不需要菜单自己滚动;sideOffset=-1 抵消触发器 1px 宽,菜单左缘对齐
+          28px 边距内沿;阴影双层定制(环境层柔影 + 贴合层近影),默认 shadow-lg
+          对着桌面太淡;blur 20px 的衰减全程(约 2σ+偏移 ≈ 26px)落在 28px 边距内,
+          到窗口边缘已衰减为零,不会出现裁切线 */}
+      <DropdownMenuContent
+        side="right"
+        align="start"
+        sideOffset={-1}
+        className="w-40! max-h-none! text-xs shadow-[0_6px_20px_rgb(0_0_0/0.3),0_2px_6px_rgb(0_0_0/0.16)]"
+      >
+        <DropdownMenuItem className="text-xs" onSelect={() => { void platformServices.trayMenu.showMainWindow() }}>
           显示主界面
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onSelect={() => { void platformServices.trayMenu.quitApp() }}>
+        <DropdownMenuItem className="text-xs" variant="destructive" onSelect={() => { void platformServices.trayMenu.quitApp() }}>
           退出 Themd
         </DropdownMenuItem>
       </DropdownMenuContent>
